@@ -1,0 +1,93 @@
+import {
+  Ingredient,
+  Product,
+  Recipe,
+  ProductionRun,
+  StockMovement,
+  AuditLog,
+  AdminDashboardMetrics,
+  MovementType,
+} from '../types';
+
+export interface IEpsoRepository {
+  // Products Catalogue
+  listProducts(includeInactive?: boolean): Promise<Product[]>;
+  getProductById(id: string): Promise<Product | null>;
+  createProduct(data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product>;
+  updateProduct(id: string, data: Partial<Product>): Promise<Product>;
+  deactivateProduct(id: string): Promise<void>;
+  safeDeleteProduct(id: string): Promise<{ deleted: boolean; deactivated?: boolean }>;
+
+  // Ingredients Catalogue
+  listIngredients(includeInactive?: boolean): Promise<Ingredient[]>;
+  getIngredientById(id: string): Promise<Ingredient | null>;
+  createIngredient(data: Omit<Ingredient, 'id' | 'createdAt' | 'updatedAt'>): Promise<Ingredient>;
+  updateIngredient(id: string, data: Partial<Ingredient>): Promise<Ingredient>;
+  deactivateIngredient(id: string): Promise<void>;
+  safeDeleteIngredient(id: string): Promise<{ deleted: boolean; deactivated?: boolean }>;
+  adjustStock(params: {
+    ingredientId: string;
+    quantityDelta: number;
+    reason: string;
+    operatorName: string;
+  }): Promise<{ ingredient: Ingredient; movement: StockMovement }>;
+
+  // Recipes (BOM)
+  listRecipes(): Promise<Recipe[]>;
+  getRecipeById(id: string): Promise<Recipe | null>;
+  getRecipeByProductId(productId: string): Promise<Recipe | null>;
+  saveRecipe(data: Omit<Recipe, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Recipe>;
+
+  // Production Operations
+  listProductionRuns(options?: {
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    productId?: string;
+    status?: 'completed' | 'cancelled';
+  }): Promise<ProductionRun[]>;
+  getProductionRunById(id: string): Promise<ProductionRun | null>;
+  recordProductionRun(params: {
+    runNumber: string;
+    productId: string;
+    recipeId?: string;
+    recipeVersion?: number;
+    productionDate: string;
+    plannedQuantity: number;
+    actualQuantity: number;
+    unit: string;
+    operatorName: string;
+    notes?: string;
+    ingredientsConsumed: Array<{
+      ingredientId: string;
+      expectedQuantity: number;
+      actualQuantity: number;
+      unit: string;
+    }>;
+  }): Promise<ProductionRun>;
+  cancelProductionRun(params: {
+    runId: string;
+    reason: string;
+    operatorName: string;
+  }): Promise<boolean>;
+
+  // Stock Ledger
+  getStockMovements(filter?: {
+    itemId?: string;
+    itemType?: 'ingredient' | 'product';
+    type?: MovementType;
+    limit?: number;
+  }): Promise<StockMovement[]>;
+
+  // Admin & Security Management
+  isAdminInitialized(): Promise<boolean>;
+  setupAdminPin(pin: string, recoveryKey: string): Promise<{ success: boolean; sessionToken: string }>;
+  verifyAdminPin(pin: string): Promise<{ success: boolean; sessionToken?: string; needsSetup?: boolean }>;
+  resetAdminPinWithRecovery(recoveryKey: string, newPin: string): Promise<{ success: boolean; message: string }>;
+  verifyAdminSession(token: string): Promise<boolean>;
+  getAdminDashboardMetrics(startDate: string, endDate: string): Promise<AdminDashboardMetrics>;
+  getAuditLogs(limit?: number): Promise<AuditLog[]>;
+
+  // Mode & System status
+  isSupabaseMode(): boolean;
+}
