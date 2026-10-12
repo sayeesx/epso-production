@@ -206,8 +206,8 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           <Input
             label={language === 'ml' ? 'സ്റ്റാൻഡേർഡ് ഉൽപ്പാദന അളവ് (Base Output)' : 'Base Batch Output'}
             type="number"
-            step="1"
-            min="1"
+            step="any"
+            min="0.01"
             required
             value={baseOutputQuantity}
             onChange={(e) => setBaseOutputQuantity(parseFloat(e.target.value) || 0)}
@@ -262,8 +262,8 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                 <div className="w-24">
                   <input
                     type="number"
-                    step="0.05"
-                    min="0.01"
+                    step="any"
+                    min="0.001"
                     value={item.quantity}
                     onChange={(e) => handleQuantityChange(idx, parseFloat(e.target.value) || 0)}
                     className="w-full text-xs font-black bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-xl p-2.5 text-center focus:ring-1 focus:ring-epso-red focus:outline-none min-h-[44px]"

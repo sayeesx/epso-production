@@ -265,8 +265,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
                 : 'Quantity to Add'
             }
             type="number"
-            step="0.1"
-            min="0.1"
+            step="any"
+            min="0.001"
             max={isDeduct && selectedIngredient ? selectedIngredient.currentStock : undefined}
             required
             value={quantity}
