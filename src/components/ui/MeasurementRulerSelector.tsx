@@ -1,6 +1,70 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { CountUp } from './count-up';
 import { Check, X, Minus, Plus } from 'lucide-react';
+
+export interface UnitConfig {
+  type: 'weight_kg' | 'weight_g' | 'volume_l' | 'volume_ml' | 'count' | 'generic';
+  min: number;
+  step: number;
+  decimals: number;
+  presets: number[];
+}
+
+export function getUnitConfig(unitStr?: string): UnitConfig {
+  const u = (unitStr || '').toLowerCase().trim();
+  if (['g', 'gm', 'gms', 'gram', 'grams'].includes(u)) {
+    return {
+      type: 'weight_g',
+      min: 1,
+      step: 1,
+      decimals: 0,
+      presets: [25, 50, 100, 250, 500],
+    };
+  }
+  if (['ml', 'mls', 'milliliter', 'millilitre'].includes(u)) {
+    return {
+      type: 'volume_ml',
+      min: 1,
+      step: 1,
+      decimals: 0,
+      presets: [50, 100, 250, 500, 1000],
+    };
+  }
+  if (['kg', 'kgs', 'kilogram', 'kilograms'].includes(u)) {
+    return {
+      type: 'weight_kg',
+      min: 0.1,
+      step: 0.1,
+      decimals: 1,
+      presets: [0.5, 1, 2, 5, 10],
+    };
+  }
+  if (['l', 'ltr', 'ltrs', 'liter', 'liters', 'litre', 'litres'].includes(u)) {
+    return {
+      type: 'volume_l',
+      min: 0.1,
+      step: 0.1,
+      decimals: 1,
+      presets: [0.5, 1, 2, 5, 10],
+    };
+  }
+  if (['pcs', 'piece', 'pieces', 'packs', 'pack', 'packet', 'packets', 'rolls', 'roll', 'box', 'boxes', 'bottle', 'bottles', 'pkt'].includes(u)) {
+    return {
+      type: 'count',
+      min: 1,
+      step: 1,
+      decimals: 0,
+      presets: [1, 5, 10, 25, 50],
+    };
+  }
+  return {
+    type: 'generic',
+    min: 0.1,
+    step: 0.1,
+    decimals: 1,
+    presets: [0.5, 1, 2, 5, 10],
+  };
+}
 
 export interface MeasurementRulerSelectorProps {
   value: number;
@@ -25,9 +89,9 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   title,
   subtitle,
   icon,
-  min = 0.1,
-  max = 100,
-  step = 0.1,
+  min,
+  max = 999999,
+  step,
   onConfirm,
   onClose,
   confirmLabel = 'Done / Set Quantity',
@@ -40,32 +104,55 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   const isInternalScrollRef = useRef<boolean>(false);
   const scrollTimeoutRef = useRef<any>(null);
 
+  // Unit configuration with fallback
+  const unitConfig = useMemo(() => getUnitConfig(unit), [unit]);
+  const effectiveMin = min ?? unitConfig.min;
+  const effectiveMax = max ?? 999999;
+  const effectiveStep = step ?? unitConfig.step;
+  const decimals = effectiveStep < 1 ? 1 : 0;
+
   // Manual typing mode state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [typedValue, setTypedValue] = useState<string>('');
 
   // Spacing between each tick mark
   const TICK_SPACING = 14;
-  const decimals = step < 1 ? 1 : 0;
-  const totalSteps = Math.max(1, Math.round((max - min) / step));
 
-  const roundToStep = useCallback(
-    (val: number) => {
-      const clamped = Math.max(min, Math.min(max, val));
-      const stepsFromMin = Math.round((clamped - min) / step);
-      return Number((min + stepsFromMin * step).toFixed(decimals));
-    },
-    [min, max, step, decimals]
-  );
+  // Dynamic Ruler Track Windowing:
+  // Render at most 250 ticks around the active position to keep DOM lightweight and smooth at 60fps.
+  const { rulerMin, rulerMax, totalTicks } = useMemo(() => {
+    const activeVal = value > 0 ? value : effectiveMin;
+    const targetStep = Math.max(0, Math.round((activeVal - effectiveMin) / effectiveStep));
+
+    if (targetStep < 120) {
+      // Near beginning: start track from effectiveMin
+      const ticks = Math.max(80, Math.min(250, targetStep + 100));
+      return {
+        rulerMin: effectiveMin,
+        rulerMax: Number((effectiveMin + ticks * effectiveStep).toFixed(decimals)),
+        totalTicks: ticks,
+      };
+    } else {
+      // In middle or high range: window 180 ticks around current target
+      const halfWindow = 90;
+      const startStep = Math.max(0, targetStep - halfWindow);
+      const ticks = 180;
+      const startMin = Number((effectiveMin + startStep * effectiveStep).toFixed(decimals));
+      return {
+        rulerMin: startMin,
+        rulerMax: Number((startMin + ticks * effectiveStep).toFixed(decimals)),
+        totalTicks: ticks,
+      };
+    }
+  }, [value, effectiveMin, effectiveStep, decimals]);
 
   // Scroll track to target value
   const scrollToValue = useCallback(
     (targetVal: number, smooth: boolean = false) => {
       const el = containerRef.current;
       if (!el) return;
-      const clamped = Math.max(min, Math.min(max, targetVal));
-      const stepIndex = Math.round((clamped - min) / step);
-      const targetScrollLeft = stepIndex * TICK_SPACING;
+      const stepsFromRulerMin = Math.max(0, (targetVal - rulerMin) / effectiveStep);
+      const targetScrollLeft = Math.round(stepsFromRulerMin * TICK_SPACING);
 
       isInternalScrollRef.current = true;
       el.scrollTo({
@@ -76,24 +163,24 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       scrollTimeoutRef.current = setTimeout(() => {
         isInternalScrollRef.current = false;
-      }, 100);
+      }, 120);
     },
-    [min, max, step, TICK_SPACING]
+    [rulerMin, effectiveStep, TICK_SPACING]
   );
 
   // Initial scroll position on mount
   useEffect(() => {
-    const initial = value > 0 ? roundToStep(value) : min;
+    const initial = value > 0 ? value : effectiveMin;
     if (value <= 0) {
-      onChange(min);
+      onChange(effectiveMin);
     }
     const timer = setTimeout(() => {
       scrollToValue(initial, false);
-    }, 40);
+    }, 50);
     return () => clearTimeout(timer);
   }, []);
 
-  // Handle scroll events from ruler
+  // Handle scroll events from ruler track
   const handleScroll = () => {
     if (isInternalScrollRef.current) return;
     const el = containerRef.current;
@@ -102,8 +189,8 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
     const scrollLeft = el.scrollLeft;
     const rawStepIndex = scrollLeft / TICK_SPACING;
     const roundedStep = Math.round(rawStepIndex);
-    const clampedStep = Math.max(0, Math.min(totalSteps, roundedStep));
-    const calculatedValue = Number((min + clampedStep * step).toFixed(decimals));
+    const clampedStep = Math.max(0, Math.min(totalTicks, roundedStep));
+    const calculatedValue = Number((rulerMin + clampedStep * effectiveStep).toFixed(decimals));
 
     if (calculatedValue !== value) {
       onChange(calculatedValue);
@@ -146,22 +233,33 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
     // Snap to nearest tick
     const scrollLeft = el.scrollLeft;
     const nearestStep = Math.round(scrollLeft / TICK_SPACING);
-    const snappedVal = Number((min + Math.max(0, Math.min(totalSteps, nearestStep)) * step).toFixed(decimals));
+    const clampedStep = Math.max(0, Math.min(totalTicks, nearestStep));
+    const snappedVal = Number((rulerMin + clampedStep * effectiveStep).toFixed(decimals));
     onChange(snappedVal);
     scrollToValue(snappedVal, true);
   };
 
+  // Stepper increment / decrement
   const adjustBy = (delta: number) => {
-    const newVal = roundToStep(value + delta);
+    const newVal = Math.max(effectiveMin, Number((value + delta).toFixed(decimals || 3)));
     onChange(newVal);
     scrollToValue(newVal, true);
   };
 
-  // Determine preset buttons based on step and max
-  const presets =
-    step <= 0.1 || max <= 10
-      ? [0.5, 1, 2, 5].filter((p) => p >= min && p <= max)
-      : [5, 10, 20, 50].filter((p) => p >= min && p <= max);
+  // Commit typed value without snapping to coarse step or capping at arbitrary limits
+  const commitTypedValue = useCallback(() => {
+    const num = parseFloat(typedValue);
+    if (!isNaN(num) && num > 0) {
+      // Clean float without IEEE 754 precision drift (keep exact user number e.g. 1.7, 100, 250.5)
+      const cleanNum = Number(num.toFixed(3));
+      onChange(cleanNum);
+      scrollToValue(cleanNum, true);
+    }
+    setIsEditing(false);
+  }, [typedValue, onChange, scrollToValue]);
+
+  // Unit-aware preset buttons
+  const presets = unitConfig.presets;
 
   return (
     <div
@@ -203,7 +301,11 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           {(onClose || onConfirm) && (
             <button
               type="button"
-              onClick={onClose || onConfirm}
+              onClick={() => {
+                if (isEditing) commitTypedValue();
+                if (onClose) onClose();
+                else if (onConfirm) onConfirm();
+              }}
               className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
               title="Close"
               aria-label="Close"
@@ -240,15 +342,50 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
 
           {/* Calibrated Ticks */}
           <div className="flex items-end shrink-0" style={{ gap: `${TICK_SPACING - 2}px` }}>
-            {Array.from({ length: totalSteps + 1 }).map((_, idx) => {
-              const currentStepVal = Number((min + idx * step).toFixed(decimals));
-              // Whole numbers (1.0, 2.0, 3.0...) or start tick (0.1) are Major ticks
-              const isWhole = Math.abs(Math.round(currentStepVal) - currentStepVal) < 0.001;
-              const isStart = idx === 0;
-              const isMajor = isWhole || isStart || idx === totalSteps;
-              // Half numbers (0.5, 1.5, 2.5...) are Medium ticks
-              const isHalf = Math.abs((currentStepVal * 2) % 1) < 0.001 && !isMajor;
-              const isMedium = isHalf;
+            {Array.from({ length: totalTicks + 1 }).map((_, idx) => {
+              const currentStepVal = Number((rulerMin + idx * effectiveStep).toFixed(decimals));
+
+              let isMajor = false;
+              let isMedium = false;
+              let label: string | null = null;
+
+              if (effectiveStep <= 0.1) {
+                // Kilograms, Liters (0.1, 0.2, 0.3 ... 1.0, 1.1 ... 2.0)
+                const isWhole = Math.abs(Math.round(currentStepVal) - currentStepVal) < 0.001;
+                const isStart = idx === 0 && rulerMin < 1;
+                const isHalf = Math.abs((currentStepVal * 2) % 1) < 0.001 && !isWhole;
+
+                if (isWhole) {
+                  isMajor = true;
+                  label = String(Math.round(currentStepVal));
+                } else if (isStart && currentStepVal < 1) {
+                  isMajor = true;
+                  label = String(currentStepVal);
+                } else if (isHalf) {
+                  isMedium = true;
+                  if (currentStepVal === 0.5) {
+                    label = '0.5';
+                  }
+                }
+              } else if (effectiveStep === 1) {
+                // Grams, Milliliters, Pcs
+                const isStart = idx === 0;
+                const majorInterval = totalTicks > 120 ? 50 : totalTicks > 50 ? 25 : 10;
+                const mediumInterval = majorInterval === 50 ? 10 : 5;
+
+                if (currentStepVal % majorInterval === 0 || (isStart && currentStepVal === 1)) {
+                  isMajor = true;
+                  label = String(currentStepVal);
+                } else if (currentStepVal % mediumInterval === 0) {
+                  isMedium = true;
+                }
+              } else {
+                const isWhole = Math.abs(Math.round(currentStepVal) - currentStepVal) < 0.001;
+                if (isWhole || idx === 0) {
+                  isMajor = true;
+                  label = String(Math.round(currentStepVal));
+                }
+              }
 
               return (
                 <div
@@ -269,9 +406,13 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                         : 'h-4 bg-stone-200 dark:bg-stone-700 w-[1px]'
                     }`}
                   />
-                  {isMajor && (
+                  {label ? (
                     <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 mt-1 select-none pointer-events-none whitespace-nowrap">
-                      {isWhole ? Math.round(currentStepVal) : currentStepVal}
+                      {label}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] opacity-0 mt-1 select-none pointer-events-none">
+                      -
                     </span>
                   )}
                 </div>
@@ -292,10 +433,10 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       <div className="my-2 flex items-center justify-center gap-3 w-full">
         <button
           type="button"
-          onClick={() => adjustBy(-step)}
-          disabled={value <= min}
+          onClick={() => adjustBy(-effectiveStep)}
+          disabled={value <= effectiveMin}
           className="w-10 h-10 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple shrink-0"
-          title={`Decrease by ${step}`}
+          title={`Decrease by ${effectiveStep}`}
         >
           <Minus className="w-5 h-5 stroke-[2.5]" />
         </button>
@@ -304,38 +445,26 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              const num = parseFloat(typedValue);
-              if (!isNaN(num) && num >= min && num <= max) {
-                const rounded = roundToStep(num);
-                onChange(rounded);
-                scrollToValue(rounded, true);
-              }
-              setIsEditing(false);
+              commitTypedValue();
             }}
             className="flex items-baseline gap-2"
           >
             <input
               type="number"
-              step={step}
-              min={min}
-              max={max}
+              step="any"
+              min={effectiveMin}
               value={typedValue}
               onChange={(e) => {
                 setTypedValue(e.target.value);
-                const num = parseFloat(e.target.value);
-                if (!isNaN(num) && num >= min && num <= max) {
-                  onChange(num);
-                  scrollToValue(num, false);
-                }
               }}
-              onBlur={() => {
-                const num = parseFloat(typedValue);
-                if (!isNaN(num) && num >= min && num <= max) {
-                  const rounded = roundToStep(num);
-                  onChange(rounded);
-                  scrollToValue(rounded, true);
+              onBlur={commitTypedValue}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitTypedValue();
+                } else if (e.key === 'Escape') {
+                  setIsEditing(false);
                 }
-                setIsEditing(false);
               }}
               autoFocus
               className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight w-36 text-center bg-stone-100 dark:bg-[#282323] rounded-2xl px-2 py-1 border-2 border-epso-orange focus:outline-none"
@@ -374,10 +503,10 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
 
         <button
           type="button"
-          onClick={() => adjustBy(step)}
-          disabled={value >= max}
+          onClick={() => adjustBy(effectiveStep)}
+          disabled={value >= effectiveMax}
           className="w-10 h-10 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple shrink-0"
-          title={`Increase by ${step}`}
+          title={`Increase by ${effectiveStep}`}
         >
           <Plus className="w-5 h-5 stroke-[2.5]" />
         </button>
@@ -414,7 +543,12 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       {onConfirm && (
         <button
           type="button"
-          onClick={onConfirm}
+          onClick={() => {
+            if (isEditing) {
+              commitTypedValue();
+            }
+            onConfirm();
+          }}
           className="w-full mt-3 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white font-extrabold text-sm sm:text-base shadow-md hover:shadow-lg transition-all duration-150 active:scale-[0.98] press-apple flex items-center justify-center gap-2 cursor-pointer"
         >
           <Check className="w-5 h-5 stroke-[2.5]" />
@@ -424,3 +558,4 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
     </div>
   );
 };
+

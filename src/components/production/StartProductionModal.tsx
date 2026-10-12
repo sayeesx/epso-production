@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { MeasurementRulerSelector } from '../ui/MeasurementRulerSelector';
+import { MeasurementRulerSelector, getUnitConfig } from '../ui/MeasurementRulerSelector';
 import { Product, Recipe, Ingredient } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -394,36 +394,38 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               <div className="flex items-center gap-2">
                 <div
                   className="flex-1 cursor-pointer"
-                  onClick={() =>
+                  onClick={() => {
+                    const uConfig = getUnitConfig(selectedProduct.unit);
                     setActiveRulerItem({
                       type: 'output',
                       name: selectedProduct.name,
                       unit: selectedProduct.unit,
                       subtitle: `${t.quantityToProduce} (${selectedProduct.unit})`,
                       value: plannedQty,
-                      min: 1,
-                      max: 200,
-                      step: selectedProduct.unit.toLowerCase() === 'pcs' || selectedProduct.unit.toLowerCase() === 'packs' ? 1 : 0.5,
-                    })
-                  }
+                      min: uConfig.min,
+                      max: 999999,
+                      step: uConfig.step,
+                    });
+                  }}
                 >
                   <Input
                     type="number"
-                    min="1"
-                    step="0.5"
+                    min={getUnitConfig(selectedProduct.unit).min}
+                    step="any"
                     value={plannedQty}
-                    onClick={() =>
+                    onClick={() => {
+                      const uConfig = getUnitConfig(selectedProduct.unit);
                       setActiveRulerItem({
                         type: 'output',
                         name: selectedProduct.name,
                         unit: selectedProduct.unit,
                         subtitle: `${t.quantityToProduce} (${selectedProduct.unit})`,
                         value: plannedQty,
-                        min: 1,
-                        max: 200,
-                        step: selectedProduct.unit.toLowerCase() === 'pcs' || selectedProduct.unit.toLowerCase() === 'packs' ? 1 : 0.5,
-                      })
-                    }
+                        min: uConfig.min,
+                        max: 999999,
+                        step: uConfig.step,
+                      });
+                    }}
                     onChange={(e) => {
                       const v = parseFloat(e.target.value) || 0;
                       setPlannedQty(v);
@@ -435,7 +437,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
                 {/* Quick Presets */}
                 <div className="flex items-center gap-1 shrink-0">
-                  {[10, 25, 50, 100].map((preset) => (
+                  {getUnitConfig(selectedProduct.unit).presets.slice(0, 4).map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -503,7 +505,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
+                            const uConfig = getUnitConfig(item.unit);
                             setActiveRulerItem({
                               type: 'ingredient',
                               ingredientId: item.ingredientId,
@@ -511,11 +514,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                               unit: item.unit,
                               subtitle: `Formula: ${item.expectedQuantity} ${item.unit} • Stock: ${inStock} ${item.unit}`,
                               value: item.actualQuantity,
-                              min: 0.1,
-                              max: Math.max(20, Math.ceil(Math.max(item.actualQuantity, item.expectedQuantity, 10))),
-                              step: item.unit.toLowerCase() === 'pcs' || item.unit.toLowerCase() === 'packs' ? 1 : 0.1,
-                            })
-                          }
+                              min: uConfig.min,
+                              max: 999999,
+                              step: uConfig.step,
+                            });
+                          }}
                           className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 font-extrabold text-xs transition-all press-apple cursor-pointer shadow-xs"
                           title="Click to adjust quantity"
                         >
@@ -571,6 +574,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   onClick={() => {
                     const ing = ingredients.find((i) => i.id === manualIngId) || ingredients[0];
                     if (ing) {
+                      const uConfig = getUnitConfig(ing.unit);
                       setActiveRulerItem({
                         type: 'manual',
                         ingredientId: ing.id,
@@ -578,9 +582,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         unit: ing.unit,
                         subtitle: `Current stock: ${ing.currentStock} ${ing.unit}`,
                         value: manualIngQty,
-                        min: 0.1,
-                        max: 50,
-                        step: ing.unit.toLowerCase() === 'pcs' || ing.unit.toLowerCase() === 'packs' ? 1 : 0.1,
+                        min: uConfig.min,
+                        max: 999999,
+                        step: uConfig.step,
                       });
                     }
                   }}
@@ -766,9 +770,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 subtitle={activeRulerItem.subtitle}
                 unit={activeRulerItem.unit}
                 value={activeRulerItem.value || 1}
-                min={activeRulerItem.min ?? 1}
-                max={activeRulerItem.max ?? 100}
-                step={activeRulerItem.step ?? 0.5}
+                min={activeRulerItem.min}
+                max={activeRulerItem.max ?? 999999}
+                step={activeRulerItem.step}
                 onChange={(newVal) => {
                   setActiveRulerItem((prev) => (prev ? { ...prev, value: newVal } : null));
                   if (activeRulerItem.type === 'ingredient' && activeRulerItem.ingredientId) {
