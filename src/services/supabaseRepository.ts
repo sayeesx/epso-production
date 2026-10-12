@@ -682,10 +682,14 @@ export class SupabaseRepository implements IEpsoRepository {
 
     await client.from('production_consumption').delete().eq('run_id', runId);
 
-    const { error } = await client.from('production_runs').delete().eq('id', runId);
-    if (error) throw new Error(error.message);
+    const { data, error } = await client
+      .from('production_runs')
+      .delete()
+      .eq('id', runId)
+      .select('id');
 
-    return true;
+    if (error) throw new Error(error.message);
+    return Boolean(data && data.length > 0);
   }
 
   // ============================================================================

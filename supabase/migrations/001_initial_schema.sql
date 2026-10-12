@@ -220,17 +220,23 @@ CREATE POLICY "Allow insert production runs" ON public.production_runs
     FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow update production runs" ON public.production_runs
     FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Allow delete production runs" ON public.production_runs
+    FOR DELETE USING (true);
 
 CREATE POLICY "Allow read consumption" ON public.production_consumption
     FOR SELECT USING (true);
 CREATE POLICY "Allow insert consumption" ON public.production_consumption
     FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow delete consumption" ON public.production_consumption
+    FOR DELETE USING (true);
 
 -- Stock movements:
 CREATE POLICY "Allow read stock movements" ON public.stock_movements
     FOR SELECT USING (true);
 CREATE POLICY "Allow insert stock movements" ON public.stock_movements
     FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow delete stock movements" ON public.stock_movements
+    FOR DELETE USING (true);
 
 -- Admin Security & Sessions: strictly denied for direct REST SELECT
 CREATE POLICY "Deny direct public read admin security" ON public.admin_security
