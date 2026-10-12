@@ -13,6 +13,7 @@ import {
   TbPlus,
   TbRotateClockwise2,
   TbHistory,
+  TbTrash,
 } from 'react-icons/tb';
 
 export const ProductionPage: React.FC = () => {
@@ -33,6 +34,8 @@ export const ProductionPage: React.FC = () => {
   const [runToCancel, setRunToCancel] = useState<ProductionRun | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [runToDelete, setRunToDelete] = useState<ProductionRun | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isOpeningNewBatch, setIsOpeningNewBatch] = useState<boolean>(false);
 
   useEffect(() => {
@@ -113,6 +116,28 @@ export const ProductionPage: React.FC = () => {
       addToast(err?.message || 'Failed to cancel production run', 'error');
     } finally {
       setIsCancelling(false);
+    }
+  };
+
+  const handleDeleteRun = async () => {
+    if (!runToDelete) return;
+    try {
+      setIsDeleting(true);
+      await repo.deleteProductionRun(runToDelete.id);
+      setRuns((prev) => prev.filter((r) => r.id !== runToDelete.id));
+      addToast(
+        language === 'ml'
+          ? `പ്രൊഡക്ഷൻ ബാച്ച് #${runToDelete.runNumber} പൂർണ്ണമായി നീക്കം ചെയ്തു`
+          : `Production batch #${runToDelete.runNumber} deleted permanently`,
+        'success'
+      );
+      setRunToDelete(null);
+      triggerRefresh();
+    } catch (err: any) {
+      console.error('Error deleting run', err);
+      addToast(err?.message || 'Failed to delete production run', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -300,18 +325,31 @@ export const ProductionPage: React.FC = () => {
                     <p className="text-xs text-stone-500 dark:text-stone-400 italic">"{run.notes}"</p>
                   )}
 
-                  {/* Cancel Run Action for completed runs */}
-                  {isCompleted && (
-                    <div className="flex justify-end pt-1 border-t border-charcoal-border/40 dark:border-[#2E2828]/60">
+                  {/* Actions: Cancel Run and Delete Batch */}
+                  <div className="flex items-center justify-between pt-1 border-t border-charcoal-border/40 dark:border-[#2E2828]/60">
+                    {isCompleted ? (
                       <button
                         onClick={() => setRunToCancel(run)}
-                        className="text-xs font-semibold text-stone-500 hover:text-red-600 dark:hover:text-red-400 flex items-center gap-1 transition-colors press-apple"
+                        className="text-xs font-semibold text-stone-500 hover:text-red-600 dark:hover:text-red-400 flex items-center gap-1 transition-colors press-apple cursor-pointer"
                       >
                         <TbRotateClockwise2 className="w-3.5 h-3.5" />
                         <span>{t.cancelRun}</span>
                       </button>
-                    </div>
-                  )}
+                    ) : (
+                      <span className="text-[11px] text-stone-400 font-medium">
+                        {language === 'ml' ? 'റദ്ദാക്കിയ ബാച്ച്' : 'Cancelled batch'}
+                      </span>
+                    )}
+
+                    <button
+                      onClick={() => setRunToDelete(run)}
+                      className="text-xs font-bold text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors press-apple cursor-pointer"
+                      title={language === 'ml' ? 'ബാച്ച് പൂർണ്ണമായി ഒഴിവാക്കുക' : 'Delete batch completely'}
+                    >
+                      <TbTrash className="w-3.5 h-3.5" />
+                      <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete'}</span>
+                    </button>
+                  </div>
                 </Card>
               );
             })}
@@ -364,6 +402,31 @@ export const ProductionPage: React.FC = () => {
               onChange={(e) => setCancelReason(e.target.value)}
               autoFocus
             />
+          </div>
+        }
+      />
+
+      {/* Delete Run Dialog */}
+      <ConfirmationDialog
+        isOpen={!!runToDelete}
+        onClose={() => setRunToDelete(null)}
+        onConfirm={handleDeleteRun}
+        title={language === 'ml' ? 'പ്രൊഡക്ഷൻ ബാച്ച് പൂർണ്ണമായി ഒഴിവാക്കണോ?' : 'Delete Production Run Permanently?'}
+        confirmLabel={language === 'ml' ? 'പൂർണ്ണമായി ഒഴിവാക്കുക' : 'Delete Permanently'}
+        variant="danger"
+        isLoading={isDeleting}
+        message={
+          <div className="space-y-3">
+            <p className="text-xs text-stone-600 dark:text-stone-300 font-malayalam">
+              {language === 'ml'
+                ? 'ഈ പ്രൊഡക്ഷൻ ബാച്ച് ഡാറ്റാബേസിൽ നിന്നും റെക്കോർഡുകളിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കപ്പെടും. ഈ പ്രവർത്തനം പഴയപടിയാക്കാൻ കഴിയില്ല.'
+                : 'This production run and its consumption records will be completely removed from the database. This action cannot be undone.'}
+            </p>
+            {runToDelete && (
+              <div className="p-2.5 bg-red-50 dark:bg-red-950/40 rounded-xl text-xs font-bold text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
+                Run #{runToDelete.runNumber} • {runToDelete.productName} ({runToDelete.actualQuantity} {runToDelete.unit})
+              </div>
+            )}
           </div>
         }
       />

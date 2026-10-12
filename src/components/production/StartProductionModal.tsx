@@ -511,9 +511,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                               unit: item.unit,
                               subtitle: `Formula: ${item.expectedQuantity} ${item.unit} • Stock: ${inStock} ${item.unit}`,
                               value: item.actualQuantity,
-                              min: 0,
-                              max: Math.max(100, Math.ceil(Math.max(item.actualQuantity, item.expectedQuantity) * 2)),
-                              step: item.unit.toLowerCase() === 'pcs' || item.unit.toLowerCase() === 'packs' ? 1 : 0.5,
+                              min: 0.1,
+                              max: Math.max(20, Math.ceil(Math.max(item.actualQuantity, item.expectedQuantity, 10))),
+                              step: item.unit.toLowerCase() === 'pcs' || item.unit.toLowerCase() === 'packs' ? 1 : 0.1,
                             })
                           }
                           className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 font-extrabold text-xs transition-all press-apple cursor-pointer shadow-xs"
@@ -579,8 +579,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         subtitle: `Current stock: ${ing.currentStock} ${ing.unit}`,
                         value: manualIngQty,
                         min: 0.1,
-                        max: 100,
-                        step: ing.unit.toLowerCase() === 'pcs' || ing.unit.toLowerCase() === 'packs' ? 1 : 0.5,
+                        max: 50,
+                        step: ing.unit.toLowerCase() === 'pcs' || ing.unit.toLowerCase() === 'packs' ? 1 : 0.1,
                       });
                     }
                   }}

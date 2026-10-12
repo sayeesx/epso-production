@@ -308,7 +308,7 @@ export class DemoRepository implements IEpsoRepository {
     if (!ing) throw new Error('Ingredient not found');
 
     const newStock = ing.currentStock + params.quantityDelta;
-    if (newStock < 0) throw new Error('Stock balance cannot be negative');
+    if (newStock < 0) throw new Error('സ്റ്റോക്ക് 0 ആണ് അല്ലെങ്കിൽ കുറവാണ്. നെഗറ്റീവ് ആകാൻ കഴിയില്ല (Stock cannot be negative)');
 
     const updated = await this.updateIngredient(params.ingredientId, { currentStock: newStock });
 
@@ -635,6 +635,28 @@ export class DemoRepository implements IEpsoRepository {
       run.id,
       { runNumber: run.runNumber, reason: params.reason }
     );
+
+    return true;
+  }
+
+  async deleteProductionRun(runId: string): Promise<boolean> {
+    const runs = this.getItem<ProductionRun[]>(STORAGE_KEYS.RUNS, []);
+    const run = runs.find((r) => r.id === runId);
+    if (!run) return true;
+
+    // Filter out run from storage
+    const updatedRuns = runs.filter((r) => r.id !== runId);
+    this.setItem(STORAGE_KEYS.RUNS, updatedRuns);
+
+    // Clean up associated movements if any
+    const movements = this.getItem<StockMovement[]>(STORAGE_KEYS.MOVEMENTS, []);
+    const updatedMovements = movements.filter((m) => !m.reference.includes(run.runNumber));
+    this.setItem(STORAGE_KEYS.MOVEMENTS, updatedMovements);
+
+    this.recordAudit('System', 'DELETE_PRODUCTION_RUN', 'PRODUCTION', runId, {
+      runNumber: run.runNumber,
+      product: run.productName,
+    });
 
     return true;
   }

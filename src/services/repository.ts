@@ -70,6 +70,7 @@ export interface IEpsoRepository {
     reason: string;
     operatorName: string;
   }): Promise<boolean>;
+  deleteProductionRun(runId: string): Promise<boolean>;
 
   // Stock Ledger
   getStockMovements(filter?: {
