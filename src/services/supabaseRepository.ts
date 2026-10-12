@@ -364,7 +364,7 @@ export class SupabaseRepository implements IEpsoRepository {
     if (!ing) throw new Error('Ingredient not found');
 
     const newStock = ing.currentStock + params.quantityDelta;
-    if (newStock < 0) throw new Error('Stock balance cannot be negative');
+    if (newStock < 0) throw new Error('സ്റ്റോക്ക് 0 ആണ് അല്ലെങ്കിൽ കുറവാണ്. നെഗറ്റീവ് ആകാൻ കഴിയില്ല (Stock cannot be negative)');
 
     const updated = await this.updateIngredient(params.ingredientId, { currentStock: newStock });
     const client = this.checkClient();
@@ -666,6 +666,26 @@ export class SupabaseRepository implements IEpsoRepository {
 
     if (error) throw new Error(error.message);
     return Boolean(data);
+  }
+
+  async deleteProductionRun(runId: string): Promise<boolean> {
+    const client = this.checkClient();
+    const { data: run } = await client
+      .from('production_runs')
+      .select('id, run_number')
+      .eq('id', runId)
+      .maybeSingle();
+
+    if (run?.run_number) {
+      await client.from('stock_movements').delete().ilike('reference', `%${run.run_number}%`);
+    }
+
+    await client.from('production_consumption').delete().eq('run_id', runId);
+
+    const { error } = await client.from('production_runs').delete().eq('id', runId);
+    if (error) throw new Error(error.message);
+
+    return true;
   }
 
   // ============================================================================

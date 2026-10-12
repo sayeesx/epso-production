@@ -6,6 +6,7 @@ import { Select } from '../ui/Select';
 import { Ingredient } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { TbAlertTriangle, TbMinus, TbPlus } from 'react-icons/tb';
 
 interface StockAdjustmentModalProps {
   isOpen: boolean;
@@ -28,14 +29,25 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
   const { language } = useLanguage();
 
   const [selectedId, setSelectedId] = useState<string>('');
-  const [actionType, setActionType] = useState<'usage' | 'wastage' | 'correction'>(defaultAction);
+  // Explicit direction: true for deduct (-), false for add (+)
+  const [isDeduct, setIsDeduct] = useState<boolean>(true);
+  const [actionCategory, setActionCategory] = useState<'usage' | 'wastage' | 'correction'>('usage');
   const [quantity, setQuantity] = useState<number>(1);
   const [reason, setReason] = useState<string>('');
   const [customNotes, setCustomNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setActionType(defaultAction);
+    if (defaultAction === 'correction') {
+      setActionCategory('correction');
+      setIsDeduct(true);
+    } else if (defaultAction === 'wastage') {
+      setActionCategory('wastage');
+      setIsDeduct(true);
+    } else {
+      setActionCategory('usage');
+      setIsDeduct(true);
+    }
   }, [defaultAction, isOpen]);
 
   useEffect(() => {
@@ -47,31 +59,32 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
   }, [preselectedIngredientId, ingredients, isOpen]);
 
   const selectedIngredient = ingredients.find((i) => i.id === selectedId);
+  const currentStock = selectedIngredient ? selectedIngredient.currentStock : 0;
+  const isOutOfStock = currentStock <= 0;
+  const isExcessiveDeduction = isDeduct && quantity > currentStock;
+  const projectedBalance = isDeduct
+    ? Number((currentStock - quantity).toFixed(3))
+    : Number((currentStock + quantity).toFixed(3));
 
   const reasonPresets = {
-    usage: [
-      language === 'ml' ? 'ട്രയൽ ബാച്ച് ടെസ്റ്റിംഗ് (Trial Testing)' : 'Trial recipe batch testing',
-      language === 'ml' ? 'ക്വാളിറ്റി ലാബ് പരിശോധന (Quality Sampling)' : 'Quality lab sampling',
-      language === 'ml' ? 'ചെറിയ അളവ് നേരിട്ടുള്ള ഉപയോഗം (Small Batch Usage)' : 'Small batch manual seasoning adjustment',
-      language === 'ml' ? 'അടുക്കളയിലെ മറ്റ് ആവശ്യങ്ങൾ (Kitchen Usage)' : 'Direct staff usage',
+    deduct: [
+      language === 'ml' ? 'ഉൽപ്പാദന ആവശ്യങ്ങൾ (Production / Kitchen Usage)' : 'Production / Kitchen Usage',
+      language === 'ml' ? 'കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged / Wastage)' : 'Damaged / Spoiled Material',
+      language === 'ml' ? 'ഈർപ്പം / പൂപ്പൽ കേടുപാട് (Moisture / Storage Damage)' : 'Moisture / Storage Damage',
+      language === 'ml' ? 'ഭൗതിക സ്റ്റോക്ക് കുറവ് തിരുത്തൽ (Stock Audit Shortage)' : 'Physical Stock Audit Shortage',
+      language === 'ml' ? 'സാമ്പിൾ അല്ലെങ്കിൽ ലാബ് ടെസ്റ്റിംഗ് (Lab Sample)' : 'Lab / Tasting Sample',
     ],
-    wastage: [
-      language === 'ml' ? 'സ്റ്റോറേജിൽ വെച്ച് കേടുവന്നത് (Storage Damage)' : 'Damaged / Spoiled during storage',
-      language === 'ml' ? 'ഈർപ്പം / പൂപ്പൽ കേടുപാട് (Moisture / Fungus)' : 'Moisture / fungus damage',
-      language === 'ml' ? 'പ്രാണികൾ / എലി ശല്യം (Pest Damage)' : 'Pest damage',
-      language === 'ml' ? 'പാത്രത്തിൽ നിന്ന് ചിതറിപ്പോയത് (Spill or Broken Container)' : 'Spill or broken container',
-      language === 'ml' ? 'കാലാവധി കഴിഞ്ഞത് (Expired)' : 'Expired raw material shelf-life',
-    ],
-    correction: [
-      language === 'ml' ? 'ഭൗതിക സ്റ്റോക്ക് എണ്ണത്തിലെ വ്യത്യാസം (Physical Discrepancy)' : 'Physical stock audit count discrepancy',
-      language === 'ml' ? 'സപ്ലയർ ബില്ലിലെ അളവ് തിരുത്തൽ (Supplier Reconciliation)' : 'Supplier delivery variance reconciliation',
-      language === 'ml' ? 'ത്രാസ് ക്രമീകരണ വ്യത്യാസം (Weighing Scale Recalibration)' : 'Weighing scale recalibration adjustment',
+    add: [
+      language === 'ml' ? 'പുതിയ പർച്ചേസ് ഇൻവാർഡ് (New Purchase Inward)' : 'New Purchase Inward',
+      language === 'ml' ? 'ഓഡിറ്റ് അധികം തിരുത്തൽ (Physical Stock Audit Excess)' : 'Physical Stock Audit Excess',
+      language === 'ml' ? 'മറ്റ് ഇൻവാർഡ് ബാലൻസ് (Direct Stock Inward)' : 'Direct Stock Inward',
     ],
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedIngredient) return;
+
     if (quantity <= 0) {
       addToast(
         language === 'ml' ? 'ശരിയായ അളവ് നൽകുക (പൂജ്യത്തിൽ കൂടുതൽ)' : 'Quantity must be greater than zero',
@@ -80,14 +93,36 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       return;
     }
 
-    const fullReason = `${reason || reasonPresets[actionType][0]}${
-      customNotes.trim() ? ` - ${customNotes.trim()}` : ''
-    }`;
+    // Critical check: if stock is 0 and trying to deduct, block with Malayalam warning
+    if (isDeduct && isOutOfStock) {
+      addToast(
+        language === 'ml'
+          ? 'മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആകാൻ കഴിയില്ല.'
+          : 'Warning: Current stock is 0! Stock cannot be negative.',
+        'error'
+      );
+      return;
+    }
+
+    // Critical check: cannot deduct more than current stock
+    if (isDeduct && quantity > currentStock) {
+      addToast(
+        language === 'ml'
+          ? `മുന്നറിയിപ്പ്: നിലവിലെ സ്റ്റോക്കിൽ (${currentStock} ${selectedIngredient.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല.`
+          : `Warning: Cannot deduct more than available balance (${currentStock} ${selectedIngredient.unit}).`,
+        'error'
+      );
+      return;
+    }
+
+    const defaultReason = isDeduct ? reasonPresets.deduct[0] : reasonPresets.add[0];
+    const fullReason = `${reason || defaultReason}${customNotes.trim() ? ` - ${customNotes.trim()}` : ''}`;
 
     try {
       setIsSubmitting(true);
       const operator = staffName || (role === 'owner' ? 'Factory Owner' : 'Production Staff');
-      const delta = actionType === 'wastage' || actionType === 'usage' ? -Math.abs(quantity) : quantity;
+      // Deduct strictly applies negative delta, Add strictly applies positive delta
+      const delta = isDeduct ? -Math.abs(quantity) : Math.abs(quantity);
 
       await repo.adjustStock({
         ingredientId: selectedIngredient.id,
@@ -98,14 +133,17 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
 
       addToast(
         language === 'ml'
-          ? `${selectedIngredient.name}: ${quantity} ${selectedIngredient.unit} സ്റ്റോക്ക് മാറ്റം രേഖപ്പെടുത്തി`
-          : `Recorded ${actionType} of ${quantity} ${selectedIngredient.unit} of ${selectedIngredient.name}`,
+          ? `${selectedIngredient.name}: ${quantity} ${selectedIngredient.unit} ${isDeduct ? 'കുറച്ചു' : 'കൂട്ടി'}. പുതിയ സ്റ്റോക്ക്: ${Math.max(0, projectedBalance)} ${selectedIngredient.unit}`
+          : `${isDeduct ? 'Deducted' : 'Added'} ${quantity} ${selectedIngredient.unit} of ${selectedIngredient.name}. New balance: ${Math.max(0, projectedBalance)} ${selectedIngredient.unit}`,
         'success'
       );
       onSuccess();
       onClose();
     } catch (err: any) {
-      addToast(err?.message || (language === 'ml' ? 'സ്റ്റോക്ക് മാറ്റം രേഖപ്പെടുത്താൻ കഴിഞ്ഞില്ല' : 'Failed to record adjustment'), 'error');
+      addToast(
+        err?.message || (language === 'ml' ? 'സ്റ്റോക്ക് മാറ്റം രേഖപ്പെടുത്താൻ കഴിഞ്ഞില്ല' : 'Failed to record adjustment'),
+        'error'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -117,97 +155,194 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       onClose={onClose}
       title={
         language === 'ml'
-          ? actionType === 'wastage'
-            ? 'കേടുപാടുകൾ / വേസ്റ്റേജ് രേഖപ്പെടുത്തുക (Wastage)'
-            : actionType === 'usage'
-            ? 'അസംസ്കൃത വസ്തു ഉപയോഗം (Usage)'
-            : 'സ്റ്റോക്ക് തിരുത്തൽ (Audit Correction)'
-          : actionType === 'wastage'
-          ? 'Record Damaged / Wastage'
-          : actionType === 'usage'
-          ? 'Record Raw Material Usage'
-          : 'Stock Count Correction'
+          ? isDeduct
+            ? 'സ്റ്റോക്ക് കുറയ്ക്കുക (Deduct Stock)'
+            : 'സ്റ്റോക്ക് ചേർക്കുക (Add Stock)'
+          : isDeduct
+          ? 'Deduct Material Stock'
+          : 'Add Inward Material Stock'
       }
       description={
         language === 'ml'
-          ? 'എല്ലാ മാറ്റങ്ങളും സ്റ്റോക്ക് ലെഡ്ജറിൽ കൃത്യമായി സൂക്ഷിക്കും.'
-          : 'All deductions create an auditable transaction ledger entry.'
+          ? 'എല്ലാ മാറ്റങ്ങളും ഓഡിറ്റ് സ്റ്റോക്ക് ലെഡ്ജറിൽ കൃത്യമായി രേഖപ്പെടുത്തും.'
+          : 'All deductions and additions create an auditable transaction ledger entry.'
       }
       maxWidth="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Ingredient Picker */}
         <Select
           label={language === 'ml' ? 'ചേരുവ തിരഞ്ഞെടുക്കുക (Select Ingredient)' : 'Select Raw Material'}
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
           options={ingredients.map((i) => ({
             value: i.id,
-            label: `${i.name} (സ്റ്റോക്ക്: ${i.currentStock} ${i.unit})`,
+            label: `${i.name} (നിലവിൽ: ${i.currentStock} ${i.unit})`,
           }))}
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* Direction Toggle: Deduct (-) vs Add (+) */}
+        <div>
+          <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5 font-malayalam">
+            {language === 'ml' ? 'മാറ്റത്തിന്റെ സ്വഭാവം (Direction)' : 'Adjustment Direction'}
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setIsDeduct(true)}
+              className={`py-2.5 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer press-apple ${
+                isDeduct
+                  ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                  : 'bg-stone-50 dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border-charcoal-border dark:border-[#2E2828] hover:bg-stone-100'
+              }`}
+            >
+              <TbMinus className="w-4 h-4 stroke-[3]" />
+              <span>{language === 'ml' ? 'കുറയ്ക്കുക (Deduct / Outward)' : 'Deduct (Outward)'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsDeduct(false)}
+              className={`py-2.5 px-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer press-apple ${
+                !isDeduct
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                  : 'bg-stone-50 dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border-charcoal-border dark:border-[#2E2828] hover:bg-stone-100'
+              }`}
+            >
+              <TbPlus className="w-4 h-4 stroke-[3]" />
+              <span>{language === 'ml' ? 'കൂട്ടുക (Add / Inward)' : 'Add (Inward)'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Stock Zero Warning Banner in Malayalam */}
+        {selectedIngredient && isDeduct && isOutOfStock && (
+          <div className="p-3.5 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-900/60 flex items-start gap-2.5 text-xs text-red-900 dark:text-red-200">
+            <TbAlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-extrabold font-malayalam leading-tight">
+                {language === 'ml'
+                  ? 'മുന്നറിയിപ്പ്: ഈ ചേരുവയുടെ സ്റ്റോക്ക് 0 ആണ്!'
+                  : 'Warning: Current stock is 0!'}
+              </p>
+              <p className="font-medium font-malayalam mt-0.5">
+                {language === 'ml'
+                  ? 'സ്റ്റോക്ക് പൂജ്യമായതിനാൽ കുറയ്ക്കാൻ സാധ്യമല്ല. സ്റ്റോക്ക് നെഗറ്റീവ് ആകാൻ പാടില്ല.'
+                  : 'Cannot deduct because balance is zero. Negative stock is not permitted.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Excessive Deduction Warning Banner in Malayalam */}
+        {selectedIngredient && isDeduct && !isOutOfStock && isExcessiveDeduction && (
+          <div className="p-3.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-900/60 flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+            <TbAlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-extrabold font-malayalam leading-tight">
+                {language === 'ml'
+                  ? 'മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!'
+                  : 'Warning: Cannot deduct more than available balance!'}
+              </p>
+              <p className="font-medium font-malayalam mt-0.5">
+                {language === 'ml'
+                  ? `നിലവിലെ സ്റ്റോക്ക് ${currentStock} ${selectedIngredient.unit} ആണ്. നെഗറ്റീവ് സ്റ്റോക്ക് ഒഴിവാക്കാൻ അളവ് കുറയ്ക്കുക.`
+                  : `Available stock is ${currentStock} ${selectedIngredient.unit}. Please reduce quantity to avoid negative stock.`}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Quantity Input */}
+        <div>
           <Input
-            label={language === 'ml' ? 'അളവ് (Quantity)' : 'Quantity to Deduct'}
+            label={
+              language === 'ml'
+                ? isDeduct
+                  ? 'കുറയ്ക്കേണ്ട അളവ് (Quantity to Deduct)'
+                  : 'ചേർക്കേണ്ട അളവ് (Quantity to Add)'
+                : isDeduct
+                ? 'Quantity to Deduct'
+                : 'Quantity to Add'
+            }
             type="number"
             step="0.1"
             min="0.1"
-            max={selectedIngredient ? selectedIngredient.currentStock : undefined}
+            max={isDeduct && selectedIngredient ? selectedIngredient.currentStock : undefined}
             required
             value={quantity}
             onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
             rightAddon={selectedIngredient?.unit || 'unit'}
           />
-
-          <Select
-            label={language === 'ml' ? 'മാറ്റത്തിന്റെ വിഭാഗം (Category)' : 'Adjustment Category'}
-            value={actionType}
-            onChange={(e) => setActionType(e.target.value as any)}
-            options={[
-              { value: 'usage', label: language === 'ml' ? 'നേരിട്ടുള്ള ഉപയോഗം (Usage)' : 'Material Usage' },
-              { value: 'wastage', label: language === 'ml' ? 'കേടുപാടുകൾ (Wastage)' : 'Damaged / Wastage' },
-              { value: 'correction', label: language === 'ml' ? 'സ്റ്റോക്ക് തിരുത്തൽ (Correction)' : 'Audit Correction' },
-            ]}
-          />
         </div>
 
+        {/* Reason Selector */}
         <Select
-          label={language === 'ml' ? 'കാരണം (Reason)' : 'Mandatory Reason'}
+          label={language === 'ml' ? 'കാരണം (Reason)' : 'Reason'}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          options={reasonPresets[actionType].map((r) => ({ value: r, label: r }))}
+          options={(isDeduct ? reasonPresets.deduct : reasonPresets.add).map((r) => ({
+            value: r,
+            label: r,
+          }))}
         />
 
+        {/* Custom Notes */}
         <Input
-          label={language === 'ml' ? 'കൂടുതൽ വിവരങ്ങൾ (Notes - Optional)' : 'Additional Details / Notes (Optional)'}
-          placeholder={language === 'ml' ? 'ഉദാ: പെട്ടി തകരാർ, ഈർപ്പം തട്ടിയത്...' : 'e.g. Bin 2 opened bag absorbed humidity'}
+          label={language === 'ml' ? 'കൂടുതൽ വിവരങ്ങൾ (Notes - Optional)' : 'Additional Notes (Optional)'}
+          placeholder={
+            language === 'ml'
+              ? 'ഉദാ: പെട്ടി തകരാർ, ഈർപ്പം തട്ടിയത്...'
+              : 'e.g. Bin 2 opened bag, moisture absorption...'
+          }
           value={customNotes}
           onChange={(e) => setCustomNotes(e.target.value)}
         />
 
+        {/* Balance Preview */}
         {selectedIngredient && (
-          <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828] text-xs flex justify-between transition-colors">
-            <span className="text-charcoal-muted dark:text-stone-400">
-              {language === 'ml' ? 'ശേഷിക്കുന്ന സ്റ്റോക്ക് (Remaining Stock):' : 'Remaining Balance After Deduction:'}
-            </span>
-            <span className="font-bold text-charcoal dark:text-white">
-              {Math.max(0, Number((selectedIngredient.currentStock - quantity).toFixed(3)))}{' '}
-              {selectedIngredient.unit}
-            </span>
+          <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828] text-xs space-y-1 transition-colors">
+            <div className="flex justify-between text-stone-500 dark:text-stone-400">
+              <span>{language === 'ml' ? 'നിലവിലെ സ്റ്റോക്ക്:' : 'Current Stock:'}</span>
+              <span className="font-bold text-stone-800 dark:text-stone-200">
+                {currentStock} {selectedIngredient.unit}
+              </span>
+            </div>
+            <div className="flex justify-between border-t border-charcoal-border/50 dark:border-[#282323] pt-1">
+              <span className="font-medium text-charcoal dark:text-stone-300">
+                {language === 'ml' ? 'മാറ്റത്തിനു ശേഷമുള്ള സ്റ്റോക്ക്:' : 'Projected Stock Balance:'}
+              </span>
+              <span
+                className={`font-black ${
+                  projectedBalance < 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-stone-900 dark:text-white'
+                }`}
+              >
+                {Math.max(0, projectedBalance)} {selectedIngredient.unit}
+              </span>
+            </div>
           </div>
         )}
 
+        {/* Action Buttons */}
         <div className="flex items-center gap-3 pt-3 border-t border-charcoal-border/70">
           <Button type="button" variant="secondary" fullWidth onClick={onClose}>
             {language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}
           </Button>
           <Button
             type="submit"
-            variant={actionType === 'wastage' ? 'danger' : 'primary'}
+            variant={isDeduct ? 'danger' : 'primary'}
             fullWidth
             isLoading={isSubmitting}
+            disabled={isDeduct && (isOutOfStock || isExcessiveDeduction)}
           >
-            {language === 'ml' ? 'രേഖപ്പെടുത്തുക' : 'Record Deduction'}
+            {language === 'ml'
+              ? isDeduct
+                ? 'കുറയ്ക്കുക (Deduct)'
+                : 'ചേർക്കുക (Add)'
+              : isDeduct
+              ? 'Record Deduction'
+              : 'Record Addition'}
           </Button>
         </div>
       </form>

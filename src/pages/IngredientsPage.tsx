@@ -3,23 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { IngredientFormModal } from '../components/ingredients/IngredientFormModal';
-import { StockAdjustmentModal } from '../components/ingredients/StockAdjustmentModal';
 import { Ingredient } from '../types';
 import {
   TbCarrot,
   TbSearch,
-  TbPlus,
   TbAlertTriangle,
-  TbAdjustmentsHorizontal,
-  TbEdit,
+  TbLock,
+  TbCheck,
 } from 'react-icons/tb';
 
 export const IngredientsPage: React.FC = () => {
-  const { repo, dataVersion, triggerRefresh } = useApp();
+  const { repo, dataVersion } = useApp();
   const { t, language } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -28,12 +24,6 @@ export const IngredientsPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showInactive, setShowInactive] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  // Modals
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
-  const [ingredientToEdit, setIngredientToEdit] = useState<Ingredient | null>(null);
-  const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
 
   useEffect(() => {
     const filterParam = searchParams.get('filter');
@@ -107,17 +97,9 @@ export const IngredientsPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            onClick={() => {
-              setIngredientToEdit(null);
-              setIsFormOpen(true);
-            }}
-            icon={<TbPlus className="w-4 h-4" />}
-          >
-            {t('addIngredient')}
-          </Button>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 text-xs font-semibold">
+          <TbLock className="w-3.5 h-3.5 text-amber-500" />
+          <span>{language === 'ml' ? 'അഡ്മിൻ നിയന്ത്രിത സ്റ്റോക്ക്' : 'Admin Managed Catalog'}</span>
         </div>
       </div>
 
@@ -267,62 +249,34 @@ export const IngredientsPage: React.FC = () => {
                   )}
                 </div>
 
-                {/* Card Action Buttons */}
-                <div className="flex items-center gap-1.5 pt-2.5 mt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedIngredient(ing);
-                      setIsAdjustOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-2 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-epso-red dark:text-red-300 rounded-lg text-xs font-bold transition-colors press-apple flex items-center justify-center gap-1"
-                    title="Change stock balance"
-                  >
-                    <TbAdjustmentsHorizontal className="w-3.5 h-3.5" />
-                    <span>Change Stock</span>
-                  </button>
+                {/* Stock Status Footer (Read-Only) */}
+                <div className="flex items-center justify-between pt-2.5 mt-3 border-t border-charcoal-border/50 dark:border-[#2E2828] text-xs">
+                  {ing.currentStock <= 0 ? (
+                    <span className="text-[11px] font-extrabold text-red-600 dark:text-red-400 flex items-center gap-1">
+                      <TbAlertTriangle className="w-3.5 h-3.5" />
+                      <span>{language === 'ml' ? 'സ്റ്റോക്ക് തീർന്നു (0 Stock)' : 'Out of Stock (0)'}</span>
+                    </span>
+                  ) : isLow ? (
+                    <span className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <TbAlertTriangle className="w-3.5 h-3.5" />
+                      <span>{language === 'ml' ? 'കുറഞ്ഞ സ്റ്റോക്ക്' : 'Low Stock Alert'}</span>
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <TbCheck className="w-3.5 h-3.5" />
+                      <span>{language === 'ml' ? 'സ്റ്റോക്ക് ലഭ്യമാണ്' : 'In Stock'}</span>
+                    </span>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIngredientToEdit(ing);
-                      setIsFormOpen(true);
-                    }}
-                    className="py-1.5 px-3 bg-stone-50 hover:bg-stone-100 dark:bg-[#141212] dark:hover:bg-[#282323] text-stone-600 dark:text-stone-300 border border-charcoal-border dark:border-[#2E2828] rounded-lg text-xs font-bold transition-colors press-apple flex items-center gap-1"
-                    title="Edit ingredient"
-                  >
-                    <TbEdit className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </button>
+                  <span className="text-[10px] text-stone-400 dark:text-stone-500 font-medium">
+                    {ing.category === 'basic' ? 'Basic' : 'Other'}
+                  </span>
                 </div>
               </Card>
             );
           })}
         </div>
       )}
-
-      {/* Modals */}
-      <IngredientFormModal
-        isOpen={isFormOpen}
-        onClose={() => {
-          setIsFormOpen(false);
-          setIngredientToEdit(null);
-        }}
-        ingredientToEdit={ingredientToEdit}
-        onSuccess={triggerRefresh}
-      />
-
-      <StockAdjustmentModal
-        isOpen={isAdjustOpen}
-        onClose={() => {
-          setIsAdjustOpen(false);
-          setSelectedIngredient(null);
-        }}
-        ingredients={ingredients}
-        preselectedIngredientId={selectedIngredient?.id}
-        defaultAction="correction"
-        onSuccess={triggerRefresh}
-      />
     </div>
   );
 };
