@@ -8,12 +8,12 @@ import { Product, Recipe, Ingredient } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
-  TbBuildingFactory2,
+  TbChefHat,
+  TbAlertCircle,
   TbSearch,
   TbChevronRight,
   TbChevronLeft,
   TbCircleCheck,
-  TbInfoCircle,
   TbPlus,
   TbTrash,
   TbRuler2,
@@ -87,6 +87,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     name: string;
     unit: string;
     subtitle?: string;
+    isZeroStock?: boolean;
     value: number;
     min?: number;
     max?: number;
@@ -188,6 +189,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     if (!manualIngId || manualIngQty <= 0) return;
     const ing = ingredients.find((i) => i.id === manualIngId);
     if (!ing) return;
+    if (ing.currentStock <= 0 || manualIngQty > ing.currentStock) return;
 
     setConsumptionItems((prev) => {
       const exists = prev.find((i) => i.ingredientId === manualIngId);
@@ -256,7 +258,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       title={
         <div className="flex items-center gap-2 text-stone-900 dark:text-white">
           <div className="w-8 h-8 rounded-lg bg-epso-red text-white flex items-center justify-center font-bold">
-            <TbBuildingFactory2 className="w-5 h-5" />
+            <TbPlus className="w-5 h-5 stroke-[2.5]" />
           </div>
           <div>
             <h3 className="text-base font-extrabold leading-tight">{t.startProduction}</h3>
@@ -387,74 +389,57 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             </div>
 
             {/* Target Output Quantity Controls */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
                 {t.quantityToProduce} ({selectedProduct.unit})
               </label>
-              <div className="flex items-center gap-2">
-                <div
-                  className="flex-1 cursor-pointer"
-                  onClick={() => {
-                    const uConfig = getUnitConfig(selectedProduct.unit);
-                    setActiveRulerItem({
-                      type: 'output',
-                      name: selectedProduct.name,
-                      unit: selectedProduct.unit,
-                      subtitle: `${t.quantityToProduce} (${selectedProduct.unit})`,
-                      value: plannedQty,
-                      min: uConfig.min,
-                      max: 999999,
-                      step: uConfig.step,
-                    });
-                  }}
-                >
-                  <Input
-                    type="number"
-                    min={getUnitConfig(selectedProduct.unit).min}
-                    step="any"
-                    value={plannedQty}
-                    onClick={() => {
-                      const uConfig = getUnitConfig(selectedProduct.unit);
-                      setActiveRulerItem({
-                        type: 'output',
-                        name: selectedProduct.name,
-                        unit: selectedProduct.unit,
-                        subtitle: `${t.quantityToProduce} (${selectedProduct.unit})`,
-                        value: plannedQty,
-                        min: uConfig.min,
-                        max: 999999,
-                        step: uConfig.step,
-                      });
-                    }}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value) || 0;
-                      setPlannedQty(v);
-                      setActualOutputQty(v);
-                    }}
-                    className="text-lg font-black text-stone-900 dark:text-white cursor-pointer"
-                  />
+              <button
+                type="button"
+                onClick={() => {
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                  const uConfig = getUnitConfig(selectedProduct.unit);
+                  setActiveRulerItem({
+                    type: 'output',
+                    name: selectedProduct.name,
+                    unit: selectedProduct.unit,
+                    subtitle: `${t.quantityToProduce} (${selectedProduct.unit})`,
+                    value: plannedQty,
+                    min: uConfig.min,
+                    max: 999999,
+                    step: uConfig.step,
+                  });
+                }}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-charcoal-border dark:border-[#2E2828] text-stone-900 dark:text-white font-black text-lg shadow-xs hover:border-epso-orange transition-all cursor-pointer text-left press-apple"
+                title={language === 'ml' ? 'അളവ് മാറ്റാൻ ക്ലിക്ക് ചെയ്യുക' : 'Click to adjust quantity'}
+              >
+                <span className="tabular-nums">{plannedQty}</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-epso-orange dark:text-amber-400">
+                  <span>{selectedProduct.unit}</span>
+                  <TbRuler2 className="w-4 h-4 opacity-75" />
                 </div>
+              </button>
 
-                {/* Quick Presets */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {getUnitConfig(selectedProduct.unit).presets.slice(0, 4).map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => {
-                        setPlannedQty(preset);
-                        setActualOutputQty(preset);
-                      }}
-                      className={`px-2.5 py-2 rounded-xl text-xs font-extrabold border transition-all press-apple ${
-                        plannedQty === preset
-                          ? 'bg-epso-red text-white border-epso-red shadow-sm'
-                          : 'bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border-charcoal-border dark:border-[#2E2828] hover:bg-stone-50 dark:hover:bg-[#282323]'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
+              {/* Quick Presets: 5, 10, 25, 50, 100, 250 */}
+              <div className="grid grid-cols-6 gap-1.5">
+                {[5, 10, 25, 50, 100, 250].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setPlannedQty(preset);
+                      setActualOutputQty(preset);
+                    }}
+                    className={`py-2 rounded-xl text-xs font-extrabold border transition-all press-apple text-center ${
+                      plannedQty === preset
+                        ? 'bg-epso-red text-white border-epso-red shadow-sm'
+                        : 'bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border-charcoal-border dark:border-[#2E2828] hover:bg-stone-50 dark:hover:bg-[#282323]'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -473,75 +458,102 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 {consumptionItems.map((item) => {
                   const ing = ingredients.find((i) => i.id === item.ingredientId);
                   const inStock = ing ? ing.currentStock : 0;
+                  const isZeroStock = inStock <= 0;
                   const isShortage = inStock < item.actualQuantity;
 
                   return (
                     <div
                       key={item.ingredientId}
-                      className="p-3 rounded-xl border border-charcoal-border dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] flex items-center justify-between gap-3 shadow-xs"
+                      className="p-3 rounded-xl border border-charcoal-border dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] shadow-xs"
                     >
-                      <div className="flex-1 min-w-0">
-                        <h5 className="text-xs font-extrabold text-stone-900 dark:text-white truncate font-malayalam">
-                          {ing?.name || 'Ingredient'}
-                        </h5>
-                        <div className="flex items-center gap-2 text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
-                          <span>
-                            Formula: {item.expectedQuantity} {item.unit}
-                          </span>
-                          <span>•</span>
-                          <span
-                            className={
-                              isShortage
-                                ? 'text-amber-600 dark:text-amber-400 font-bold'
-                                : 'text-emerald-600 dark:text-emerald-400 font-bold'
-                            }
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="text-xs font-extrabold text-stone-900 dark:text-white truncate font-malayalam">
+                            {ing?.name || 'Ingredient'}
+                          </h5>
+                          <div className="flex items-center gap-2 text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
+                            <span>
+                              Formula: {item.expectedQuantity} {item.unit}
+                            </span>
+                            <span>•</span>
+                            <span
+                              className={
+                                isZeroStock
+                                  ? 'text-red-600 dark:text-red-400 font-extrabold'
+                                  : isShortage
+                                  ? 'text-amber-600 dark:text-amber-400 font-bold'
+                                  : 'text-emerald-600 dark:text-emerald-400 font-bold'
+                              }
+                            >
+                              Stock: {inStock} {item.unit}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actual Input & Ruler Selector Trigger */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (document.activeElement instanceof HTMLElement) {
+                                document.activeElement.blur();
+                              }
+                              const uConfig = getUnitConfig(item.unit);
+                              setActiveRulerItem({
+                                type: 'ingredient',
+                                ingredientId: item.ingredientId,
+                                name: ing?.name || 'Ingredient',
+                                unit: item.unit,
+                                subtitle: isZeroStock
+                                  ? `Formula: ${item.expectedQuantity} ${item.unit} • Stock: 0 ${item.unit}`
+                                  : `Formula: ${item.expectedQuantity} ${item.unit} • Stock: ${inStock} ${item.unit}`,
+                                isZeroStock,
+                                value: isZeroStock ? 0 : item.actualQuantity,
+                                min: uConfig.min,
+                                max: 999999,
+                                step: uConfig.step,
+                              });
+                            }}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-extrabold transition-all press-apple cursor-pointer shadow-xs ${
+                              isZeroStock
+                                ? 'bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                                : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300'
+                            }`}
+                            title="Click to adjust quantity"
                           >
-                            Stock: {inStock} {item.unit}
-                          </span>
+                            <span className="text-sm font-black tabular-nums">{item.actualQuantity}</span>
+                            <span className="text-[11px] font-bold">{item.unit}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemToDelete({
+                                id: item.ingredientId,
+                                name: ing?.name || 'Ingredient',
+                                quantity: item.actualQuantity,
+                                unit: item.unit,
+                              });
+                            }}
+                            className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors press-apple cursor-pointer"
+                            title="Remove item from this batch"
+                          >
+                            <TbTrash className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Actual Input & Ruler Selector Trigger */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const uConfig = getUnitConfig(item.unit);
-                            setActiveRulerItem({
-                              type: 'ingredient',
-                              ingredientId: item.ingredientId,
-                              name: ing?.name || 'Ingredient',
-                              unit: item.unit,
-                              subtitle: `Formula: ${item.expectedQuantity} ${item.unit} • Stock: ${inStock} ${item.unit}`,
-                              value: item.actualQuantity,
-                              min: uConfig.min,
-                              max: 999999,
-                              step: uConfig.step,
-                            });
-                          }}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 font-extrabold text-xs transition-all press-apple cursor-pointer shadow-xs"
-                          title="Click to adjust quantity"
-                        >
-                          <span className="text-sm font-black tabular-nums">{item.actualQuantity}</span>
-                          <span className="text-[11px] font-bold">{item.unit}</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemToDelete({
-                              id: item.ingredientId,
-                              name: ing?.name || 'Ingredient',
-                              quantity: item.actualQuantity,
-                              unit: item.unit,
-                            });
-                          }}
-                          className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors press-apple cursor-pointer"
-                          title="Remove item from this batch"
-                        >
-                          <TbTrash className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {/* Red warning text when ingredient stock is 0 */}
+                      {isZeroStock && (
+                        <div className="mt-2 pt-1.5 border-t border-stone-100 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 font-malayalam">
+                          <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                          <span>
+                            {language === 'ml'
+                              ? `ശ്രദ്ധിക്കുക: സ്റ്റോക്ക് ലഭ്യമല്ല (0 ${item.unit} സ്റ്റോക്ക്)`
+                              : `Warning: Stock is 0 ${item.unit} (Out of stock)`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -556,55 +568,107 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </div>
 
               {/* Add manual ingredient row with Ruler Measurement */}
-              <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828] flex flex-wrap sm:flex-nowrap items-center gap-2">
-                <select
-                  value={manualIngId}
-                  onChange={(e) => setManualIngId(e.target.value)}
-                  className="flex-1 min-w-[140px] px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-lg font-malayalam"
-                >
-                  {ingredients.map((ing) => (
-                    <option key={ing.id} value={ing.id}>
-                      {ing.name} ({ing.unit})
-                    </option>
-                  ))}
-                </select>
+              {(() => {
+                const selectedManualIng = ingredients.find((i) => i.id === manualIngId) || ingredients[0];
+                const isManualZeroStock = selectedManualIng ? selectedManualIng.currentStock <= 0 : false;
+                const isManualExceedsStock = selectedManualIng ? manualIngQty > selectedManualIng.currentStock : false;
+                const isAddDisabled = isManualZeroStock || isManualExceedsStock;
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ing = ingredients.find((i) => i.id === manualIngId) || ingredients[0];
-                    if (ing) {
-                      const uConfig = getUnitConfig(ing.unit);
-                      setActiveRulerItem({
-                        type: 'manual',
-                        ingredientId: ing.id,
-                        name: ing.name,
-                        unit: ing.unit,
-                        subtitle: `Current stock: ${ing.currentStock} ${ing.unit}`,
-                        value: manualIngQty,
-                        min: uConfig.min,
-                        max: 999999,
-                        step: uConfig.step,
-                      });
-                    }
-                  }}
-                  className="px-2.5 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 text-xs font-extrabold flex items-center gap-1 cursor-pointer press-apple shadow-xs"
-                  title="Click to adjust quantity"
-                >
-                  <span>
-                    {manualIngQty} {ingredients.find((i) => i.id === manualIngId)?.unit || 'unit'}
-                  </span>
-                </button>
+                return (
+                  <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828]">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                      <select
+                        value={manualIngId}
+                        onChange={(e) => setManualIngId(e.target.value)}
+                        className="flex-1 min-w-[140px] px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-lg font-malayalam"
+                      >
+                        {ingredients.map((ing) => (
+                          <option key={ing.id} value={ing.id}>
+                            {ing.name} ({ing.unit})
+                          </option>
+                        ))}
+                      </select>
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={addManualIngredient}
-                  icon={<TbPlus className="w-3.5 h-3.5" />}
-                >
-                  Add
-                </Button>
-              </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (document.activeElement instanceof HTMLElement) {
+                            document.activeElement.blur();
+                          }
+                          const ing = selectedManualIng;
+                          if (ing) {
+                            const isZero = ing.currentStock <= 0;
+                            const uConfig = getUnitConfig(ing.unit);
+                            setActiveRulerItem({
+                              type: 'manual',
+                              ingredientId: ing.id,
+                              name: ing.name,
+                              unit: ing.unit,
+                              subtitle: isZero
+                                ? `Current stock: 0 ${ing.unit}`
+                                : `Current stock: ${ing.currentStock} ${ing.unit}`,
+                              isZeroStock: isZero,
+                              value: isZero ? 0 : manualIngQty,
+                              min: uConfig.min,
+                              max: 999999,
+                              step: uConfig.step,
+                            });
+                          }
+                        }}
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-extrabold flex items-center gap-1 cursor-pointer press-apple shadow-xs ${
+                          isManualZeroStock
+                            ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                            : 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300'
+                        }`}
+                        title="Click to adjust quantity"
+                      >
+                        <span>
+                          {manualIngQty} {selectedManualIng?.unit || 'unit'}
+                        </span>
+                      </button>
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={isAddDisabled}
+                        onClick={isAddDisabled ? undefined : addManualIngredient}
+                        className={
+                          isAddDisabled
+                            ? '!bg-stone-200 dark:!bg-stone-800 !text-stone-400 dark:!text-stone-500 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none'
+                            : ''
+                        }
+                        icon={<TbPlus className="w-3.5 h-3.5" />}
+                      >
+                        Add
+                      </Button>
+                    </div>
+
+                    {/* Red warning text INSIDE the container, just like added ingredients */}
+                    {isManualZeroStock && selectedManualIng && (
+                      <div className="mt-2 pt-1.5 border-t border-stone-200 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 font-malayalam">
+                        <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
+                        <span>
+                          {language === 'ml'
+                            ? `ശ്രദ്ധിക്കുക: സ്റ്റോക്ക് ലഭ്യമല്ല (0 ${selectedManualIng.unit} സ്റ്റോക്ക്)`
+                            : `Warning: Stock is 0 ${selectedManualIng.unit} (Out of stock)`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Warning if selected measurement exceeds stock */}
+                    {!isManualZeroStock && isManualExceedsStock && selectedManualIng && (
+                      <div className="mt-2 pt-1.5 border-t border-stone-200 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 font-malayalam">
+                        <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                        <span>
+                          {language === 'ml'
+                            ? `ശ്രദ്ധിക്കുക: തിരഞ്ഞെടുത്ത അളവ് സ്റ്റോക്കിനേക്കാൾ കൂടുതലാണ് (${selectedManualIng.currentStock} ${selectedManualIng.unit} ലഭ്യമാണ്)`
+                            : `Warning: Quantity exceeds current stock (${selectedManualIng.currentStock} ${selectedManualIng.unit} available)`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-charcoal-border dark:border-[#2E2828]">
@@ -768,6 +832,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               <MeasurementRulerSelector
                 title={activeRulerItem.name}
                 subtitle={activeRulerItem.subtitle}
+                isZeroStock={activeRulerItem.isZeroStock}
                 unit={activeRulerItem.unit}
                 value={activeRulerItem.value || 1}
                 min={activeRulerItem.min}

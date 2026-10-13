@@ -124,8 +124,12 @@ export const ProductsPage: React.FC = () => {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-950/60 text-epso-red dark:text-red-300 flex items-center justify-center font-black text-sm shrink-0">
-                        {prod.name.slice(0, 1)}
+                      <div className="w-10 h-10 rounded-full bg-stone-100 dark:bg-[#221E1E] border border-stone-200/80 dark:border-[#2C2727] flex items-center justify-center shrink-0 shadow-2xs">
+                        <img
+                          src="/epso-icon-grey.png"
+                          alt=""
+                          className="w-6 h-6 object-contain opacity-50 dark:opacity-40 select-none pointer-events-none"
+                        />
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">

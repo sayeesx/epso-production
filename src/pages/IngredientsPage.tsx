@@ -187,27 +187,36 @@ export const IngredientsPage: React.FC = () => {
               >
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                            isBasic
-                              ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
-                              : 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300'
-                          }`}
-                        >
-                          {isBasic ? 'Category A: Basic' : 'Category B: Other'}
-                        </span>
-                        {ing.isActive === false && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
-                            Inactive
-                          </span>
-                        )}
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-stone-100 dark:bg-[#221E1E] border border-stone-200/80 dark:border-[#2C2727] flex items-center justify-center shrink-0 shadow-2xs">
+                        <img
+                          src="/epso-icon-grey.png"
+                          alt=""
+                          className="w-6 h-6 object-contain opacity-50 dark:opacity-40 select-none pointer-events-none"
+                        />
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                              isBasic
+                                ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300'
+                            }`}
+                          >
+                            {isBasic ? 'Category A: Basic' : 'Category B: Other'}
+                          </span>
+                          {ing.isActive === false && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
 
-                      <h3 className="text-base font-bold text-stone-900 dark:text-white mt-1.5 leading-snug break-words font-malayalam">
-                        {ing.name}
-                      </h3>
+                        <h3 className="text-base font-bold text-stone-900 dark:text-white mt-1 leading-snug break-words font-malayalam">
+                          {ing.name}
+                        </h3>
+                      </div>
                     </div>
 
                     <div className="text-right shrink-0">

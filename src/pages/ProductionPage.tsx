@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -19,6 +20,7 @@ import {
 export const ProductionPage: React.FC = () => {
   const { repo, dataVersion, triggerRefresh, addToast, staffName, isStartProductionOpen, setIsStartProductionOpen } = useApp();
   const { t, language } = useLanguage();
+  const { isDark } = useTheme();
 
   const [runs, setRuns] = useState<ProductionRun[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -143,15 +145,14 @@ export const ProductionPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
-      {/* Sleek, minimal header bar */}
+      {/* Sleek header bar with prominent Epso logo */}
       <div className="flex items-center justify-between gap-3 pt-1">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white tracking-tight">
-            {language === 'ml' ? 'പ്രൊഡക്ഷൻ' : 'Production'}
-          </h1>
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            {language === 'ml' ? 'സമീപകാല ബാച്ച് വിവരങ്ങൾ' : 'Recent production batches'}
-          </p>
+        <div className="flex items-center">
+          <img
+            src={isDark ? '/epso-logo-dark.png' : '/epso-logo-light.png'}
+            alt="Epso Logo"
+            className="h-[50px] sm:h-[62px] w-auto object-contain transition-opacity duration-200 select-none"
+          />
         </div>
 
         <button

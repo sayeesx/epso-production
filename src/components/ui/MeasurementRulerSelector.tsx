@@ -36,7 +36,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
       min: 0.1,
       step: 0.1,
       decimals: 1,
-      presets: [0.5, 1, 2, 5, 10],
+      presets: [5, 10, 25, 50, 100, 250],
     };
   }
   if (['l', 'ltr', 'ltrs', 'liter', 'liters', 'litre', 'litres'].includes(u)) {
@@ -76,6 +76,7 @@ export interface MeasurementRulerSelectorProps {
   min?: number;
   max?: number;
   step?: number;
+  isZeroStock?: boolean;
   onConfirm?: () => void;
   onClose?: () => void;
   confirmLabel?: string;
@@ -92,17 +93,15 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   min,
   max = 999999,
   step,
+  isZeroStock = false,
   onConfirm,
   onClose,
   confirmLabel = 'Done / Set Quantity',
   className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef<boolean>(false);
-  const startXRef = useRef<number>(0);
-  const startScrollLeftRef = useRef<number>(0);
-  const isInternalScrollRef = useRef<boolean>(false);
-  const scrollTimeoutRef = useRef<any>(null);
+  const isProgrammaticScrollRef = useRef<boolean>(false);
+  const programmaticTimerRef = useRef<any>(null);
 
   // Unit configuration with fallback
   const unitConfig = useMemo(() => getUnitConfig(unit), [unit]);
@@ -114,149 +113,130 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   // Manual typing mode state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [typedValue, setTypedValue] = useState<string>('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Spacing between each tick mark
+  // Spacing between each tick mark in pixels
   const TICK_SPACING = 14;
 
-  // Dynamic Ruler Track Windowing:
-  // Render at most 250 ticks around the active position to keep DOM lightweight and smooth at 60fps.
-  const { rulerMin, rulerMax, totalTicks } = useMemo(() => {
-    const activeVal = value > 0 ? value : effectiveMin;
-    const targetStep = Math.max(0, Math.round((activeVal - effectiveMin) / effectiveStep));
+  // Calculate starting tick count to accommodate current value plus scroll runway
+  const initialTicks = useMemo(() => {
+    const valStep = Math.ceil((Math.max(value, effectiveMin) - effectiveMin) / effectiveStep);
+    return Math.max(500, valStep + 300);
+  }, [effectiveMin, effectiveStep]);
 
-    if (targetStep < 120) {
-      // Near beginning: start track from effectiveMin
-      const ticks = Math.max(80, Math.min(250, targetStep + 100));
-      return {
-        rulerMin: effectiveMin,
-        rulerMax: Number((effectiveMin + ticks * effectiveStep).toFixed(decimals)),
-        totalTicks: ticks,
-      };
-    } else {
-      // In middle or high range: window 180 ticks around current target
-      const halfWindow = 90;
-      const startStep = Math.max(0, targetStep - halfWindow);
-      const ticks = 180;
-      const startMin = Number((effectiveMin + startStep * effectiveStep).toFixed(decimals));
-      return {
-        rulerMin: startMin,
-        rulerMax: Number((startMin + ticks * effectiveStep).toFixed(decimals)),
-        totalTicks: ticks,
-      };
-    }
-  }, [value, effectiveMin, effectiveStep, decimals]);
+  const [totalTicks, setTotalTicks] = useState<number>(initialTicks);
 
-  // Scroll track to target value
+  // Keep a ref of latest value to prevent redundant onChange calls
+  const latestValueRef = useRef<number>(value);
+  latestValueRef.current = value;
+
+  // Scroll to a target value programmatically (smoothly or instantly)
   const scrollToValue = useCallback(
-    (targetVal: number, smooth: boolean = false) => {
+    (targetVal: number, smooth: boolean = true) => {
       const el = containerRef.current;
       if (!el) return;
-      const stepsFromRulerMin = Math.max(0, (targetVal - rulerMin) / effectiveStep);
-      const targetScrollLeft = Math.round(stepsFromRulerMin * TICK_SPACING);
 
-      isInternalScrollRef.current = true;
+      const stepIndex = Math.max(0, Math.round((targetVal - effectiveMin) / effectiveStep));
+      const targetScrollLeft = Math.round(stepIndex * TICK_SPACING);
+
+      // Expand track if target is near or beyond current tick ceiling
+      if (stepIndex >= totalTicks - 100) {
+        setTotalTicks((prev) => Math.max(prev, stepIndex + 400));
+      }
+
+      isProgrammaticScrollRef.current = true;
+      if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, smooth ? 450 : 50);
+
       el.scrollTo({
         left: targetScrollLeft,
         behavior: smooth ? 'smooth' : 'auto',
       });
-
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => {
-        isInternalScrollRef.current = false;
-      }, 120);
     },
-    [rulerMin, effectiveStep, TICK_SPACING]
+    [effectiveMin, effectiveStep, totalTicks, TICK_SPACING]
   );
 
-  // Initial scroll position on mount
+  // Initial setup: ensure keyboard is closed and ruler is positioned at starting value
   useEffect(() => {
-    const initial = value > 0 ? value : effectiveMin;
-    if (value <= 0) {
+    setIsEditing(false);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const target = isZeroStock ? 0 : value > 0 ? value : effectiveMin;
+    if (!isZeroStock && value <= 0) {
       onChange(effectiveMin);
     }
     const timer = setTimeout(() => {
-      scrollToValue(initial, false);
-    }, 50);
-    return () => clearTimeout(timer);
+      scrollToValue(target, false);
+    }, 40);
+    return () => {
+      clearTimeout(timer);
+      if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+    };
   }, []);
 
-  // Handle scroll events from ruler track
+  // When user enters manual editing mode, focus and select input
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  // Handle native scroll events from ruler track
   const handleScroll = () => {
-    if (isInternalScrollRef.current) return;
+    if (isZeroStock) return;
     const el = containerRef.current;
     if (!el) return;
 
-    const scrollLeft = el.scrollLeft;
-    const rawStepIndex = scrollLeft / TICK_SPACING;
-    const roundedStep = Math.round(rawStepIndex);
-    const clampedStep = Math.max(0, Math.min(totalTicks, roundedStep));
-    const calculatedValue = Number((rulerMin + clampedStep * effectiveStep).toFixed(decimals));
+    // If programmatic smooth scroll is running, refresh timer and do not override
+    if (isProgrammaticScrollRef.current) {
+      if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 150);
+      return;
+    }
 
-    if (calculatedValue !== value) {
+    const scrollLeft = el.scrollLeft;
+    const stepIndex = Math.max(0, Math.round(scrollLeft / TICK_SPACING));
+    const calculatedValue = Number((effectiveMin + stepIndex * effectiveStep).toFixed(decimals));
+
+    if (calculatedValue !== latestValueRef.current) {
+      latestValueRef.current = calculatedValue;
       onChange(calculatedValue);
     }
-  };
 
-  // Pointer drag gestures for mouse and touch
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const el = containerRef.current;
-    if (!el) return;
-    isDraggingRef.current = true;
-    startXRef.current = e.clientX;
-    startScrollLeftRef.current = el.scrollLeft;
-    try {
-      el.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore
+    // Truly infinite: dynamically add more ticks as the user scrolls right
+    if (stepIndex >= totalTicks - 120) {
+      setTotalTicks((prev) => prev + 300);
     }
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current) return;
-    const el = containerRef.current;
-    if (!el) return;
-    const deltaX = e.clientX - startXRef.current;
-    el.scrollLeft = startScrollLeftRef.current - deltaX;
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    const el = containerRef.current;
-    if (!el) return;
-    try {
-      el.releasePointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-
-    // Snap to nearest tick
-    const scrollLeft = el.scrollLeft;
-    const nearestStep = Math.round(scrollLeft / TICK_SPACING);
-    const clampedStep = Math.max(0, Math.min(totalTicks, nearestStep));
-    const snappedVal = Number((rulerMin + clampedStep * effectiveStep).toFixed(decimals));
-    onChange(snappedVal);
-    scrollToValue(snappedVal, true);
-  };
-
-  // Stepper increment / decrement
+  // Adjust by increment stepper
   const adjustBy = (delta: number) => {
+    if (isZeroStock) return;
     const newVal = Math.max(effectiveMin, Number((value + delta).toFixed(decimals || 3)));
     onChange(newVal);
     scrollToValue(newVal, true);
   };
 
-  // Commit typed value without snapping to coarse step or capping at arbitrary limits
+  // Commit typed value
   const commitTypedValue = useCallback(() => {
+    if (isZeroStock) {
+      setIsEditing(false);
+      return;
+    }
     const num = parseFloat(typedValue);
     if (!isNaN(num) && num > 0) {
-      // Clean float without IEEE 754 precision drift (keep exact user number e.g. 1.7, 100, 250.5)
       const cleanNum = Number(num.toFixed(3));
       onChange(cleanNum);
       scrollToValue(cleanNum, true);
     }
     setIsEditing(false);
-  }, [typedValue, onChange, scrollToValue]);
+  }, [typedValue, isZeroStock, onChange, scrollToValue]);
 
   // Unit-aware preset buttons
   const presets = unitConfig.presets;
@@ -317,21 +297,31 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       </div>
 
       {/* RULER CONTAINER WITH THEME ORANGE CENTER INDICATOR */}
-      <div className="relative w-full py-4 my-2 overflow-hidden flex flex-col items-center">
-        {/* Center Vertical Marker Line: Theme Epso Orange */}
-        <div className="absolute top-0 bottom-8 left-1/2 -translate-x-1/2 w-0.5 bg-epso-orange dark:bg-orange-500 z-20 pointer-events-none rounded-full shadow-[0_0_10px_rgba(229,90,36,0.6)]">
-          <div className="w-2.5 h-2.5 rounded-full bg-epso-orange dark:bg-orange-500 -ml-[4px] -top-1 absolute" />
+      <div
+        className={`relative w-full py-4 my-2 overflow-hidden flex flex-col items-center transition-all ${
+          isZeroStock ? 'opacity-30 grayscale pointer-events-none select-none cursor-not-allowed' : ''
+        }`}
+      >
+        {/* Center Vertical Marker Line */}
+        <div
+          className={`absolute top-0 bottom-8 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full ${
+            isZeroStock
+              ? 'bg-stone-400 dark:bg-stone-600'
+              : 'bg-epso-orange dark:bg-orange-500 shadow-[0_0_10px_rgba(229,90,36,0.6)]'
+          }`}
+        >
+          <div
+            className={`w-2.5 h-2.5 rounded-full -ml-[4px] -top-1 absolute ${
+              isZeroStock ? 'bg-stone-400 dark:bg-stone-600' : 'bg-epso-orange dark:bg-orange-500'
+            }`}
+          />
         </div>
 
-        {/* Scrollable / Draggable Ruler Track */}
+        {/* Scrollable / Draggable Ruler Track (Native hardware momentum touch scroll) */}
         <div
           ref={containerRef}
           onScroll={handleScroll}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          className="w-full overflow-x-scroll no-scrollbar cursor-grab active:cursor-grabbing touch-pan-x flex items-end h-20 relative select-none"
+          className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-20 relative select-none"
           style={{
             scrollbarWidth: 'none',
             msOverflowStyle: 'none',
@@ -343,7 +333,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           {/* Calibrated Ticks */}
           <div className="flex items-end shrink-0" style={{ gap: `${TICK_SPACING - 2}px` }}>
             {Array.from({ length: totalTicks + 1 }).map((_, idx) => {
-              const currentStepVal = Number((rulerMin + idx * effectiveStep).toFixed(decimals));
+              const currentStepVal = Number((effectiveMin + idx * effectiveStep).toFixed(decimals));
 
               let isMajor = false;
               let isMedium = false;
@@ -352,7 +342,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
               if (effectiveStep <= 0.1) {
                 // Kilograms, Liters (0.1, 0.2, 0.3 ... 1.0, 1.1 ... 2.0)
                 const isWhole = Math.abs(Math.round(currentStepVal) - currentStepVal) < 0.001;
-                const isStart = idx === 0 && rulerMin < 1;
+                const isStart = idx === 0 && effectiveMin < 1;
                 const isHalf = Math.abs((currentStepVal * 2) % 1) < 0.001 && !isWhole;
 
                 if (isWhole) {
@@ -370,8 +360,8 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
               } else if (effectiveStep === 1) {
                 // Grams, Milliliters, Pcs
                 const isStart = idx === 0;
-                const majorInterval = totalTicks > 120 ? 50 : totalTicks > 50 ? 25 : 10;
-                const mediumInterval = majorInterval === 50 ? 10 : 5;
+                const majorInterval = totalTicks > 500 ? 50 : 25;
+                const mediumInterval = 10;
 
                 if (currentStepVal % majorInterval === 0 || (isStart && currentStepVal === 1)) {
                   isMajor = true;
@@ -391,6 +381,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                 <div
                   key={idx}
                   onClick={() => {
+                    if (isZeroStock) return;
                     onChange(currentStepVal);
                     scrollToValue(currentStepVal, true);
                   }}
@@ -434,14 +425,14 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
         <button
           type="button"
           onClick={() => adjustBy(-effectiveStep)}
-          disabled={value <= effectiveMin}
+          disabled={isZeroStock || value <= effectiveMin}
           className="w-10 h-10 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple shrink-0"
           title={`Decrease by ${effectiveStep}`}
         >
           <Minus className="w-5 h-5 stroke-[2.5]" />
         </button>
 
-        {isEditing ? (
+        {isEditing && !isZeroStock ? (
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -450,6 +441,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
             className="flex items-baseline gap-2"
           >
             <input
+              ref={inputRef}
               type="number"
               step="any"
               min={effectiveMin}
@@ -466,7 +458,6 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                   setIsEditing(false);
                 }
               }}
-              autoFocus
               className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight w-36 text-center bg-stone-100 dark:bg-[#282323] rounded-2xl px-2 py-1 border-2 border-epso-orange focus:outline-none"
             />
             <span className="text-xl sm:text-2xl font-extrabold text-epso-orange dark:text-amber-400">
@@ -477,11 +468,17 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           <button
             type="button"
             onClick={() => {
+              if (isZeroStock) return;
               setTypedValue(String(value));
               setIsEditing(true);
             }}
-            className="flex items-baseline gap-2 cursor-pointer group px-4 py-1 rounded-2xl hover:bg-stone-100 dark:hover:bg-[#282323] transition-all press-apple border border-transparent hover:border-charcoal-border/40"
-            title="Click to manually type custom quantity"
+            disabled={isZeroStock}
+            className={`flex items-baseline gap-2 px-4 py-1 rounded-2xl transition-all press-apple border border-transparent ${
+              isZeroStock
+                ? 'cursor-not-allowed opacity-40'
+                : 'cursor-pointer group hover:bg-stone-100 dark:hover:bg-[#282323] hover:border-charcoal-border/40'
+            }`}
+            title={isZeroStock ? 'Stock is 0' : 'Click to manually type custom quantity'}
           >
             <div className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight">
               <CountUp
@@ -492,19 +489,25 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                 className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white"
               />
             </div>
-            <span className="text-xl sm:text-2xl font-extrabold text-epso-orange dark:text-amber-400">
+            <span
+              className={`text-xl sm:text-2xl font-extrabold ${
+                isZeroStock ? 'text-stone-400 dark:text-stone-500' : 'text-epso-orange dark:text-amber-400'
+              }`}
+            >
               {unit}
             </span>
-            <span className="text-xs text-stone-400 group-hover:text-epso-orange font-bold ml-1 transition-colors">
-              ✏️
-            </span>
+            {!isZeroStock && (
+              <span className="text-xs text-stone-400 group-hover:text-epso-orange font-bold ml-1 transition-colors">
+                ✏️
+              </span>
+            )}
           </button>
         )}
 
         <button
           type="button"
           onClick={() => adjustBy(effectiveStep)}
-          disabled={value >= effectiveMax}
+          disabled={isZeroStock || value >= effectiveMax}
           className="w-10 h-10 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple shrink-0"
           title={`Increase by ${effectiveStep}`}
         >
@@ -513,22 +516,32 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       </div>
 
       <p className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mb-2">
-        {isEditing ? 'Enter അമർത്തി സേവ് ചെയ്യുക' : 'റൂളർ നീക്കുകയോ നമ്പറിൽ തൊട്ട് ടൈപ്പ് ചെയ്യുകയോ ചെയ്യാം'}
+        {isZeroStock
+          ? 'സ്റ്റോക്ക് ലഭ്യമല്ല (Stock is 0)'
+          : isEditing
+          ? 'Enter അമർത്തി സേവ് ചെയ്യുക'
+          : 'റൂളർ നീക്കുകയോ നമ്പറിൽ തൊട്ട് ടൈപ്പ് ചെയ്യുകയോ ചെയ്യാം'}
       </p>
 
       {/* QUICK PRESET BUTTONS */}
       {presets.length > 0 && (
-        <div className="flex items-center justify-center gap-2 my-2 w-full">
+        <div
+          className={`flex items-center justify-center gap-2 my-2 w-full ${
+            isZeroStock ? 'opacity-30 pointer-events-none' : ''
+          }`}
+        >
           {presets.map((preset) => (
             <button
               key={preset}
               type="button"
+              disabled={isZeroStock}
               onClick={() => {
+                if (isZeroStock) return;
                 onChange(preset);
                 scrollToValue(preset, true);
               }}
               className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-95 press-apple cursor-pointer border ${
-                value === preset
+                value === preset && !isZeroStock
                   ? 'bg-gradient-to-r from-epso-red to-epso-orange text-white border-transparent shadow-sm ring-2 ring-epso-orange/30'
                   : 'bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300 border-charcoal-border/50 dark:border-[#383030]'
               }`}
@@ -549,13 +562,16 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
             }
             onConfirm();
           }}
-          className="w-full mt-3 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white font-extrabold text-sm sm:text-base shadow-md hover:shadow-lg transition-all duration-150 active:scale-[0.98] press-apple flex items-center justify-center gap-2 cursor-pointer"
+          className={`w-full mt-3 py-3.5 px-6 rounded-2xl font-extrabold text-sm sm:text-base shadow-md transition-all duration-150 active:scale-[0.98] press-apple flex items-center justify-center gap-2 cursor-pointer ${
+            isZeroStock
+              ? 'bg-stone-200 dark:bg-[#2A2525] text-stone-600 dark:text-stone-300 cursor-pointer hover:bg-stone-300 dark:hover:bg-[#322C2C]'
+              : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white hover:shadow-lg'
+          }`}
         >
           <Check className="w-5 h-5 stroke-[2.5]" />
-          <span>{confirmLabel}</span>
+          <span>{isZeroStock ? 'Close / തിരികെ പോകുക' : confirmLabel}</span>
         </button>
       )}
     </div>
   );
 };
-
