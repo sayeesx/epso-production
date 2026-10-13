@@ -572,19 +572,19 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 const selectedManualIng = ingredients.find((i) => i.id === manualIngId) || ingredients[0];
                 const isManualZeroStock = selectedManualIng ? selectedManualIng.currentStock <= 0 : false;
                 const isManualExceedsStock = selectedManualIng ? manualIngQty > selectedManualIng.currentStock : false;
-                const isAddDisabled = isManualZeroStock || isManualExceedsStock;
+                const isAddDisabled = isManualZeroStock || isManualExceedsStock || manualIngQty <= 0;
 
                 return (
-                  <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828]">
+                  <div className="p-3 bg-white dark:bg-[#1E1B1B] rounded-xl border border-charcoal-border dark:border-[#2E2828] shadow-xs transition-colors">
                     <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                       <select
                         value={manualIngId}
                         onChange={(e) => setManualIngId(e.target.value)}
-                        className="flex-1 min-w-[140px] px-2.5 py-1.5 text-xs font-semibold bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-lg font-malayalam"
+                        className="flex-1 min-w-[140px] px-2.5 py-2 text-xs font-semibold bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-xl font-malayalam focus:outline-none focus:ring-1 focus:ring-epso-orange"
                       >
                         {ingredients.map((ing) => (
                           <option key={ing.id} value={ing.id}>
-                            {ing.name} ({ing.unit})
+                            {ing.name} ({ing.unit}) {ing.currentStock <= 0 ? (language === 'ml' ? '• (സ്റ്റോക്ക് ഇല്ല)' : '• (0 stock)') : `• (${ing.currentStock} ${ing.unit})`}
                           </option>
                         ))}
                       </select>
@@ -605,8 +605,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                               name: ing.name,
                               unit: ing.unit,
                               subtitle: isZero
-                                ? `Current stock: 0 ${ing.unit}`
-                                : `Current stock: ${ing.currentStock} ${ing.unit}`,
+                                ? (language === 'ml' ? `സ്റ്റോക്ക്: 0 ${ing.unit}` : `Current stock: 0 ${ing.unit}`)
+                                : (language === 'ml' ? `സ്റ്റോക്ക്: ${ing.currentStock} ${ing.unit}` : `Current stock: ${ing.currentStock} ${ing.unit}`),
                               isZeroStock: isZero,
                               value: isZero ? 0 : manualIngQty,
                               min: uConfig.min,
@@ -615,9 +615,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                             });
                           }
                         }}
-                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-extrabold flex items-center gap-1 cursor-pointer press-apple shadow-xs ${
+                        className={`px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1 cursor-pointer press-apple shadow-xs transition-all ${
                           isManualZeroStock
                             ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                            : isManualExceedsStock
+                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
                             : 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300'
                         }`}
                         title="Click to adjust quantity"
@@ -634,7 +636,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         onClick={isAddDisabled ? undefined : addManualIngredient}
                         className={
                           isAddDisabled
-                            ? '!bg-stone-200 dark:!bg-stone-800 !text-stone-400 dark:!text-stone-500 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none'
+                            ? '!bg-stone-200 dark:!bg-stone-800 !text-stone-400 dark:!text-stone-500 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none shadow-none'
                             : ''
                         }
                         icon={<TbPlus className="w-3.5 h-3.5" />}
@@ -645,7 +647,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
                     {/* Red warning text INSIDE the container, just like added ingredients */}
                     {isManualZeroStock && selectedManualIng && (
-                      <div className="mt-2 pt-1.5 border-t border-stone-200 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 font-malayalam">
+                      <div className="mt-2.5 pt-2 border-t border-stone-100 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 font-malayalam">
                         <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
                         <span>
                           {language === 'ml'
@@ -657,7 +659,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
                     {/* Warning if selected measurement exceeds stock */}
                     {!isManualZeroStock && isManualExceedsStock && selectedManualIng && (
-                      <div className="mt-2 pt-1.5 border-t border-stone-200 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 font-malayalam">
+                      <div className="mt-2.5 pt-2 border-t border-stone-100 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 font-malayalam">
                         <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
                         <span>
                           {language === 'ml'
@@ -833,6 +835,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 title={activeRulerItem.name}
                 subtitle={activeRulerItem.subtitle}
                 isZeroStock={activeRulerItem.isZeroStock}
+                presets={activeRulerItem.type === 'output' ? [5, 10, 25, 50, 100, 250] : undefined}
                 unit={activeRulerItem.unit}
                 value={activeRulerItem.value || 1}
                 min={activeRulerItem.min}

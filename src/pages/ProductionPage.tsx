@@ -151,7 +151,7 @@ export const ProductionPage: React.FC = () => {
           <img
             src={isDark ? '/epso-logo-dark.png' : '/epso-logo-light.png'}
             alt="Epso Logo"
-            className="h-[50px] sm:h-[62px] w-auto object-contain transition-opacity duration-200 select-none"
+            className="h-[56px] sm:h-[68px] w-auto object-contain transition-opacity duration-200 select-none"
           />
         </div>
 
