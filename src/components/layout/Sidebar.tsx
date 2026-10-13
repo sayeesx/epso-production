@@ -2,9 +2,11 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Package, UtensilsCrossed, Settings, UserCheck } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useTheme } from '../../context/ThemeContext';
 
 export const Sidebar: React.FC = () => {
   const { staffName } = useApp();
+  const { isDark } = useTheme();
 
   const navItems = [
     { to: '/', label: 'Production', icon: Home, end: true },
@@ -14,8 +16,15 @@ export const Sidebar: React.FC = () => {
   ];
 
   return (
-    <aside className="hidden md:flex flex-col w-60 border-r border-charcoal-border/70 dark:border-charcoal-border-dark bg-white dark:bg-[#141212] min-h-[calc(100vh-57px)] p-4 shrink-0 shadow-sm transition-colors duration-200">
+    <aside className="hidden md:flex flex-col w-60 border-r border-charcoal-border/70 dark:border-charcoal-border-dark bg-white dark:bg-[#141212] min-h-screen p-4 shrink-0 shadow-sm transition-colors duration-200">
       <div className="space-y-6 flex-1">
+        <div className="px-3 py-1">
+          <img
+            src={isDark ? '/epso-logo-dark.png' : '/epso-logo-light.png'}
+            alt="Epso Logo"
+            className="h-8 w-auto object-contain select-none"
+          />
+        </div>
         <div>
           <div className="px-3 mb-2.5 text-[11px] font-bold tracking-wider text-stone-400 dark:text-stone-500 uppercase">
             Menu

@@ -42,7 +42,7 @@
   body {
     background-color: var(--color-bg);
     color: var(--color-text);
-    font-family: 'Plus Jakarta Sans', 'Noto Sans Malayalam', Inter, system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Anek Malayalam', 'Manjari', 'Noto Sans Malayalam', Inter, system-ui, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
