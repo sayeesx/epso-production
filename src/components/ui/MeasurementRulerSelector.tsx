@@ -76,6 +76,7 @@ export interface MeasurementRulerSelectorProps {
   min?: number;
   max?: number;
   step?: number;
+  presets?: number[];
   isZeroStock?: boolean;
   onConfirm?: () => void;
   onClose?: () => void;
@@ -93,6 +94,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   min,
   max = 999999,
   step,
+  presets: customPresets,
   isZeroStock = false,
   onConfirm,
   onClose,
@@ -238,8 +240,8 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
     setIsEditing(false);
   }, [typedValue, isZeroStock, onChange, scrollToValue]);
 
-  // Unit-aware preset buttons
-  const presets = unitConfig.presets;
+  // Unit-aware preset buttons (custom presets take priority)
+  const presets = customPresets ?? unitConfig.presets;
 
   return (
     <div
