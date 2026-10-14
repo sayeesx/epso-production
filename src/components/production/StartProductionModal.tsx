@@ -213,12 +213,39 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     setManualIngQty(1);
   };
 
+  // Check for any ingredient in consumption list that is out of stock (currentStock <= 0)
+  const outOfStockIngredients = useMemo(() => {
+    return consumptionItems
+      .map((item) => {
+        const ing = ingredients.find((i) => i.id === item.ingredientId);
+        const inStock = ing ? ing.currentStock : 0;
+        return {
+          ...item,
+          name: ing?.name || 'Ingredient',
+          currentStock: inStock,
+          isOutOfStock: inStock <= 0,
+        };
+      })
+      .filter((item) => item.isOutOfStock);
+  }, [consumptionItems, ingredients]);
+
+  const hasOutOfStockIngredient = outOfStockIngredients.length > 0;
+
   const handleFinalSubmit = async () => {
     if (!selectedProduct) return;
     if (actualOutputQty <= 0) {
       addToast(
         language === 'ml' ? 'ശരിയായ അളവ് നൽകുക' : 'Please provide a valid output quantity',
         'warning'
+      );
+      return;
+    }
+    if (hasOutOfStockIngredient) {
+      addToast(
+        language === 'ml'
+          ? 'ചേരുവകളുടെ സ്റ്റോക്ക് തീർന്നതിനാൽ പ്രൊഡക്ഷൻ സേവ് ചെയ്യാനാവില്ല'
+          : 'Cannot save production: some required ingredients are out of stock',
+        'error'
       );
       return;
     }
@@ -311,8 +338,13 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 isModalExpanded || productSearch ? 'max-h-[72vh] sm:max-h-[66vh]' : 'max-h-[50vh]'
               }`}>
                 {filteredProducts.map((p) => {
-                  const hasRecipe = recipes.some((r) => r.productId === p.id && r.isActive);
+                  const productRecipe = recipes.find((r) => r.productId === p.id && r.isActive);
+                  const hasRecipe = !!productRecipe;
                   const isSelected = p.id === selectedProductId;
+                  const hasOutOfStockIng = productRecipe?.ingredients.some((ingItem) => {
+                    const ing = ingredients.find((i) => i.id === ingItem.ingredientId);
+                    return !ing || ing.currentStock <= 0;
+                  });
 
                   return (
                     <div
@@ -337,9 +369,15 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                               {p.unit}
                             </span>
                             {hasRecipe ? (
-                              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                                Recipe Ready
-                              </span>
+                              hasOutOfStockIng ? (
+                                <span className="text-[10px] font-bold text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                  {language === 'ml' ? 'സ്റ്റോക്ക് തീർന്നു' : 'Out of Stock'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                  Recipe Ready
+                                </span>
+                              )
                             ) : (
                               <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-[#282323] px-1.5 py-0.5 rounded">
                                 Manual
@@ -673,6 +711,25 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               })()}
             </div>
 
+            {/* Out of stock warning banner above action buttons */}
+            {hasOutOfStockIngredient && (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
+                <TbAlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                <div className="flex-1">
+                  <span className="font-extrabold font-malayalam block">
+                    {language === 'ml'
+                      ? 'ചേരുവകളുടെ സ്റ്റോക്ക് തീർന്നു (Out of Stock)'
+                      : 'Ingredients Out of Stock'}
+                  </span>
+                  <span className="text-[11px] font-medium font-malayalam opacity-90 mt-0.5 block">
+                    {language === 'ml'
+                      ? `${outOfStockIngredients.map((i) => i.name).join(', ')} എന്നിവയുടെ നിലവിലെ സ്റ്റോക്ക് 0 ആണ്. സ്റ്റോക്ക് റീസ്റ്റോക്ക് ചെയ്യാതെ അടുത്ത ഘട്ടത്തിലേക്ക് തുടരാനാവില്ല.`
+                      : `${outOfStockIngredients.map((i) => i.name).join(', ')} has 0 stock available. You cannot proceed to review until stock is replenished.`}
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between pt-2 border-t border-charcoal-border dark:border-[#2E2828]">
               <Button variant="ghost" onClick={() => setStep(1)} icon={<TbChevronLeft className="w-4 h-4" />}>
                 Back
@@ -682,7 +739,19 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 variant="primary"
                 onClick={() => setStep(3)}
                 icon={<TbChevronRight className="w-4 h-4" />}
-                disabled={plannedQty <= 0}
+                disabled={plannedQty <= 0 || hasOutOfStockIngredient}
+                className={
+                  hasOutOfStockIngredient
+                    ? '!bg-stone-300 dark:!bg-stone-800 !text-stone-500 dark:!text-stone-400 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none'
+                    : ''
+                }
+                title={
+                  hasOutOfStockIngredient
+                    ? language === 'ml'
+                      ? 'ചേരുവകളുടെ സ്റ്റോക്ക് തീർന്നതിനാൽ തുടരാനാവില്ല'
+                      : 'Cannot proceed: ingredients are out of stock'
+                    : undefined
+                }
               >
                 Next: Review
               </Button>
