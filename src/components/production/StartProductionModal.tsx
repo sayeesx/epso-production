@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -560,9 +559,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         {step === 2 && selectedProduct && (
           <div className="space-y-4">
             {/* Selected Product Banner */}
-            <div className="p-3.5 bg-stone-100 dark:bg-[#141212] rounded-2xl flex items-center justify-between border border-charcoal-border dark:border-[#2E2828]">
+            <div className="p-3 bg-stone-100/70 dark:bg-[#252020]/70 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-stone-200/80 dark:bg-[#252020] border border-stone-300/80 dark:border-[#2E2828] flex items-center justify-center shrink-0 shadow-2xs">
+                <div className="w-10 h-10 rounded-xl bg-stone-200/60 dark:bg-[#2e2828]/60 flex items-center justify-center shrink-0">
                   <img
                     src="/epso-icon-grey.png"
                     alt={selectedProduct.name}
@@ -586,8 +585,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </Button>
             </div>
 
-            {/* Dedicated Measurement Ruler for Output Quantity */}
-            <div className="p-4 bg-white dark:bg-[#1E1B1B] rounded-2xl border border-charcoal-border dark:border-[#2E2828] shadow-xs">
+            {/* Dedicated Measurement Ruler for Output Quantity - Flat, borderless, shadowless */}
+            <div className="w-full py-1">
               <MeasurementRulerSelector
                 title={language === 'ml' ? 'ഉൽപ്പാദന അളവ് നിശ്ചയിക്കുക' : 'Set Production Quantity'}
                 subtitle={language === 'ml' ? `യൂണിറ്റ്: ${selectedProduct.unit}` : `Unit: ${selectedProduct.unit}`}
@@ -602,7 +601,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             </div>
 
             {/* Step 2 Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-charcoal-border dark:border-[#2E2828]">
+            <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
               <Button
                 variant="ghost"
                 onClick={() => setStep(1)}
@@ -628,145 +627,179 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         {/* STEP 3: SELECT INGREDIENTS TO TICK (WITH RULER)          */}
         {/* ======================================================== */}
         {step === 3 && selectedProduct && (
-          <div className="space-y-3">
-            {/* Header info bar */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="relative flex-1">
-                <Input
-                  placeholder={language === 'ml' ? 'ചേരുവകൾ തിരയുക...' : 'Search ingredients...'}
-                  value={ingredientSearch}
-                  onChange={(e) => setIngredientSearch(e.target.value)}
-                  leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
+          activeRulerItem ? (
+            /* DIRECT IN-MODAL MEASUREMENT RULER (NO PORTAL, NO LEVITATION, NO BORDERS, NO SHADOWS) */
+            <div className="space-y-2 animate-in fade-in duration-150">
+              {/* Seamless Ruler for Measuring Selected Ingredient */}
+              <div className="w-full py-1">
+                <MeasurementRulerSelector
+                  title={activeRulerItem.name}
+                  subtitle={activeRulerItem.subtitle}
+                  isZeroStock={activeRulerItem.isZeroStock}
+                  unit={activeRulerItem.unit}
+                  value={activeRulerItem.value || 1}
+                  min={activeRulerItem.min}
+                  max={activeRulerItem.max ?? 999999}
+                  step={activeRulerItem.step}
+                  onChange={(newVal) => {
+                    setActiveRulerItem((prev) => (prev ? { ...prev, value: newVal } : null));
+                    if (activeRulerItem.type === 'ingredient' && activeRulerItem.ingredientId) {
+                      updateActualQty(activeRulerItem.ingredientId, newVal);
+                    }
+                  }}
+                  confirmLabel={language === 'ml' ? 'സ്ഥിരീകരിക്കുക' : 'Done / Set Quantity'}
+                  onConfirm={() => setActiveRulerItem(null)}
+                  onClose={() => setActiveRulerItem(null)}
                 />
               </div>
-              <div className="px-3 py-2 rounded-xl bg-stone-100 dark:bg-[#252020] text-stone-700 dark:text-stone-300 text-xs font-bold font-mono shrink-0">
-                {consumptionItems.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
-              </div>
             </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Header info bar */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    placeholder={language === 'ml' ? 'ചേരുവകൾ തിരയുക...' : 'Search ingredients...'}
+                    value={ingredientSearch}
+                    onChange={(e) => setIngredientSearch(e.target.value)}
+                    leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
+                  />
+                </div>
+                <div className="px-3 py-2 rounded-xl bg-stone-100 dark:bg-[#252020] text-stone-700 dark:text-stone-300 text-xs font-bold font-mono shrink-0">
+                  {consumptionItems.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
+                </div>
+              </div>
 
-            <p className="text-[11px] text-stone-400 font-malayalam">
-              {language === 'ml'
-                ? 'ഉപയോഗിക്കുന്ന ചേരുവകളിൽ ടിക്ക് ചെയ്യുക. അളവ് മാറ്റാൻ കാർഡിൽ ക്ലിക്ക് ചെയ്യാം.'
-                : 'Tick the ingredients needed. Tap card to measure exact quantity with ruler.'}
-            </p>
+              <p className="text-[11px] text-stone-400 font-malayalam">
+                {language === 'ml'
+                  ? 'ഉപയോഗിക്കുന്ന ചേരുവകളിൽ ടിക്ക് ചെയ്യുക. അളവ് മാറ്റാൻ കാർഡിൽ ക്ലിക്ക് ചെയ്യാം.'
+                  : 'Tick the ingredients needed. Tap card to measure exact quantity with ruler.'}
+              </p>
 
-            {/* Ingredients Selection Grid (Styled just like Step 1 Product cards!) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1">
-              {filteredIngredients.map((ing) => {
-                const consumedItem = consumptionItems.find((i) => i.ingredientId === ing.id);
-                const isSelected = !!consumedItem;
-                const inStock = ing.currentStock || 0;
-                const isZeroStock = inStock <= 0;
-                const isShortage = consumedItem ? consumedItem.actualQuantity > inStock : false;
+              {/* Ingredients Selection Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1">
+                {filteredIngredients.map((ing) => {
+                  const consumedItem = consumptionItems.find((i) => i.ingredientId === ing.id);
+                  const isSelected = !!consumedItem;
+                  const inStock = ing.currentStock || 0;
+                  const isZeroStock = inStock <= 0;
+                  const isShortage = consumedItem ? consumedItem.actualQuantity > inStock : false;
 
-                return (
-                  <div
-                    key={ing.id}
-                    onClick={() => handleToggleIngredient(ing)}
-                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between select-none press-apple ${
-                      isSelected
-                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 shadow-xs'
-                        : 'border-charcoal-border dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:border-emerald-500/40 hover:bg-stone-50 dark:hover:bg-[#282323]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {/* Checkbox indicator */}
-                      <div
-                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
-                          isSelected
-                            ? 'bg-emerald-500 text-white shadow-xs'
-                            : 'border-2 border-stone-300 dark:border-stone-600 bg-transparent'
-                        }`}
-                      >
-                        {isSelected && <TbCheck className="w-4 h-4 stroke-[3]" />}
-                      </div>
+                  return (
+                    <div
+                      key={ing.id}
+                      onClick={() => {
+                        if (isSelected) {
+                          handleOpenIngredientRuler(ing, consumedItem.actualQuantity);
+                        } else {
+                          handleToggleIngredient(ing);
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between select-none press-apple ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30'
+                          : 'border-charcoal-border dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:border-emerald-500/40 hover:bg-stone-50 dark:hover:bg-[#282323]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {/* Checkbox indicator */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleIngredient(ing);
+                          }}
+                          className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-500 text-white'
+                              : 'border-2 border-stone-300 dark:border-stone-600 bg-transparent hover:border-emerald-500'
+                          }`}
+                        >
+                          {isSelected && <TbCheck className="w-4 h-4 stroke-[3]" />}
+                        </button>
 
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam truncate">
-                          {ing.name}
-                        </h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                              isZeroStock
-                                ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400'
-                                : isShortage
-                                ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400'
-                                : 'bg-stone-100 dark:bg-[#252020] text-stone-600 dark:text-stone-400'
-                            }`}
-                          >
-                            {isZeroStock
-                              ? language === 'ml'
-                                ? 'സ്റ്റോക്കില്ല'
-                                : 'Out of Stock'
-                              : `${inStock} ${ing.unit} സ്റ്റോക്ക്`}
-                          </span>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam truncate">
+                            {ing.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                isZeroStock
+                                  ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400'
+                                  : isShortage
+                                  ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400'
+                                  : 'bg-stone-100 dark:bg-[#252020] text-stone-600 dark:text-stone-400'
+                              }`}
+                            >
+                              {isZeroStock
+                                ? language === 'ml'
+                                  ? 'സ്റ്റോക്കില്ല'
+                                  : 'Out of Stock'
+                                : `${inStock} ${ing.unit} സ്റ്റോക്ക്`}
+                            </span>
+                          </div>
                         </div>
                       </div>
+
+                      {/* Measured Quantity Pill & Ruler Button */}
+                      {isSelected && consumedItem && (
+                        <div
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#141212] border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-black text-xs hover:border-emerald-500 transition-all shrink-0 ml-2"
+                          title={language === 'ml' ? 'അളവ് മാറ്റുക' : 'Tune Quantity'}
+                        >
+                          <span>
+                            {consumedItem.actualQuantity} {consumedItem.unit}
+                          </span>
+                          <TbRuler2 className="w-3.5 h-3.5 opacity-70" />
+                        </div>
+                      )}
                     </div>
+                  );
+                })}
 
-                    {/* Measured Quantity Pill & Ruler Button */}
-                    {isSelected && consumedItem && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenIngredientRuler(ing, consumedItem.actualQuantity);
-                        }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#141212] border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-black text-xs shadow-2xs hover:border-emerald-500 transition-all shrink-0 ml-2"
-                        title={language === 'ml' ? 'അളവ് മാറ്റുക' : 'Tune Quantity'}
-                      >
-                        <span>
-                          {consumedItem.actualQuantity} {consumedItem.unit}
-                        </span>
-                        <TbRuler2 className="w-3.5 h-3.5 opacity-70" />
-                      </button>
-                    )}
+                {filteredIngredients.length === 0 && (
+                  <div className="col-span-2 text-center py-8 text-stone-400 text-sm font-medium font-malayalam">
+                    ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല
                   </div>
-                );
-              })}
+                )}
+              </div>
 
-              {filteredIngredients.length === 0 && (
-                <div className="col-span-2 text-center py-8 text-stone-400 text-sm font-medium font-malayalam">
-                  ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല
+              {/* Out of stock warning banner if any selected ingredient is 0 */}
+              {hasOutOfStockIngredient && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/60 flex items-start gap-2.5 text-xs text-red-800 dark:text-red-300">
+                  <TbAlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                  <div className="flex-1 font-malayalam">
+                    <span className="font-bold block">സ്റ്റോക്ക് മുന്നറിയിപ്പ്:</span>
+                    <span className="text-[11px] opacity-90 mt-0.5 block">
+                      {outOfStockIngredients.map((i) => i.name).join(', ')} സ്റ്റോക്ക് തീർന്നു (0 Stock).
+                    </span>
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Out of stock warning banner if any selected ingredient is 0 */}
-            {hasOutOfStockIngredient && (
-              <div className="p-3 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/60 flex items-start gap-2.5 text-xs text-red-800 dark:text-red-300">
-                <TbAlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
-                <div className="flex-1 font-malayalam">
-                  <span className="font-bold block">സ്റ്റോക്ക് മുന്നറിയിപ്പ്:</span>
-                  <span className="text-[11px] opacity-90 mt-0.5 block">
-                    {outOfStockIngredients.map((i) => i.name).join(', ')} സ്റ്റോക്ക് തീർന്നു (0 Stock).
-                  </span>
-                </div>
+              {/* Step 3 Actions */}
+              <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
+                <Button
+                  variant="ghost"
+                  onClick={() => setStep(2)}
+                  icon={<TbChevronLeft className="w-4 h-4" />}
+                >
+                  {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
+                </Button>
+
+                <Button
+                  variant="primary"
+                  onClick={() => setStep(4)}
+                  icon={<TbChevronRight className="w-4 h-4" />}
+                  disabled={consumptionItems.length === 0 || hasOutOfStockIngredient}
+                  className="font-bold px-5"
+                >
+                  {language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Next: Review'}
+                </Button>
               </div>
-            )}
-
-            {/* Step 3 Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-charcoal-border dark:border-[#2E2828]">
-              <Button
-                variant="ghost"
-                onClick={() => setStep(2)}
-                icon={<TbChevronLeft className="w-4 h-4" />}
-              >
-                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
-              </Button>
-
-              <Button
-                variant="primary"
-                onClick={() => setStep(4)}
-                icon={<TbChevronRight className="w-4 h-4" />}
-                disabled={consumptionItems.length === 0 || hasOutOfStockIngredient}
-                className="font-bold px-5"
-              >
-                {language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Next: Review'}
-              </Button>
             </div>
-          </div>
+          )
         )}
 
         {/* ======================================================== */}
@@ -953,43 +986,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           </div>
         </div>
       )}
-
-      {/* Interactive Measurement Ruler Modal Overlay for Measuring Each Ingredient */}
-      {activeRulerItem &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
-            onClick={() => setActiveRulerItem(null)}
-          >
-            <div
-              className="w-full max-w-md animate-in zoom-in-95 duration-200 relative"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MeasurementRulerSelector
-                title={activeRulerItem.name}
-                subtitle={activeRulerItem.subtitle}
-                isZeroStock={activeRulerItem.isZeroStock}
-                unit={activeRulerItem.unit}
-                value={activeRulerItem.value || 1}
-                min={activeRulerItem.min}
-                max={activeRulerItem.max ?? 999999}
-                step={activeRulerItem.step}
-                onChange={(newVal) => {
-                  setActiveRulerItem((prev) => (prev ? { ...prev, value: newVal } : null));
-                  if (activeRulerItem.type === 'ingredient' && activeRulerItem.ingredientId) {
-                    updateActualQty(activeRulerItem.ingredientId, newVal);
-                  } else if (activeRulerItem.type === 'output') {
-                    handlePlannedQtyChange(newVal);
-                  }
-                }}
-                confirmLabel={language === 'ml' ? 'സ്ഥിരീകരിക്കുക' : 'Done / Set Quantity'}
-                onConfirm={() => setActiveRulerItem(null)}
-                onClose={() => setActiveRulerItem(null)}
-              />
-            </div>
-          </div>,
-          document.body
-        )}
     </Modal>
   );
 };

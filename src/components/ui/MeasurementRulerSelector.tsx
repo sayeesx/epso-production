@@ -82,6 +82,7 @@ export interface MeasurementRulerSelectorProps {
   onClose?: () => void;
   confirmLabel?: string;
   className?: string;
+  hideHeader?: boolean;
 }
 
 export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> = ({
@@ -100,6 +101,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   onClose,
   confirmLabel = 'Done / Set Quantity',
   className = '',
+  hideHeader = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScrollRef = useRef<boolean>(false);
@@ -246,13 +248,14 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   return (
     <div
       onClick={(e) => e.stopPropagation()}
-      className={`bg-white dark:bg-[#181515] rounded-3xl p-5 border border-stone-200 dark:border-[#2E2828] shadow-2xl select-none flex flex-col items-center max-w-md mx-auto w-full transition-colors relative ${className}`}
+      className={`bg-transparent select-none flex flex-col items-center w-full transition-colors relative ${className}`}
     >
-      {/* Top Header Card with Close Button */}
-      <div className="w-full flex items-center justify-between pb-3 mb-2 border-b border-stone-100 dark:border-[#282323]">
+      {/* Top Header Card with Close Button (only if not hideHeader and has title/subtitle) */}
+      {!hideHeader && (title || subtitle || onClose) && (
+        <div className="w-full flex items-center justify-between pb-3 mb-2">
         <div className="flex items-center gap-3 min-w-0 pr-2">
           {icon ? (
-            <div className="w-11 h-11 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-epso-orange flex items-center justify-center shrink-0 shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-epso-orange flex items-center justify-center shrink-0">
               {icon}
             </div>
           ) : null}
@@ -297,10 +300,11 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           )}
         </div>
       </div>
+      )}
 
       {/* RULER CONTAINER WITH THEME ORANGE CENTER INDICATOR */}
       <div
-        className={`relative w-full py-4 my-2 overflow-hidden flex flex-col items-center transition-all ${
+        className={`relative w-full py-2 my-1 overflow-hidden flex flex-col items-center transition-all ${
           isZeroStock ? 'opacity-30 grayscale pointer-events-none select-none cursor-not-allowed' : ''
         }`}
       >
@@ -309,7 +313,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           className={`absolute top-0 bottom-8 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full ${
             isZeroStock
               ? 'bg-stone-400 dark:bg-stone-600'
-              : 'bg-epso-orange dark:bg-orange-500 shadow-[0_0_10px_rgba(229,90,36,0.6)]'
+              : 'bg-epso-orange dark:bg-orange-500'
           }`}
         >
           <div
@@ -417,13 +421,13 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           <div className="shrink-0 w-1/2" />
         </div>
 
-        {/* Gradient edge fades for horizontal depth */}
-        <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white dark:from-[#181515] to-transparent pointer-events-none z-10" />
-        <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white dark:from-[#181515] to-transparent pointer-events-none z-10" />
+        {/* Gradient edge fades for horizontal depth - matching modal background */}
+        <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-white dark:from-[#1E1B1B] to-transparent pointer-events-none z-10" />
+        <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white dark:from-[#1E1B1B] to-transparent pointer-events-none z-10" />
       </div>
 
       {/* LARGE VALUE DISPLAY WITH SMOOTH STEPPERS (-) AND (+) */}
-      <div className="my-2 flex items-center justify-center gap-3 w-full">
+      <div className="my-1 flex items-center justify-center gap-3 w-full">
         <button
           type="button"
           onClick={() => adjustBy(-effectiveStep)}
@@ -517,7 +521,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
         </button>
       </div>
 
-      <p className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mb-2">
+      <p className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mb-1">
         {isZeroStock
           ? 'സ്റ്റോക്ക് ലഭ്യമല്ല (Stock is 0)'
           : isEditing
@@ -528,7 +532,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       {/* QUICK PRESET BUTTONS */}
       {presets.length > 0 && (
         <div
-          className={`flex items-center justify-center gap-2 my-2 w-full ${
+          className={`flex items-center justify-center gap-2 my-1.5 w-full ${
             isZeroStock ? 'opacity-30 pointer-events-none' : ''
           }`}
         >
@@ -542,10 +546,10 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                 onChange(preset);
                 scrollToValue(preset, true);
               }}
-              className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-95 press-apple cursor-pointer border ${
+              className={`flex-1 py-2 rounded-xl text-xs sm:text-sm font-black transition-all active:scale-95 press-apple cursor-pointer ${
                 value === preset && !isZeroStock
-                  ? 'bg-gradient-to-r from-epso-red to-epso-orange text-white border-transparent shadow-sm ring-2 ring-epso-orange/30'
-                  : 'bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300 border-charcoal-border/50 dark:border-[#383030]'
+                  ? 'bg-gradient-to-r from-epso-red to-epso-orange text-white ring-2 ring-epso-orange/30'
+                  : 'bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300'
               }`}
             >
               {preset} {unit}
@@ -564,10 +568,10 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
             }
             onConfirm();
           }}
-          className={`w-full mt-3 py-3.5 px-6 rounded-2xl font-extrabold text-sm sm:text-base shadow-md transition-all duration-150 active:scale-[0.98] press-apple flex items-center justify-center gap-2 cursor-pointer ${
+          className={`w-full mt-3 py-3.5 px-6 rounded-2xl font-extrabold text-sm sm:text-base transition-all duration-150 active:scale-[0.98] press-apple flex items-center justify-center gap-2 cursor-pointer ${
             isZeroStock
               ? 'bg-stone-200 dark:bg-[#2A2525] text-stone-600 dark:text-stone-300 cursor-pointer hover:bg-stone-300 dark:hover:bg-[#322C2C]'
-              : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white hover:shadow-lg'
+              : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white'
           }`}
         >
           <Check className="w-5 h-5 stroke-[2.5]" />
