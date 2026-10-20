@@ -185,6 +185,7 @@ export interface PackingRecord {
   packingDate: string;
   productId: string;
   productName?: string;
+  productionRunId?: string;
   packagingItemId?: string;
   packetSize: string;
   packetsPacked: number;
