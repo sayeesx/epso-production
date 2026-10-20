@@ -22,22 +22,6 @@ export const ProductsPage: React.FC = () => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
-  const [showSpinner, setShowSpinner] = useState<boolean>(false);
-
-  // Show loading spinner loader only if fetching takes time (e.g. slow network), avoid fake spinner flashes
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    if (loading) {
-      timer = setTimeout(() => {
-        setShowSpinner(true);
-      }, 150);
-    } else {
-      setShowSpinner(false);
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [loading]);
 
   // Read-only Recipe Modal
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState<boolean>(false);
@@ -113,15 +97,12 @@ export const ProductsPage: React.FC = () => {
         leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
       />
 
-      {/* Loading state: clean loading spinner loader without text, shown only when fetching is active/slow */}
-      {loading && showSpinner && (
-        <div className="py-12 flex justify-center">
+      {/* Loading state: clean loading spinner loader */}
+      {loading ? (
+        <div className="py-16 flex justify-center items-center">
           <LoadingSpinner size="lg" />
         </div>
-      )}
-
-      {/* Products Grid */}
-      {!loading && (
+      ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filteredProducts.map((prod) => {
             const recipe = recipes.find((r) => r.productId === prod.id && r.isActive);
@@ -209,10 +190,6 @@ export const ProductsPage: React.FC = () => {
                       </span>
                     )}
                   </div>
-
-                  <span className="text-[11px] text-stone-400 font-medium">
-                    Wholesale: ₹{prod.wholesalePrice || 0}
-                  </span>
                 </div>
               </Card>
             );
