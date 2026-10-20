@@ -33,8 +33,8 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
   if (['kg', 'kgs', 'kilogram', 'kilograms'].includes(u)) {
     return {
       type: 'weight_kg',
-      min: 0.1,
-      step: 0.1,
+      min: 0,
+      step: 0.5,
       decimals: 1,
       presets: [5, 10, 25, 50, 100, 250],
     };
@@ -206,15 +206,16 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
 
     const scrollLeft = el.scrollLeft;
     const stepIndex = Math.max(0, Math.round(scrollLeft / TICK_SPACING));
-    const calculatedValue = Number((effectiveMin + stepIndex * effectiveStep).toFixed(decimals));
+    const rawVal = Number((effectiveMin + stepIndex * effectiveStep).toFixed(decimals));
+    const calculatedValue = Math.min(effectiveMax, rawVal);
 
     if (calculatedValue !== latestValueRef.current) {
       latestValueRef.current = calculatedValue;
       onChange(calculatedValue);
     }
 
-    // Truly infinite: dynamically add more ticks as the user scrolls right
-    if (stepIndex >= totalTicks - 120) {
+    // Add more ticks as the user scrolls right, unless capped by effectiveMax
+    if (stepIndex >= totalTicks - 120 && (!effectiveMax || totalTicks * effectiveStep < effectiveMax)) {
       setTotalTicks((prev) => prev + 300);
     }
   };
@@ -222,7 +223,8 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   // Adjust by increment stepper
   const adjustBy = (delta: number) => {
     if (isZeroStock) return;
-    const newVal = Math.max(effectiveMin, Number((value + delta).toFixed(decimals || 3)));
+    const raw = Number((value + delta).toFixed(decimals || 3));
+    const newVal = Math.min(effectiveMax, Math.max(effectiveMin, raw));
     onChange(newVal);
     scrollToValue(newVal, true);
   };
@@ -340,12 +342,23 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           <div className="flex items-end shrink-0" style={{ gap: `${TICK_SPACING - 2}px` }}>
             {Array.from({ length: totalTicks + 1 }).map((_, idx) => {
               const currentStepVal = Number((effectiveMin + idx * effectiveStep).toFixed(decimals));
+              if (effectiveMax && currentStepVal > effectiveMax) return null;
 
               let isMajor = false;
               let isMedium = false;
               let label: string | null = null;
 
-              if (effectiveStep <= 0.1) {
+              if (effectiveStep === 0.5) {
+                // 0, 0.5, 1, 1.5, 2, 2.5 ...
+                const isWhole = Math.abs(Math.round(currentStepVal) - currentStepVal) < 0.001;
+                if (isWhole) {
+                  isMajor = true;
+                  label = String(Math.round(currentStepVal));
+                } else {
+                  isMedium = true;
+                  label = String(currentStepVal);
+                }
+              } else if (effectiveStep <= 0.1) {
                 // Kilograms, Liters (0.1, 0.2, 0.3 ... 1.0, 1.1 ... 2.0)
                 const isWhole = Math.abs(Math.round(currentStepVal) - currentStepVal) < 0.001;
                 const isStart = idx === 0 && effectiveMin < 1;

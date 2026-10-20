@@ -68,8 +68,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', '"Anek Malayalam"', '"Manjari"', '"Noto Sans Malayalam"', 'Inter', 'system-ui', 'sans-serif'],
-        malayalam: ['"Anek Malayalam"', '"Manjari"', '"Noto Sans Malayalam"', '"Plus Jakarta Sans"', 'sans-serif'],
+        sans: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        malayalam: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
       },
       boxShadow: {
         none: 'none',

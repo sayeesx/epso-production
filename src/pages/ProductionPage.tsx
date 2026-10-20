@@ -7,14 +7,18 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { StartProductionModal } from '../components/production/StartProductionModal';
+import { DailyOilModal } from '../components/production/DailyOilModal';
+import { BatchPackingModal } from '../components/production/BatchPackingModal';
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog';
-import { Product, Recipe, Ingredient, ProductionRun } from '../types';
+import { Product, Recipe, Ingredient, ProductionRun, PackingRecord, DailyClosing } from '../types';
 import {
   TbSearch,
   TbPlus,
   TbRotateClockwise2,
   TbHistory,
   TbTrash,
+  TbDroplet,
+  TbPackage,
 } from 'react-icons/tb';
 
 export const ProductionPage: React.FC = () => {
@@ -26,8 +30,9 @@ export const ProductionPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [todayOilClosing, setTodayOilClosing] = useState<DailyClosing | null>(null);
+  const [packingRecords, setPackingRecords] = useState<PackingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-
 
   // Filters
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -40,23 +45,30 @@ export const ProductionPage: React.FC = () => {
   const [runToDelete, setRunToDelete] = useState<ProductionRun | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isOpeningNewBatch, setIsOpeningNewBatch] = useState<boolean>(false);
+  const [isDailyOilModalOpen, setIsDailyOilModalOpen] = useState<boolean>(false);
+  const [batchForPacking, setBatchForPacking] = useState<ProductionRun | null>(null);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         setLoading(true);
-        const [rList, pList, recList, iList] = await Promise.all([
+        const todayStr = new Date().toISOString().split('T')[0];
+        const [rList, pList, recList, iList, oilClose, packList] = await Promise.all([
           repo.listProductionRuns({ limit: 40 }),
           repo.listProducts(false),
           repo.listRecipes(),
           repo.listIngredients(false),
+          repo.getDailyClosing(todayStr).catch(() => null),
+          repo.listPackingRecords({ limit: 60 }).catch(() => []),
         ]);
         if (mounted) {
           setRuns(rList);
           setProducts(pList);
           setRecipes(recList);
           setIngredients(iList);
+          setTodayOilClosing(oilClose);
+          setPackingRecords(packList || []);
         }
       } catch (err: any) {
         console.error('Error loading production data', err);
@@ -149,42 +161,84 @@ export const ProductionPage: React.FC = () => {
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
       {/* Sleek header bar with prominent Epso logo */}
-      <div className="flex items-center justify-between gap-3 pt-1">
+      <div className="flex items-center justify-between gap-2 pt-1 flex-wrap sm:flex-nowrap">
         <div className="flex items-center">
           <img
             src={isDark ? '/epso-logo-dark.png' : '/epso-logo-light.png'}
             alt="Epso Logo"
-            className="h-[56px] sm:h-[68px] w-auto object-contain transition-opacity duration-200 select-none"
+            className="h-[52px] sm:h-[64px] w-auto object-contain transition-opacity duration-200 select-none"
           />
         </div>
 
-        <button
-          onClick={() => {
-            setIsOpeningNewBatch(true);
-            setTimeout(() => {
-              setIsStartProductionOpen(true);
-              setIsOpeningNewBatch(false);
-            }, 100);
-          }}
-          disabled={isOpeningNewBatch}
-          className="flex items-center gap-1.5 bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 press-apple select-none cursor-pointer"
-        >
-          {isOpeningNewBatch ? (
-            <svg
-              className="animate-spin h-4 w-4 text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-          ) : (
-            <TbPlus className="w-4 h-4 stroke-[3]" />
-          )}
-          <span>{language === 'ml' ? 'പുതിയ ബാച്ച്' : 'New Batch'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Daily Oil consumption & leftover button */}
+          <button
+            onClick={() => setIsDailyOilModalOpen(true)}
+            className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
+            title={language === 'ml' ? 'ദിവസത്തെ ഓയിൽ ഉപഭോഗവും ബാക്കിയും ചേർക്കുക' : 'Record daily oil consumed & leftover'}
+          >
+            <TbDroplet className="w-4 h-4 text-amber-600 dark:text-amber-400 fill-amber-500/20" />
+            <span>{language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Record Oil'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setIsOpeningNewBatch(true);
+              setTimeout(() => {
+                setIsStartProductionOpen(true);
+                setIsOpeningNewBatch(false);
+              }, 100);
+            }}
+            disabled={isOpeningNewBatch}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 press-apple select-none cursor-pointer"
+          >
+            {isOpeningNewBatch ? (
+              <svg
+                className="animate-spin h-4 w-4 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <TbPlus className="w-4 h-4 stroke-[3]" />
+            )}
+            <span>{language === 'ml' ? 'പുതിയ ബാച്ച്' : 'New Batch'}</span>
+          </button>
+        </div>
       </div>
+
+      {/* Today's oil status strip if recorded */}
+      {todayOilClosing && (todayOilClosing.oilConsumed > 0 || todayOilClosing.oilClosingBalance > 0) && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+              <TbDroplet className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-extrabold text-amber-900 dark:text-amber-200">
+                {language === 'ml' ? 'ഇന്നത്തെ ഓയിൽ' : "Today's Oil"}:
+              </span>{' '}
+              <span className="font-bold text-amber-800 dark:text-amber-300">
+                {language === 'ml' ? 'ഉപയോഗിച്ചത്' : 'Used'}: {todayOilClosing.oilConsumed} L
+              </span>
+              {todayOilClosing.oilClosingBalance > 0 && (
+                <span className="text-amber-700/80 dark:text-amber-400/80 ml-2">
+                  • {language === 'ml' ? 'ബാക്കി' : 'Leftover'}: {todayOilClosing.oilClosingBalance} L
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setIsDailyOilModalOpen(true)}
+            className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:underline cursor-pointer shrink-0"
+          >
+            {language === 'ml' ? 'മാറ്റുക' : 'Edit'}
+          </button>
+        </div>
+      )}
 
 
       {/* Production History & Operational Search */}
@@ -257,6 +311,7 @@ export const ProductionPage: React.FC = () => {
           <div className="space-y-2.5">
             {filteredRuns.map((run) => {
               const isCompleted = run.status === 'completed';
+              const batchPackings = packingRecords.filter((p) => p.productionRunId === run.id);
 
               return (
                 <Card
@@ -330,21 +385,61 @@ export const ProductionPage: React.FC = () => {
                     <p className="text-xs text-stone-500 dark:text-stone-400 italic">"{run.notes}"</p>
                   )}
 
-                  {/* Actions: Cancel Run and Delete Batch */}
-                  <div className="flex items-center justify-between pt-1 border-t border-charcoal-border/40 dark:border-[#2E2828]/60">
-                    {isCompleted ? (
-                      <button
-                        onClick={() => setRunToCancel(run)}
-                        className="text-xs font-semibold text-stone-500 hover:text-red-600 dark:hover:text-red-400 flex items-center gap-1 transition-colors press-apple cursor-pointer"
-                      >
-                        <TbRotateClockwise2 className="w-3.5 h-3.5" />
-                        <span>{t.cancelRun}</span>
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-stone-400 font-medium">
-                        {language === 'ml' ? 'റദ്ദാക്കിയ ബാച്ച്' : 'Cancelled batch'}
-                      </span>
-                    )}
+                  {/* Packed packets summary for this batch */}
+                  {batchPackings.length > 0 && (
+                    <div className="bg-stone-50 dark:bg-[#141212] rounded-xl p-2.5 text-xs border border-charcoal-border/70 dark:border-[#2E2828] space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-stone-300">
+                        <span className="flex items-center gap-1.5">
+                          <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
+                          {language === 'ml' ? 'പാക്ക് ചെയ്തവ' : 'Packed Quantities'}:
+                        </span>
+                        <span className="text-stone-500 font-normal">
+                          {batchPackings.reduce((sum, p) => sum + p.quantityPacked, 0)} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts total'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {batchPackings.map((pkg) => (
+                          <span
+                            key={pkg.id}
+                            className="inline-flex items-center gap-1 bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 border border-charcoal-border/60 dark:border-[#2E2828] px-2 py-0.5 rounded-md font-semibold text-[11px]"
+                          >
+                            <span className="font-bold text-epso-red">{pkg.packetSize}:</span>
+                            <span>{pkg.quantityPacked} pkts</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions: Add Packets, Cancel Run and Delete Batch */}
+                  <div className="flex items-center justify-between pt-1 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      {isCompleted ? (
+                        <button
+                          onClick={() => setRunToCancel(run)}
+                          className="text-xs font-semibold text-stone-500 hover:text-red-600 dark:hover:text-red-400 flex items-center gap-1 transition-colors press-apple cursor-pointer"
+                        >
+                          <TbRotateClockwise2 className="w-3.5 h-3.5" />
+                          <span>{t.cancelRun}</span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-stone-400 font-medium">
+                          {language === 'ml' ? 'റദ്ദാക്കിയ ബാച്ച്' : 'Cancelled batch'}
+                        </span>
+                      )}
+
+                      {/* Add Packets Button on batch */}
+                      {isCompleted && (
+                        <button
+                          onClick={() => setBatchForPacking(run)}
+                          className="text-xs font-bold text-stone-700 dark:text-stone-200 bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342e2e] px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all press-apple cursor-pointer border border-charcoal-border/40 dark:border-[#2E2828]"
+                          title={language === 'ml' ? 'ഈ ബാച്ചിൽ പാക്കറ്റുകൾ ചേർക്കുക' : 'Add packets for this batch'}
+                        >
+                          <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
+                          <span>{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
+                        </button>
+                      )}
+                    </div>
 
                     <button
                       onClick={() => setRunToDelete(run)}
@@ -434,6 +529,24 @@ export const ProductionPage: React.FC = () => {
             )}
           </div>
         }
+      />
+      {/* Daily Oil Modal */}
+      <DailyOilModal
+        isOpen={isDailyOilModalOpen}
+        onClose={() => setIsDailyOilModalOpen(false)}
+        onSuccess={() => {
+          triggerRefresh();
+        }}
+      />
+
+      {/* Batch Packing Modal */}
+      <BatchPackingModal
+        isOpen={!!batchForPacking}
+        batch={batchForPacking}
+        onClose={() => setBatchForPacking(null)}
+        onSuccess={() => {
+          triggerRefresh();
+        }}
       />
     </div>
   );
