@@ -90,6 +90,8 @@ export interface ConsumedIngredientItem {
   expectedQuantity: number;
   actualQuantity: number;
   unit: UnitType;
+  unitCost?: number;
+  totalCost?: number;
 }
 
 export interface BatchIngredientUsage {
@@ -121,12 +123,82 @@ export interface ProductionRun {
   notes?: string;
   operatorName: string;
   ingredientsConsumed: ConsumedIngredientItem[];
+  totalIngredientCost?: number;
   createdAt: string;
   updatedAt: string;
 }
 
 // Backward compatibility alias for existing components
 export type ProductionBatch = ProductionRun;
+
+export interface DailyClosing {
+  id: string;
+  productionDate: string; // YYYY-MM-DD
+  oilOpeningBalance: number; // kg
+  oilPurchases: number; // kg
+  oilClosingBalance: number; // kg
+  oilConsumed: number; // kg
+  oilCostPerKg: number; // ₹
+  oilTotalExpense: number; // ₹
+  productionWages: number; // ₹
+  totalSharedExpense: number; // ₹
+  totalProductionKg: number; // kg
+  status: 'open' | 'closed' | 'adjusted';
+  notes?: string;
+  closedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyCostAllocation {
+  id: string;
+  closingId: string;
+  productionDate: string;
+  productId: string;
+  productName: string;
+  totalProductionKg: number;
+  batchCount: number;
+  ingredientCost: number;
+  allocatedOilCost: number;
+  allocatedProductionWages: number;
+  totalProductionCost: number;
+  productionCostPerKg: number;
+  createdAt?: string;
+}
+
+export interface PackagingItem {
+  id: string;
+  productId: string;
+  productName?: string;
+  sizeLabel: string;
+  sizeGrams: number;
+  currentStock: number;
+  unitCost: number;
+  packingLabourRate: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PackingRecord {
+  id: string;
+  packingDate: string;
+  productId: string;
+  productName?: string;
+  packagingItemId?: string;
+  packetSize: string;
+  packetsPacked: number;
+  coversConsumed: number;
+  coverUnitCost: number;
+  packagingCost: number;
+  packingLabourRate: number;
+  packingLabourCost: number;
+  totalPackingCost: number;
+  weightPackedKg: number;
+  operatorName: string;
+  notes?: string;
+  createdAt?: string;
+}
 
 export interface AuditLog {
   id: string;

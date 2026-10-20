@@ -11,6 +11,7 @@ import {
   TbSun,
   TbMoon,
   TbPalette,
+  TbLock,
 } from 'react-icons/tb';
 
 export const SettingsView: React.FC = () => {
@@ -150,6 +151,35 @@ export const SettingsView: React.FC = () => {
             {language === 'ml' ? 'സേവ്' : 'Save'}
           </Button>
         </form>
+      </Card>
+
+      {/* Security & Screen Lock */}
+      <Card padding="md" className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-red-50 dark:bg-amber-950/40 text-epso-red dark:text-amber-400 flex items-center justify-center">
+              <TbLock className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-stone-900 dark:text-white">
+                {language === 'ml' ? 'സുരക്ഷ & പാസ്‌കോഡ്' : 'Security & PIN Lock'}
+              </h3>
+              <p className="text-[11px] text-stone-400 font-malayalam">
+                {language === 'ml' ? 'സ്ക്രീൻ ഉടൻ ലോക്ക് ചെയ്യുക' : 'Lock session screen'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              sessionStorage.removeItem('epso_production_unlocked');
+              window.location.reload();
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-red-600 dark:text-red-400 text-xs font-bold transition-all press-apple cursor-pointer"
+          >
+            {language === 'ml' ? 'ലോക്ക് ചെയ്യുക' : 'Lock Now'}
+          </button>
+        </div>
       </Card>
 
       {/* Developed by Narrs footer */}

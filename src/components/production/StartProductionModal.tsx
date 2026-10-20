@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -17,6 +17,8 @@ import {
   TbPlus,
   TbTrash,
   TbRuler2,
+  TbChevronDown,
+  TbCheck,
 } from 'react-icons/tb';
 
 interface StartProductionModalProps {
@@ -48,7 +50,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [productSearch, setProductSearch] = useState<string>('');
   const [isModalExpanded, setIsModalExpanded] = useState<boolean>(false);
-  const [isShimmerLoading, setIsShimmerLoading] = useState<boolean>(false);
+  const [isIngDropdownOpen, setIsIngDropdownOpen] = useState<boolean>(false);
+  const [ingFilterSearch, setIngFilterSearch] = useState<string>('');
+  const ingredientDropdownRef = useRef<HTMLDivElement>(null);
   const [plannedQty, setPlannedQty] = useState<number>(1);
   const [actualOutputQty, setActualOutputQty] = useState<number>(1);
   const [productionDate, setProductionDate] = useState<string>(
@@ -101,10 +105,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       setSelectedProductId('');
       setProductSearch('');
       setIsModalExpanded(false);
-      setIsShimmerLoading(true);
-      const timer = setTimeout(() => {
-        setIsShimmerLoading(false);
-      }, 350);
+      setIsIngDropdownOpen(false);
+      setIngFilterSearch('');
       setActiveRulerItem(null);
       setItemToDelete(null);
       setPlannedQty(1);
@@ -114,9 +116,37 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       setNotes('');
       setConsumptionItems([]);
       if (ingredients.length > 0) setManualIngId(ingredients[0].id);
-      return () => clearTimeout(timer);
     }
   }, [isOpen, staffName, ingredients]);
+
+  // Click outside to close ingredient dropdown
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (
+        ingredientDropdownRef.current &&
+        !ingredientDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsIngDropdownOpen(false);
+      }
+    };
+    if (isIngDropdownOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isIngDropdownOpen]);
+
+  // Filtered ingredients for manual ingredient dropdown
+  const filteredManualIngredients = useMemo(() => {
+    if (!ingFilterSearch.trim()) return ingredients;
+    const q = ingFilterSearch.toLowerCase();
+    return ingredients.filter(
+      (ing) =>
+        ing.name.toLowerCase().includes(q) ||
+        ing.unit.toLowerCase().includes(q)
+    );
+  }, [ingredients, ingFilterSearch]);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === selectedProductId),
@@ -252,6 +282,17 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
     try {
       setIsSubmitting(true);
+      const itemsWithCost = consumptionItems.map((item) => {
+        const ing = ingredients.find((i) => i.id === item.ingredientId);
+        const unitCost = ing ? Number(ing.avgCostPerUnit) || 0 : 0;
+        const totalCost = Math.round((item.actualQuantity * unitCost + Number.EPSILON) * 100) / 100;
+        return {
+          ...item,
+          unitCost,
+          totalCost,
+        };
+      });
+
       const saved = await repo.recordProductionRun({
         runNumber: `PRD-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
         productId: selectedProduct.id,
@@ -263,7 +304,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         unit: selectedProduct.unit,
         operatorName: operator.trim() || 'Kitchen Staff',
         notes: notes.trim() || undefined,
-        ingredientsConsumed: consumptionItems,
+        ingredientsConsumed: itemsWithCost,
       });
 
       addToast(t.productionSavedSuccess, 'success');
@@ -314,8 +355,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               />
             </div>
 
-            {/* Shimmer Skeleton effect when fetching products */}
-            {isLoadingProducts || isShimmerLoading ? (
+            {/* Skeleton effect when fetching products */}
+            {isLoadingProducts ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                   <div
@@ -323,7 +364,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                     className="p-3.5 rounded-xl border border-charcoal-border/70 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] flex items-center justify-between animate-pulse"
                   >
                     <div className="flex items-center gap-3 flex-1">
-                      <div className="w-9 h-9 rounded-lg bg-stone-200 dark:bg-stone-800 shrink-0" />
+                      <div className="w-10 h-10 rounded-xl bg-stone-200 dark:bg-stone-800 shrink-0" />
                       <div className="space-y-2 flex-1">
                         <div className="h-4 w-28 bg-stone-200 dark:bg-stone-800 rounded" />
                         <div className="h-3 w-16 bg-stone-200 dark:bg-stone-800 rounded" />
@@ -357,8 +398,12 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-red-100 dark:bg-red-950/60 text-epso-red dark:text-red-300 flex items-center justify-center font-extrabold text-sm shrink-0">
-                          {p.name.slice(0, 1)}
+                        <div className="w-10 h-10 rounded-xl bg-stone-100 dark:bg-[#252020] border border-stone-200/80 dark:border-[#2E2828] flex items-center justify-center shrink-0 shadow-2xs">
+                          <img
+                            src="/epso-icon-grey.png"
+                            alt={p.name}
+                            className="w-6 h-6 object-contain opacity-55 dark:opacity-45 select-none pointer-events-none"
+                          />
                         </div>
                         <div>
                           <h4 className="text-sm font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam">
@@ -408,8 +453,12 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             {/* Selected Product Summary Banner */}
             <div className="p-3 bg-stone-100 dark:bg-[#141212] rounded-xl flex items-center justify-between border border-charcoal-border dark:border-[#2E2828]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-epso-red text-white flex items-center justify-center font-bold text-sm">
-                  {selectedProduct.name.slice(0, 1)}
+                <div className="w-9 h-9 rounded-xl bg-stone-200/80 dark:bg-[#252020] border border-stone-300/80 dark:border-[#2E2828] flex items-center justify-center shrink-0 shadow-2xs">
+                  <img
+                    src="/epso-icon-grey.png"
+                    alt={selectedProduct.name}
+                    className="w-5 h-5 object-contain opacity-60 dark:opacity-50 select-none pointer-events-none"
+                  />
                 </div>
                 <div>
                   <h4 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">{selectedProduct.name}</h4>
@@ -615,17 +664,117 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 return (
                   <div className="p-3 bg-white dark:bg-[#1E1B1B] rounded-xl border border-charcoal-border dark:border-[#2E2828] shadow-xs transition-colors">
                     <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-                      <select
-                        value={manualIngId}
-                        onChange={(e) => setManualIngId(e.target.value)}
-                        className="flex-1 min-w-[140px] px-2.5 py-2 text-xs font-semibold bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-xl font-malayalam focus:outline-none focus:ring-1 focus:ring-epso-orange"
-                      >
-                        {ingredients.map((ing) => (
-                          <option key={ing.id} value={ing.id}>
-                            {ing.name} ({ing.unit}) {ing.currentStock <= 0 ? (language === 'ml' ? '• (സ്റ്റോക്ക് ഇല്ല)' : '• (0 stock)') : `• (${ing.currentStock} ${ing.unit})`}
-                          </option>
-                        ))}
-                      </select>
+                      {/* Theme-Related Ingredient Custom Dropdown */}
+                      <div className="relative flex-1 min-w-[170px]" ref={ingredientDropdownRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsIngDropdownOpen((prev) => !prev)}
+                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border ${
+                            isIngDropdownOpen
+                              ? 'border-epso-orange ring-1 ring-epso-orange/30'
+                              : 'border-charcoal-border dark:border-[#2E2828] hover:border-epso-orange/60 dark:hover:border-amber-500/60'
+                          } rounded-xl font-malayalam transition-all cursor-pointer text-left press-apple`}
+                          aria-haspopup="listbox"
+                          aria-expanded={isIngDropdownOpen}
+                        >
+                          <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                            <span className="truncate">{selectedManualIng?.name || (language === 'ml' ? 'ചേരുവ തിരഞ്ഞെടുക്കുക' : 'Select Ingredient')}</span>
+                            {selectedManualIng && (
+                              <span className="text-[10px] text-stone-500 dark:text-stone-400 shrink-0 font-sans">
+                                ({selectedManualIng.unit})
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {selectedManualIng && (
+                              selectedManualIng.currentStock <= 0 ? (
+                                <span className="text-[9px] font-bold text-red-600 dark:text-red-400 bg-red-100/80 dark:bg-red-950/70 px-1 py-0.5 rounded shrink-0">
+                                  {language === 'ml' ? 'സ്റ്റോക്കില്ല' : '0 stock'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tabular-nums shrink-0">
+                                  {selectedManualIng.currentStock} {selectedManualIng.unit}
+                                </span>
+                              )
+                            )}
+                            <TbChevronDown
+                              className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 ${
+                                isIngDropdownOpen ? 'rotate-180' : ''
+                              }`}
+                            />
+                          </div>
+                        </button>
+
+                        {/* Theme Dropdown Menu popup (drops upward to avoid getting clipped) */}
+                        {isIngDropdownOpen && (
+                          <div
+                            className="absolute left-0 right-0 bottom-full mb-1.5 z-50 bg-white dark:bg-[#1E1B1B] border border-charcoal-border dark:border-[#2E2828] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 origin-bottom"
+                            role="listbox"
+                          >
+                            <div className="p-1.5 border-b border-stone-100 dark:border-[#282323]">
+                              <input
+                                type="text"
+                                placeholder={language === 'ml' ? 'ചേരുവ തിരയുക...' : 'Search ingredient...'}
+                                value={ingFilterSearch}
+                                onChange={(e) => setIngFilterSearch(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full px-2.5 py-1.5 text-xs bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border border-stone-200 dark:border-[#2E2828] rounded-lg font-malayalam focus:outline-none focus:ring-1 focus:ring-epso-orange"
+                                autoFocus
+                              />
+                            </div>
+                            <div className="max-h-52 overflow-y-auto p-1 space-y-0.5">
+                              {filteredManualIngredients.length === 0 ? (
+                                <div className="px-3 py-2 text-xs text-stone-400 text-center font-medium font-malayalam">
+                                  {language === 'ml' ? 'ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല' : 'No ingredients found'}
+                                </div>
+                              ) : (
+                                filteredManualIngredients.map((ing) => {
+                                  const isSelected = ing.id === (selectedManualIng?.id || manualIngId);
+                                  const isZero = ing.currentStock <= 0;
+                                  return (
+                                    <div
+                                      key={ing.id}
+                                      role="option"
+                                      aria-selected={isSelected}
+                                      onClick={() => {
+                                        setManualIngId(ing.id);
+                                        setIsIngDropdownOpen(false);
+                                        setIngFilterSearch('');
+                                      }}
+                                      className={`px-2.5 py-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors font-malayalam ${
+                                        isSelected
+                                          ? 'bg-red-50 dark:bg-red-950/50 text-epso-red dark:text-amber-400 font-bold'
+                                          : 'text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323]'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1 pr-2">
+                                        <span className="truncate">{ing.name}</span>
+                                        <span className="text-[10px] text-stone-500 dark:text-stone-400 font-sans shrink-0">
+                                          ({ing.unit})
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        {isZero ? (
+                                          <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-100/80 dark:bg-red-950/70 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900/40">
+                                            {language === 'ml' ? 'സ്റ്റോക്കില്ല' : '0 stock'}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-300 tabular-nums">
+                                            {ing.currentStock} {ing.unit}
+                                          </span>
+                                        )}
+                                        {isSelected && (
+                                          <TbCheck className="w-3.5 h-3.5 text-epso-red dark:text-amber-400 shrink-0 ml-1" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       <button
                         type="button"

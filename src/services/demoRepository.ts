@@ -8,6 +8,10 @@ import {
   AuditLog,
   AdminDashboardMetrics,
   MovementType,
+  DailyClosing,
+  DailyCostAllocation,
+  PackagingItem,
+  PackingRecord,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_INGREDIENTS, INITIAL_RECIPES } from './demoSeedData';
 
@@ -909,5 +913,108 @@ export class DemoRepository implements IEpsoRepository {
       createdAt: new Date().toISOString(),
     });
     this.setItem(STORAGE_KEYS.AUDIT_LOGS, logs.slice(0, 200));
+  }
+
+  // ============================================================================
+  // COSTING & PACKAGING DEMO METHODS
+  // ============================================================================
+
+  async getDailyClosing(_date: string): Promise<DailyClosing | null> {
+    return null;
+  }
+
+  async listDailyClosings(_limit = 60): Promise<DailyClosing[]> {
+    return [];
+  }
+
+  async saveDailyClosing(params: {
+    productionDate: string;
+    oilOpeningBalance: number;
+    oilPurchases: number;
+    oilClosingBalance: number;
+    oilCostPerKg: number;
+    productionWages: number;
+    notes?: string;
+    closedBy: string;
+  }): Promise<DailyClosing> {
+    const consumed = Math.max(0, params.oilOpeningBalance + params.oilPurchases - params.oilClosingBalance);
+    const expense = consumed * params.oilCostPerKg;
+    return {
+      id: `closing-${Date.now()}`,
+      productionDate: params.productionDate,
+      oilOpeningBalance: params.oilOpeningBalance,
+      oilPurchases: params.oilPurchases,
+      oilClosingBalance: params.oilClosingBalance,
+      oilConsumed: consumed,
+      oilCostPerKg: params.oilCostPerKg,
+      oilTotalExpense: expense,
+      productionWages: params.productionWages,
+      totalSharedExpense: expense + params.productionWages,
+      totalProductionKg: 0,
+      status: 'closed',
+      notes: params.notes,
+      closedBy: params.closedBy,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async listCostAllocations(_dateOrClosingId: string): Promise<DailyCostAllocation[]> {
+    return [];
+  }
+
+  async listPackagingItems(_productId?: string): Promise<PackagingItem[]> {
+    return [];
+  }
+
+  async savePackagingItem(item: Partial<PackagingItem> & { productId: string; sizeLabel: string }): Promise<PackagingItem> {
+    return {
+      id: item.id || `pack-${Date.now()}`,
+      productId: item.productId,
+      sizeLabel: item.sizeLabel,
+      sizeGrams: item.sizeGrams || 100,
+      currentStock: item.currentStock || 0,
+      unitCost: item.unitCost || 0,
+      packingLabourRate: item.packingLabourRate || 1.0,
+      isActive: item.isActive ?? true,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async deletePackagingItem(_id: string): Promise<void> {
+    // Demo no-op
+  }
+
+  async recordPacking(params: {
+    packingDate: string;
+    productId: string;
+    packagingItemId?: string;
+    packetSize: string;
+    packetsPacked: number;
+    operatorName: string;
+    notes?: string;
+  }): Promise<PackingRecord> {
+    return {
+      id: `packing-${Date.now()}`,
+      packingDate: params.packingDate,
+      productId: params.productId,
+      packagingItemId: params.packagingItemId,
+      packetSize: params.packetSize,
+      packetsPacked: params.packetsPacked,
+      coversConsumed: params.packetsPacked,
+      coverUnitCost: 0,
+      packagingCost: 0,
+      packingLabourRate: 1.0,
+      packingLabourCost: params.packetsPacked,
+      totalPackingCost: params.packetsPacked,
+      weightPackedKg: (params.packetsPacked * 100) / 1000,
+      operatorName: params.operatorName,
+      notes: params.notes,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async listPackingRecords(_options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
+    return [];
   }
 }

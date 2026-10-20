@@ -29,7 +29,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [sku, setSku] = useState('');
   const [description, setDescription] = useState('');
   const [unit, setUnit] = useState<UnitType>('kg');
-  const [currentStock, setCurrentStock] = useState<number>(0);
+  const [currentStock, setCurrentStock] = useState<number | string>(0);
   const [wholesalePrice, setWholesalePrice] = useState<number>(0);
   const [isActive, setIsActive] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -72,7 +72,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           sku: sku.trim() || undefined,
           description: description.trim() || undefined,
           unit,
-          currentStock,
+          currentStock: Number(currentStock) || 0,
           wholesalePrice,
           isActive,
         });
@@ -89,7 +89,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           description: description.trim() || undefined,
           recipeId: '',
           unit,
-          currentStock,
+          currentStock: Number(currentStock) || 0,
           wholesalePrice,
           isActive,
         });
@@ -174,8 +174,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             type="number"
             step="0.5"
             min="0"
-            value={currentStock}
-            onChange={(e) => setCurrentStock(parseFloat(e.target.value) || 0)}
+            value={currentStock === 0 ? '' : currentStock}
+            onChange={(e) => setCurrentStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
             rightAddon={unit}
           />
         </div>

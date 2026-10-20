@@ -7,6 +7,10 @@ import {
   AuditLog,
   AdminDashboardMetrics,
   MovementType,
+  DailyClosing,
+  DailyCostAllocation,
+  PackagingItem,
+  PackingRecord,
 } from '../types';
 
 export interface IEpsoRepository {
@@ -91,4 +95,34 @@ export interface IEpsoRepository {
 
   // Mode & System status
   isSupabaseMode(): boolean;
+
+  // Daily Closing & Cost Allocation
+  getDailyClosing(date: string): Promise<DailyClosing | null>;
+  listDailyClosings(limit?: number): Promise<DailyClosing[]>;
+  saveDailyClosing(data: {
+    productionDate: string;
+    oilOpeningBalance: number;
+    oilPurchases: number;
+    oilClosingBalance: number;
+    oilCostPerKg: number;
+    productionWages: number;
+    notes?: string;
+    closedBy: string;
+  }): Promise<DailyClosing>;
+  listCostAllocations(dateOrClosingId: string): Promise<DailyCostAllocation[]>;
+
+  // Packaging & Packing
+  listPackagingItems(productId?: string): Promise<PackagingItem[]>;
+  savePackagingItem(item: Partial<PackagingItem> & { productId: string; sizeLabel: string }): Promise<PackagingItem>;
+  deletePackagingItem(id: string): Promise<void>;
+  recordPacking(params: {
+    packingDate: string;
+    productId: string;
+    packagingItemId?: string;
+    packetSize: string;
+    packetsPacked: number;
+    operatorName: string;
+    notes?: string;
+  }): Promise<PackingRecord>;
+  listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]>;
 }
