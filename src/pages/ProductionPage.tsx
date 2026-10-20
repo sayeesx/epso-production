@@ -225,10 +225,10 @@ export const ProductionPage: React.FC = () => {
             <div>
               <h2 className="text-sm font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{language === 'ml' ? 'ഇന്നത്തെ ഉൽപ്പാദന സംഗ്രഹം' : 'Daily Production Summary'}</span>
+                <span>{language === 'ml' ? 'ഇന്നത്തെ പ്രൊഡക്ഷൻ' : "Today's Production"}</span>
               </h2>
               <p className="text-[11px] text-stone-400 font-malayalam mt-0.5">
-                {language === 'ml' ? 'ഇന്ന് പൂർത്തിയാക്കിയ എല്ലാ ബാച്ചുകളും' : 'All batches completed today'}
+                {language === 'ml' ? 'ഇന്ന് ഉണ്ടാക്കിയ ബാച്ചുകൾ' : 'Batches completed today'}
               </p>
             </div>
             <span className="text-xs font-mono font-bold text-stone-500 dark:text-stone-400">

@@ -199,13 +199,8 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
           </div>
         )}
 
-        {/* Hint footer */}
-        <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-8 text-center font-malayalam">
-          അഡ്മിൻ കൺസോളിൽ നിന്നും പിൻ മാറ്റാവുന്നതാണ്.
-          <span className="block text-[10px] text-stone-400/80 font-sans mt-0.5">
-            Default PIN: 1234
-          </span>
-        </p>
+        {/* Empty space for balance */}
+        <div className="h-6" />
       </div>
 
       {/* Subtle Bottom Brand */}

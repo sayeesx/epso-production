@@ -7,7 +7,7 @@ import { NavigationProgress } from '../ui/NavigationProgress';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { ProductionPinGate } from '../auth/ProductionPinGate';
-import { TbWifiOff } from 'react-icons/tb';
+import { OfflineScreen } from '../ui/OfflineScreen';
 
 export const AppLayout: React.FC = () => {
   const { isOffline } = useApp();
@@ -17,6 +17,10 @@ export const AppLayout: React.FC = () => {
     return sessionStorage.getItem('epso_production_unlocked') === 'true';
   });
 
+  if (isOffline) {
+    return <OfflineScreen onRetry={() => window.location.reload()} />;
+  }
+
   if (!isUnlocked) {
     return <ProductionPinGate onUnlock={() => setIsUnlocked(true)} />;
   }
@@ -25,14 +29,6 @@ export const AppLayout: React.FC = () => {
     <div className="min-h-screen bg-canvas dark:bg-canvas-dark text-charcoal dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
       <NavigationProgress />
       <ToastContainer />
-
-      {/* Offline Alert Banner (shown only when offline) */}
-      {isOffline && (
-        <div className="sticky top-0 z-50 bg-amber-500 text-white text-xs font-bold py-1.5 px-4 text-center flex items-center justify-center gap-1.5 shadow-sm">
-          <TbWifiOff className="w-3.5 h-3.5" />
-          <span>{t.offlineNotice || 'Working Offline'}</span>
-        </div>
-      )}
 
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
         <Sidebar />
