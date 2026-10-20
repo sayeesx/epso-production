@@ -311,7 +311,12 @@ export const ProductionPage: React.FC = () => {
           <div className="space-y-2.5">
             {filteredRuns.map((run) => {
               const isCompleted = run.status === 'completed';
-              const batchPackings = packingRecords.filter((p) => p.productionRunId === run.id);
+              const batchPackings = packingRecords.filter(
+                (p) =>
+                  p.productionRunId === run.id ||
+                  (p.notes && p.notes.includes(run.runNumber)) ||
+                  (p.productId === run.productId && p.packingDate === run.productionDate)
+              );
 
               return (
                 <Card
@@ -394,7 +399,7 @@ export const ProductionPage: React.FC = () => {
                           {language === 'ml' ? 'പാക്ക് ചെയ്തവ' : 'Packed Quantities'}:
                         </span>
                         <span className="text-stone-500 font-normal">
-                          {batchPackings.reduce((sum, p) => sum + p.quantityPacked, 0)} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts total'}
+                          {batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0)} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts total'}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -404,7 +409,7 @@ export const ProductionPage: React.FC = () => {
                             className="inline-flex items-center gap-1 bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 border border-charcoal-border/60 dark:border-[#2E2828] px-2 py-0.5 rounded-md font-semibold text-[11px]"
                           >
                             <span className="font-bold text-epso-red">{pkg.packetSize}:</span>
-                            <span>{pkg.quantityPacked} pkts</span>
+                            <span>{pkg.packetsPacked} pkts</span>
                           </span>
                         ))}
                       </div>
