@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -8,7 +8,6 @@ import { Product, Recipe, Ingredient } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
-  TbChefHat,
   TbAlertCircle,
   TbSearch,
   TbChevronRight,
@@ -17,7 +16,6 @@ import {
   TbPlus,
   TbTrash,
   TbRuler2,
-  TbChevronDown,
   TbCheck,
 } from 'react-icons/tb';
 
@@ -31,6 +29,8 @@ interface StartProductionModalProps {
   onSuccess: (savedRun?: any) => void;
 }
 
+type WizardStep = 1 | 2 | 3 | 4;
+
 export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   isOpen,
   onClose,
@@ -43,32 +43,26 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const { repo, staffName, addToast } = useApp();
   const { t, language } = useLanguage();
 
-  // Wizard Step: 1 = Select Product, 2 = Quantity & Ingredients, 3 = Confirm
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  // 4-Step Stepper:
+  // 1 = Select Product
+  // 2 = Measure Production Quantity with Ruler
+  // 3 = Select Ingredients to tick (with measurement ruler for each)
+  // 4 = Review & Confirm
+  const [step, setStep] = useState<WizardStep>(1);
 
   // Form State
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [productSearch, setProductSearch] = useState<string>('');
+  const [ingredientSearch, setIngredientSearch] = useState<string>('');
   const [isModalExpanded, setIsModalExpanded] = useState<boolean>(false);
-  const [isIngDropdownOpen, setIsIngDropdownOpen] = useState<boolean>(false);
-  const [ingFilterSearch, setIngFilterSearch] = useState<string>('');
-  const ingredientDropdownRef = useRef<HTMLDivElement>(null);
-  const [plannedQty, setPlannedQty] = useState<number>(1);
-  const [actualOutputQty, setActualOutputQty] = useState<number>(1);
+  const [plannedQty, setPlannedQty] = useState<number>(10);
+  const [actualOutputQty, setActualOutputQty] = useState<number>(10);
   const [productionDate, setProductionDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
   const [operator, setOperator] = useState<string>(staffName);
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  // Ingredient deletion confirm dialog state
-  const [itemToDelete, setItemToDelete] = useState<{
-    id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-  } | null>(null);
 
   // Ingredients consumption list: { ingredientId, expectedQuantity, actualQuantity, unit }
   const [consumptionItems, setConsumptionItems] = useState<
@@ -80,13 +74,17 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     }>
   >([]);
 
-  // Manual ingredient add in step 2
-  const [manualIngId, setManualIngId] = useState<string>(ingredients[0]?.id || '');
-  const [manualIngQty, setManualIngQty] = useState<number>(1);
+  // Ingredient deletion confirm dialog state
+  const [itemToDelete, setItemToDelete] = useState<{
+    id: string;
+    name: string;
+    quantity: number;
+    unit: string;
+  } | null>(null);
 
   // Active measurement tuning state using horizontal smooth ruler
   const [activeRulerItem, setActiveRulerItem] = useState<{
-    type: 'ingredient' | 'output' | 'manual';
+    type: 'ingredient' | 'output';
     ingredientId?: string;
     name: string;
     unit: string;
@@ -97,56 +95,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     max?: number;
     step?: number;
   } | null>(null);
-
-  // Reset form when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setStep(1);
-      setSelectedProductId('');
-      setProductSearch('');
-      setIsModalExpanded(false);
-      setIsIngDropdownOpen(false);
-      setIngFilterSearch('');
-      setActiveRulerItem(null);
-      setItemToDelete(null);
-      setPlannedQty(1);
-      setActualOutputQty(1);
-      setProductionDate(new Date().toISOString().split('T')[0]);
-      setOperator(staffName);
-      setNotes('');
-      setConsumptionItems([]);
-      if (ingredients.length > 0) setManualIngId(ingredients[0].id);
-    }
-  }, [isOpen, staffName, ingredients]);
-
-  // Click outside to close ingredient dropdown
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (
-        ingredientDropdownRef.current &&
-        !ingredientDropdownRef.current.contains(e.target as Node)
-      ) {
-        setIsIngDropdownOpen(false);
-      }
-    };
-    if (isIngDropdownOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [isIngDropdownOpen]);
-
-  // Filtered ingredients for manual ingredient dropdown
-  const filteredManualIngredients = useMemo(() => {
-    if (!ingFilterSearch.trim()) return ingredients;
-    const q = ingFilterSearch.toLowerCase();
-    return ingredients.filter(
-      (ing) =>
-        ing.name.toLowerCase().includes(q) ||
-        ing.unit.toLowerCase().includes(q)
-    );
-  }, [ingredients, ingFilterSearch]);
 
   const selectedProduct = useMemo(
     () => products.find((p) => p.id === selectedProductId),
@@ -161,6 +109,25 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     [recipes, selectedProductId]
   );
 
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+      setSelectedProductId('');
+      setProductSearch('');
+      setIngredientSearch('');
+      setIsModalExpanded(false);
+      setActiveRulerItem(null);
+      setItemToDelete(null);
+      setPlannedQty(10);
+      setActualOutputQty(10);
+      setProductionDate(new Date().toISOString().split('T')[0]);
+      setOperator(staffName);
+      setNotes('');
+      setConsumptionItems([]);
+    }
+  }, [isOpen, staffName]);
+
   // Filter products for Step 1
   const filteredProducts = useMemo(() => {
     const q = productSearch.trim().toLowerCase();
@@ -169,18 +136,27 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     );
   }, [products, productSearch]);
 
-  // When product or planned quantity changes in Step 2, scale recipe formula
-  useEffect(() => {
-    if (!selectedProduct) return;
+  // Filter ingredients for Step 3
+  const filteredIngredients = useMemo(() => {
+    const q = ingredientSearch.trim().toLowerCase();
+    return ingredients.filter(
+      (ing) => ing.isActive && (!q || ing.name.toLowerCase().includes(q))
+    );
+  }, [ingredients, ingredientSearch]);
 
-    if (activeRecipe && activeRecipe.ingredients.length > 0) {
-      const scaleFactor =
-        activeRecipe.baseOutputQuantity > 0
-          ? plannedQty / activeRecipe.baseOutputQuantity
-          : 1;
+  // When a product is selected in Step 1, advance to Step 2 (measure quantity)
+  const handleSelectProduct = (productId: string) => {
+    setSelectedProductId(productId);
+    setIsModalExpanded(false);
+    const prodRecipe = recipes.find((r) => r.productId === productId && r.isActive);
+    const initialQty = prodRecipe?.baseOutputQuantity || 10;
+    setPlannedQty(initialQty);
+    setActualOutputQty(initialQty);
 
-      const scaled = activeRecipe.ingredients.map((item) => {
-        const requiredQty = Number((item.quantity * scaleFactor).toFixed(3));
+    // Pre-populate with recipe ingredients scaled for initial planned quantity
+    if (prodRecipe && prodRecipe.ingredients.length > 0) {
+      const scaled = prodRecipe.ingredients.map((item) => {
+        const requiredQty = Number(item.quantity.toFixed(3));
         return {
           ingredientId: item.ingredientId,
           expectedQuantity: requiredQty,
@@ -190,15 +166,32 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       });
       setConsumptionItems(scaled);
     } else {
-      // No recipe formula: leave empty or retain manually added ingredients
-      setConsumptionItems((prev) => (prev.length > 0 ? prev : []));
+      setConsumptionItems([]);
     }
-  }, [selectedProduct, activeRecipe, plannedQty]);
 
-  const handleSelectProduct = (productId: string) => {
-    setSelectedProductId(productId);
-    setIsModalExpanded(false);
     setStep(2);
+  };
+
+  // When planned quantity changes in Step 2, scale recipe ingredients if available
+  const handlePlannedQtyChange = (newQty: number) => {
+    setPlannedQty(newQty);
+    setActualOutputQty(newQty);
+
+    if (activeRecipe && activeRecipe.ingredients.length > 0 && activeRecipe.baseOutputQuantity > 0) {
+      const scaleFactor = newQty / activeRecipe.baseOutputQuantity;
+      setConsumptionItems((prev) => {
+        return activeRecipe.ingredients.map((item) => {
+          const scaledQty = Number((item.quantity * scaleFactor).toFixed(3));
+          const existing = prev.find((p) => p.ingredientId === item.ingredientId);
+          return {
+            ingredientId: item.ingredientId,
+            expectedQuantity: scaledQty,
+            actualQuantity: existing ? existing.actualQuantity : scaledQty,
+            unit: item.unit,
+          };
+        });
+      });
+    }
   };
 
   const updateActualQty = (ingredientId: string, newQty: number) => {
@@ -215,32 +208,68 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     setConsumptionItems((prev) => prev.filter((i) => i.ingredientId !== ingredientId));
   };
 
-  const addManualIngredient = () => {
-    if (!manualIngId || manualIngQty <= 0) return;
-    const ing = ingredients.find((i) => i.id === manualIngId);
-    if (!ing) return;
-    if (ing.currentStock <= 0 || manualIngQty > ing.currentStock) return;
+  // Toggle selection of an ingredient in Step 3
+  const handleToggleIngredient = (ing: Ingredient) => {
+    const isSelected = consumptionItems.some((i) => i.ingredientId === ing.id);
 
-    setConsumptionItems((prev) => {
-      const exists = prev.find((i) => i.ingredientId === manualIngId);
-      if (exists) {
-        return prev.map((i) =>
-          i.ingredientId === manualIngId
-            ? { ...i, actualQuantity: Number((i.actualQuantity + manualIngQty).toFixed(3)) }
-            : i
-        );
+    if (isSelected) {
+      // Untick/remove ingredient
+      setConsumptionItems((prev) => prev.filter((i) => i.ingredientId !== ing.id));
+    } else {
+      // Find initial quantity: check recipe formula or get unit default
+      const recipeItem = activeRecipe?.ingredients.find((ri) => ri.ingredientId === ing.id);
+      let initialQty = 1;
+      if (recipeItem && activeRecipe?.baseOutputQuantity) {
+        const scale = plannedQty / activeRecipe.baseOutputQuantity;
+        initialQty = Number((recipeItem.quantity * scale).toFixed(3));
+      } else {
+        const uConfig = getUnitConfig(ing.unit);
+        initialQty = uConfig.presets[0] || uConfig.min || 1;
       }
-      return [
+
+      // Add to consumption items
+      setConsumptionItems((prev) => [
         ...prev,
         {
           ingredientId: ing.id,
-          expectedQuantity: manualIngQty,
-          actualQuantity: manualIngQty,
+          expectedQuantity: initialQty,
+          actualQuantity: initialQty,
           unit: ing.unit,
         },
-      ];
+      ]);
+
+      // Open measurement ruler for this ingredient immediately
+      const uConfig = getUnitConfig(ing.unit);
+      setActiveRulerItem({
+        type: 'ingredient',
+        ingredientId: ing.id,
+        name: ing.name,
+        unit: ing.unit,
+        subtitle: `സ്റ്റോക്ക്: ${ing.currentStock} ${ing.unit}`,
+        isZeroStock: ing.currentStock <= 0,
+        value: initialQty,
+        min: uConfig.min,
+        max: 999999,
+        step: uConfig.step,
+      });
+    }
+  };
+
+  // Open ruler directly for an already selected ingredient
+  const handleOpenIngredientRuler = (ing: Ingredient, currentVal: number) => {
+    const uConfig = getUnitConfig(ing.unit);
+    setActiveRulerItem({
+      type: 'ingredient',
+      ingredientId: ing.id,
+      name: ing.name,
+      unit: ing.unit,
+      subtitle: `സ്റ്റോക്ക്: ${ing.currentStock} ${ing.unit}`,
+      isZeroStock: ing.currentStock <= 0,
+      value: currentVal,
+      min: uConfig.min,
+      max: 999999,
+      step: uConfig.step,
     });
-    setManualIngQty(1);
   };
 
   // Check for any ingredient in consumption list that is out of stock (currentStock <= 0)
@@ -260,6 +289,15 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   }, [consumptionItems, ingredients]);
 
   const hasOutOfStockIngredient = outOfStockIngredients.length > 0;
+
+  // Calculate total batch ingredient cost for Step 4 review
+  const totalBatchIngredientCost = useMemo(() => {
+    return consumptionItems.reduce((sum, item) => {
+      const ing = ingredients.find((i) => i.id === item.ingredientId);
+      const unitCost = ing ? Number(ing.avgCostPerUnit) || 0 : 0;
+      return sum + item.actualQuantity * unitCost;
+    }, 0);
+  }, [consumptionItems, ingredients]);
 
   const handleFinalSubmit = async () => {
     if (!selectedProduct) return;
@@ -318,6 +356,13 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     }
   };
 
+  const stepTitles = {
+    1: language === 'ml' ? 'ഉൽപ്പന്നം തിരഞ്ഞെടുക്കുക' : 'Select Product',
+    2: language === 'ml' ? 'ഉൽപ്പാദന അളവ്' : 'Target Quantity',
+    3: language === 'ml' ? 'ചേരുവകൾ തിരഞ്ഞെടുക്കുക' : 'Select Ingredients',
+    4: language === 'ml' ? 'റിവ്യൂ & പ്രൊഡക്ഷൻ' : 'Review & Start',
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -331,7 +376,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           <div>
             <h3 className="text-base font-extrabold leading-tight">{t.startProduction}</h3>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
-              Step {step} of 3 • {step === 1 ? t.selectProduct : step === 2 ? t.quantityToProduce : t.confirmTitle}
+              Step {step} of 4 • {stepTitles[step]}
             </p>
           </div>
         </div>
@@ -339,7 +384,67 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       size="lg"
     >
       <div className="space-y-4">
-        {/* STEP 1: SELECT PRODUCT */}
+        {/* ======================================================== */}
+        {/* 4-STEP PROGRESS STEPPER HEADER                           */}
+        {/* ======================================================== */}
+        <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-[#282323]">
+          {[
+            { num: 1, label: language === 'ml' ? 'ഉൽപ്പന്നം' : 'Product' },
+            { num: 2, label: language === 'ml' ? 'അളവ്' : 'Quantity' },
+            { num: 3, label: language === 'ml' ? 'ചേരുവകൾ' : 'Ingredients' },
+            { num: 4, label: language === 'ml' ? 'റിവ്യൂ' : 'Review' },
+          ].map((s, idx) => {
+            const isCurrent = step === s.num;
+            const isPassed = step > s.num;
+
+            return (
+              <React.Fragment key={s.num}>
+                <div
+                  onClick={() => {
+                    if (isPassed) setStep(s.num as WizardStep);
+                  }}
+                  className={`flex items-center gap-1.5 ${
+                    isPassed ? 'cursor-pointer' : ''
+                  }`}
+                >
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+                      isCurrent
+                        ? 'bg-epso-red text-white shadow-xs ring-2 ring-epso-red/30'
+                        : isPassed
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-stone-200 dark:bg-[#282323] text-stone-500 dark:text-stone-400'
+                    }`}
+                  >
+                    {isPassed ? '✓' : s.num}
+                  </div>
+                  <span
+                    className={`text-xs font-bold font-malayalam hidden sm:inline ${
+                      isCurrent
+                        ? 'text-stone-900 dark:text-white font-extrabold'
+                        : isPassed
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-stone-400 dark:text-stone-500'
+                    }`}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+                {idx < 3 && (
+                  <div
+                    className={`flex-1 h-0.5 mx-2 rounded-full transition-all ${
+                      step > idx + 1 ? 'bg-emerald-500' : 'bg-stone-200 dark:bg-[#282323]'
+                    }`}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* ======================================================== */}
+        {/* STEP 1: SELECT PRODUCT                                   */}
+        {/* ======================================================== */}
         {step === 1 && (
           <div className="space-y-3">
             <div onClick={() => setIsModalExpanded(true)}>
@@ -375,9 +480,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 ))}
               </div>
             ) : (
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto pr-1 transition-all duration-300 ${
-                isModalExpanded || productSearch ? 'max-h-[72vh] sm:max-h-[66vh]' : 'max-h-[50vh]'
-              }`}>
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto pr-1 transition-all duration-300 ${
+                  isModalExpanded || productSearch ? 'max-h-[72vh] sm:max-h-[66vh]' : 'max-h-[50vh]'
+                }`}
+              >
                 {filteredProducts.map((p) => {
                   const productRecipe = recipes.find((r) => r.productId === p.id && r.isActive);
                   const hasRecipe = !!productRecipe;
@@ -447,502 +554,311 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: QUANTITY & INGREDIENT USAGE */}
+        {/* ======================================================== */}
+        {/* STEP 2: MEASURE QUANTITY WITH RULER (DEDICATED MODAL)   */}
+        {/* ======================================================== */}
         {step === 2 && selectedProduct && (
           <div className="space-y-4">
-            {/* Selected Product Summary Banner */}
-            <div className="p-3 bg-stone-100 dark:bg-[#141212] rounded-xl flex items-center justify-between border border-charcoal-border dark:border-[#2E2828]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-stone-200/80 dark:bg-[#252020] border border-stone-300/80 dark:border-[#2E2828] flex items-center justify-center shrink-0 shadow-2xs">
+            {/* Selected Product Banner */}
+            <div className="p-3.5 bg-stone-100 dark:bg-[#141212] rounded-2xl flex items-center justify-between border border-charcoal-border dark:border-[#2E2828]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-stone-200/80 dark:bg-[#252020] border border-stone-300/80 dark:border-[#2E2828] flex items-center justify-center shrink-0 shadow-2xs">
                   <img
                     src="/epso-icon-grey.png"
                     alt={selectedProduct.name}
-                    className="w-5 h-5 object-contain opacity-60 dark:opacity-50 select-none pointer-events-none"
+                    className="w-6 h-6 object-contain opacity-60 dark:opacity-50 select-none pointer-events-none"
                   />
                 </div>
                 <div>
-                  <h4 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">{selectedProduct.name}</h4>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                  <h4 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
+                    {selectedProduct.name}
+                  </h4>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam">
                     {activeRecipe
-                      ? `Formula v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} base)`
-                      : t.recipeNotConfigured}
+                      ? `ഫോർമുല v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} ബേസ്)`
+                      : 'മാനുവൽ പ്രൊഡക്ഷൻ (No recipe formula)'}
                   </p>
                 </div>
               </div>
 
               <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
-                Change
+                {language === 'ml' ? 'മാറ്റുക' : 'Change'}
               </Button>
             </div>
 
-            {/* Target Output Quantity Controls */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
-                {t.quantityToProduce} ({selectedProduct.unit})
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
-                  const uConfig = getUnitConfig(selectedProduct.unit);
-                  setActiveRulerItem({
-                    type: 'output',
-                    name: selectedProduct.name,
-                    unit: selectedProduct.unit,
-                    subtitle: `${t.quantityToProduce} (${selectedProduct.unit})`,
-                    value: plannedQty,
-                    min: uConfig.min,
-                    max: 999999,
-                    step: uConfig.step,
-                  });
-                }}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-charcoal-border dark:border-[#2E2828] text-stone-900 dark:text-white font-black text-lg shadow-xs hover:border-epso-orange transition-all cursor-pointer text-left press-apple"
-                title={language === 'ml' ? 'അളവ് മാറ്റാൻ ക്ലിക്ക് ചെയ്യുക' : 'Click to adjust quantity'}
-              >
-                <span className="tabular-nums">{plannedQty}</span>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-epso-orange dark:text-amber-400">
-                  <span>{selectedProduct.unit}</span>
-                  <TbRuler2 className="w-4 h-4 opacity-75" />
-                </div>
-              </button>
-
-              {/* Quick Presets: 5, 10, 25, 50, 100, 250 */}
-              <div className="grid grid-cols-6 gap-1.5">
-                {[5, 10, 25, 50, 100, 250].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => {
-                      setPlannedQty(preset);
-                      setActualOutputQty(preset);
-                    }}
-                    className={`py-2 rounded-xl text-xs font-extrabold border transition-all press-apple text-center ${
-                      plannedQty === preset
-                        ? 'bg-epso-red text-white border-epso-red shadow-sm'
-                        : 'bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border-charcoal-border dark:border-[#2E2828] hover:bg-stone-50 dark:hover:bg-[#282323]'
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
+            {/* Dedicated Measurement Ruler for Output Quantity */}
+            <div className="p-4 bg-white dark:bg-[#1E1B1B] rounded-2xl border border-charcoal-border dark:border-[#2E2828] shadow-xs">
+              <MeasurementRulerSelector
+                title={language === 'ml' ? 'ഉൽപ്പാദന അളവ് നിശ്ചയിക്കുക' : 'Set Production Quantity'}
+                subtitle={language === 'ml' ? `യൂണിറ്റ്: ${selectedProduct.unit}` : `Unit: ${selectedProduct.unit}`}
+                unit={selectedProduct.unit}
+                value={plannedQty}
+                presets={[5, 10, 25, 50, 100, 250]}
+                min={0.1}
+                max={999999}
+                step={selectedProduct.unit.toLowerCase().includes('kg') ? 0.5 : 1}
+                onChange={handlePlannedQtyChange}
+              />
             </div>
 
-            {/* Ingredients Consumption List */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                  {t.requiredIngredients} ({consumptionItems.length})
-                </label>
-                <span className="text-[11px] text-stone-500 dark:text-stone-400 font-semibold">
-                  {t.actualConsumption}
-                </span>
-              </div>
-
-              <div className="space-y-2 max-h-[35vh] overflow-y-auto pr-1">
-                {consumptionItems.map((item) => {
-                  const ing = ingredients.find((i) => i.id === item.ingredientId);
-                  const inStock = ing ? ing.currentStock : 0;
-                  const isZeroStock = inStock <= 0;
-                  const isShortage = inStock < item.actualQuantity;
-
-                  return (
-                    <div
-                      key={item.ingredientId}
-                      className="p-3 rounded-xl border border-charcoal-border dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] shadow-xs"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <h5 className="text-xs font-extrabold text-stone-900 dark:text-white truncate font-malayalam">
-                            {ing?.name || 'Ingredient'}
-                          </h5>
-                          <div className="flex items-center gap-2 text-[10px] text-stone-500 dark:text-stone-400 mt-0.5">
-                            <span>
-                              Formula: {item.expectedQuantity} {item.unit}
-                            </span>
-                            <span>•</span>
-                            <span
-                              className={
-                                isZeroStock
-                                  ? 'text-red-600 dark:text-red-400 font-extrabold'
-                                  : isShortage
-                                  ? 'text-amber-600 dark:text-amber-400 font-bold'
-                                  : 'text-emerald-600 dark:text-emerald-400 font-bold'
-                              }
-                            >
-                              Stock: {inStock} {item.unit}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Actual Input & Ruler Selector Trigger */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (document.activeElement instanceof HTMLElement) {
-                                document.activeElement.blur();
-                              }
-                              const uConfig = getUnitConfig(item.unit);
-                              setActiveRulerItem({
-                                type: 'ingredient',
-                                ingredientId: item.ingredientId,
-                                name: ing?.name || 'Ingredient',
-                                unit: item.unit,
-                                subtitle: isZeroStock
-                                  ? `Formula: ${item.expectedQuantity} ${item.unit} • Stock: 0 ${item.unit}`
-                                  : `Formula: ${item.expectedQuantity} ${item.unit} • Stock: ${inStock} ${item.unit}`,
-                                isZeroStock,
-                                value: isZeroStock ? 0 : item.actualQuantity,
-                                min: uConfig.min,
-                                max: 999999,
-                                step: uConfig.step,
-                              });
-                            }}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-xl border text-xs font-extrabold transition-all press-apple cursor-pointer shadow-xs ${
-                              isZeroStock
-                                ? 'bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
-                                : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300'
-                            }`}
-                            title="Click to adjust quantity"
-                          >
-                            <span className="text-sm font-black tabular-nums">{item.actualQuantity}</span>
-                            <span className="text-[11px] font-bold">{item.unit}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setItemToDelete({
-                                id: item.ingredientId,
-                                name: ing?.name || 'Ingredient',
-                                quantity: item.actualQuantity,
-                                unit: item.unit,
-                              });
-                            }}
-                            className="p-1.5 text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors press-apple cursor-pointer"
-                            title="Remove item from this batch"
-                          >
-                            <TbTrash className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Red warning text when ingredient stock is 0 */}
-                      {isZeroStock && (
-                        <div className="mt-2 pt-1.5 border-t border-stone-100 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 font-malayalam">
-                          <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                          <span>
-                            {language === 'ml'
-                              ? `ശ്രദ്ധിക്കുക: സ്റ്റോക്ക് ലഭ്യമല്ല (0 ${item.unit} സ്റ്റോക്ക്)`
-                              : `Warning: Stock is 0 ${item.unit} (Out of stock)`}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {consumptionItems.length === 0 && (
-                  <div className="text-center py-6 border border-dashed border-charcoal-border dark:border-[#2E2828] rounded-xl text-stone-400 text-xs">
-                    {language === 'ml'
-                      ? 'ചേരുവകൾ ഒന്നും ചേർത്തിട്ടില്ല. താഴെയുള്ള ബോക്സ് ഉപയോഗിച്ച് ചേരുവകൾ ചേർക്കുക.'
-                      : 'No ingredients added yet. Add ingredients using the selector below.'}
-                  </div>
-                )}
-              </div>
-
-              {/* Add manual ingredient row with Ruler Measurement */}
-              {(() => {
-                const selectedManualIng = ingredients.find((i) => i.id === manualIngId) || ingredients[0];
-                const isManualZeroStock = selectedManualIng ? selectedManualIng.currentStock <= 0 : false;
-                const isManualExceedsStock = selectedManualIng ? manualIngQty > selectedManualIng.currentStock : false;
-                const isAddDisabled = isManualZeroStock || isManualExceedsStock || manualIngQty <= 0;
-
-                return (
-                  <div className="p-3 bg-white dark:bg-[#1E1B1B] rounded-xl border border-charcoal-border dark:border-[#2E2828] shadow-xs transition-colors">
-                    <div className="flex items-center gap-2 relative">
-                      {/* Theme-Related Ingredient Custom Dropdown */}
-                      <div className="relative flex-1 min-w-0" ref={ingredientDropdownRef}>
-                        <button
-                          type="button"
-                          onClick={() => setIsIngDropdownOpen((prev) => !prev)}
-                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border ${
-                            isIngDropdownOpen
-                              ? 'border-epso-orange ring-1 ring-epso-orange/30'
-                              : 'border-charcoal-border dark:border-[#2E2828] hover:border-epso-orange/60 dark:hover:border-amber-500/60'
-                          } rounded-xl font-malayalam transition-all cursor-pointer text-left press-apple`}
-                          aria-haspopup="listbox"
-                          aria-expanded={isIngDropdownOpen}
-                        >
-                          <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                            <span className="truncate">{selectedManualIng?.name || (language === 'ml' ? 'ചേരുവ തിരഞ്ഞെടുക്കുക' : 'Select Ingredient')}</span>
-                            {selectedManualIng && (
-                              <span className="text-[10px] text-stone-500 dark:text-stone-400 shrink-0 font-sans">
-                                ({selectedManualIng.unit})
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {selectedManualIng && (
-                              selectedManualIng.currentStock <= 0 ? (
-                                <span className="text-[9px] font-bold text-red-600 dark:text-red-400 bg-red-100/80 dark:bg-red-950/70 px-1 py-0.5 rounded shrink-0">
-                                  {language === 'ml' ? 'സ്റ്റോക്കില്ല' : '0 stock'}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 tabular-nums shrink-0">
-                                  {selectedManualIng.currentStock} {selectedManualIng.unit}
-                                </span>
-                              )
-                            )}
-                            <TbChevronDown
-                              className={`w-3.5 h-3.5 text-stone-400 transition-transform duration-200 ${
-                                isIngDropdownOpen ? 'rotate-180' : ''
-                              }`}
-                            />
-                          </div>
-                        </button>
-
-                        {/* Theme Dropdown Menu popup (drops upward to avoid getting clipped) */}
-                        {isIngDropdownOpen && (
-                          <div
-                            className="absolute left-0 right-0 bottom-full mb-1.5 z-50 bg-white dark:bg-[#1E1B1B] border border-charcoal-border dark:border-[#2E2828] rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 origin-bottom"
-                            role="listbox"
-                          >
-                            <div className="p-1.5 border-b border-stone-100 dark:border-[#282323] bg-stone-50/50 dark:bg-[#181515]">
-                              <input
-                                type="text"
-                                placeholder={language === 'ml' ? 'ചേരുവ തിരയുക...' : 'Search ingredient...'}
-                                value={ingFilterSearch}
-                                onChange={(e) => setIngFilterSearch(e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-[#141212] text-stone-900 dark:text-white border border-stone-200 dark:border-[#2E2828] rounded-lg font-malayalam focus:outline-none focus:ring-1 focus:ring-epso-orange"
-                                autoFocus
-                              />
-                            </div>
-                            <div className="max-h-48 overflow-y-auto p-1 divide-y divide-stone-100/60 dark:divide-[#282323]/60">
-                              {filteredManualIngredients.length === 0 ? (
-                                <div className="px-3 py-3 text-xs text-stone-400 text-center font-medium font-malayalam">
-                                  {language === 'ml' ? 'ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല' : 'No ingredients found'}
-                                </div>
-                              ) : (
-                                filteredManualIngredients.map((ing) => {
-                                  const isSelected = ing.id === (selectedManualIng?.id || manualIngId);
-                                  const isZero = ing.currentStock <= 0;
-                                  return (
-                                    <div
-                                      key={ing.id}
-                                      role="option"
-                                      aria-selected={isSelected}
-                                      onClick={() => {
-                                        setManualIngId(ing.id);
-                                        setIsIngDropdownOpen(false);
-                                        setIngFilterSearch('');
-                                      }}
-                                      className={`px-2.5 py-2 rounded-lg text-xs flex items-center justify-between cursor-pointer transition-colors font-malayalam ${
-                                        isSelected
-                                          ? 'bg-red-50 dark:bg-red-950/50 text-epso-red dark:text-amber-400 font-bold'
-                                          : 'text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323]'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-1.5 min-w-0 flex-1 pr-2">
-                                        <span className="truncate">{ing.name}</span>
-                                        <span className="text-[10px] text-stone-500 dark:text-stone-400 font-sans shrink-0">
-                                          ({ing.unit})
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 shrink-0">
-                                        {isZero ? (
-                                          <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-100/80 dark:bg-red-950/70 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900/40">
-                                            {language === 'ml' ? 'സ്റ്റോക്കില്ല' : '0 stock'}
-                                          </span>
-                                        ) : (
-                                          <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-300 tabular-nums">
-                                            {ing.currentStock} {ing.unit}
-                                          </span>
-                                        )}
-                                        {isSelected && (
-                                          <TbCheck className="w-3.5 h-3.5 text-epso-red dark:text-amber-400 shrink-0 ml-1" />
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Quantity button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (document.activeElement instanceof HTMLElement) {
-                            document.activeElement.blur();
-                          }
-                          const ing = selectedManualIng;
-                          if (ing) {
-                            const isZero = ing.currentStock <= 0;
-                            const uConfig = getUnitConfig(ing.unit);
-                            setActiveRulerItem({
-                              type: 'manual',
-                              ingredientId: ing.id,
-                              name: ing.name,
-                              unit: ing.unit,
-                              subtitle: isZero
-                                ? (language === 'ml' ? `സ്റ്റോക്ക്: 0 ${ing.unit}` : `Current stock: 0 ${ing.unit}`)
-                                : (language === 'ml' ? `സ്റ്റോക്ക്: ${ing.currentStock} ${ing.unit}` : `Current stock: ${ing.currentStock} ${ing.unit}`),
-                              isZeroStock: isZero,
-                              value: isZero ? 0 : manualIngQty,
-                              min: uConfig.min,
-                              max: 999999,
-                              step: uConfig.step,
-                            });
-                          }
-                        }}
-                        className={`px-3 py-2 rounded-xl border text-xs font-extrabold shrink-0 flex items-center gap-1 cursor-pointer press-apple shadow-xs transition-all ${
-                          isManualZeroStock
-                            ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
-                            : isManualExceedsStock
-                            ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-300'
-                            : 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300'
-                        }`}
-                        title="Click to adjust quantity"
-                      >
-                        <span>
-                          {manualIngQty} {selectedManualIng?.unit || 'unit'}
-                        </span>
-                      </button>
-
-                      {/* Add button - Hidden when dropdown is open on mobile/all */}
-                      {!isIngDropdownOpen && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={isAddDisabled}
-                          onClick={isAddDisabled ? undefined : addManualIngredient}
-                          className={
-                            isAddDisabled
-                              ? '!bg-stone-200 dark:!bg-stone-800 !text-stone-400 dark:!text-stone-500 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none shadow-none shrink-0'
-                              : 'shrink-0'
-                          }
-                          icon={<TbPlus className="w-3.5 h-3.5" />}
-                        >
-                          Add
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* Red warning text INSIDE the container, just like added ingredients */}
-                    {isManualZeroStock && selectedManualIng && (
-                      <div className="mt-2.5 pt-2 border-t border-stone-100 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-red-600 dark:text-red-400 font-malayalam">
-                        <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-red-500" />
-                        <span>
-                          {language === 'ml'
-                            ? `ശ്രദ്ധിക്കുക: സ്റ്റോക്ക് ലഭ്യമല്ല (0 ${selectedManualIng.unit} സ്റ്റോക്ക്)`
-                            : `Warning: Stock is 0 ${selectedManualIng.unit} (Out of stock)`}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Warning if selected measurement exceeds stock */}
-                    {!isManualZeroStock && isManualExceedsStock && selectedManualIng && (
-                      <div className="mt-2.5 pt-2 border-t border-stone-100 dark:border-[#282323] flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 font-malayalam">
-                        <TbAlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
-                        <span>
-                          {language === 'ml'
-                            ? `ശ്രദ്ധിക്കുക: തിരഞ്ഞെടുത്ത അളവ് സ്റ്റോക്കിനേക്കാൾ കൂടുതലാണ് (${selectedManualIng.currentStock} ${selectedManualIng.unit} ലഭ്യമാണ്)`
-                            : `Warning: Quantity exceeds current stock (${selectedManualIng.currentStock} ${selectedManualIng.unit} available)`}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Out of stock warning banner above action buttons */}
-            {hasOutOfStockIngredient && (
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 flex items-start gap-2.5 text-xs text-red-700 dark:text-red-300">
-                <TbAlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
-                <div className="flex-1">
-                  <span className="font-extrabold font-malayalam block">
-                    {language === 'ml'
-                      ? 'ചേരുവകളുടെ സ്റ്റോക്ക് തീർന്നു (Out of Stock)'
-                      : 'Ingredients Out of Stock'}
-                  </span>
-                  <span className="text-[11px] font-medium font-malayalam opacity-90 mt-0.5 block">
-                    {language === 'ml'
-                      ? `${outOfStockIngredients.map((i) => i.name).join(', ')} എന്നിവയുടെ നിലവിലെ സ്റ്റോക്ക് 0 ആണ്. സ്റ്റോക്ക് റീസ്റ്റോക്ക് ചെയ്യാതെ അടുത്ത ഘട്ടത്തിലേക്ക് തുടരാനാവില്ല.`
-                      : `${outOfStockIngredients.map((i) => i.name).join(', ')} has 0 stock available. You cannot proceed to review until stock is replenished.`}
-                  </span>
-                </div>
-              </div>
-            )}
-
+            {/* Step 2 Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-charcoal-border dark:border-[#2E2828]">
-              <Button variant="ghost" onClick={() => setStep(1)} icon={<TbChevronLeft className="w-4 h-4" />}>
-                Back
+              <Button
+                variant="ghost"
+                onClick={() => setStep(1)}
+                icon={<TbChevronLeft className="w-4 h-4" />}
+              >
+                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
               </Button>
 
               <Button
                 variant="primary"
                 onClick={() => setStep(3)}
                 icon={<TbChevronRight className="w-4 h-4" />}
-                disabled={plannedQty <= 0 || hasOutOfStockIngredient}
-                className={
-                  hasOutOfStockIngredient
-                    ? '!bg-stone-300 dark:!bg-stone-800 !text-stone-500 dark:!text-stone-400 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none'
-                    : ''
-                }
-                title={
-                  hasOutOfStockIngredient
-                    ? language === 'ml'
-                      ? 'ചേരുവകളുടെ സ്റ്റോക്ക് തീർന്നതിനാൽ തുടരാനാവില്ല'
-                      : 'Cannot proceed: ingredients are out of stock'
-                    : undefined
-                }
+                disabled={plannedQty <= 0}
+                className="font-bold px-5"
               >
-                Next: Review
+                {language === 'ml' ? 'അടുത്തത്: ചേരുവകൾ' : 'Next: Select Ingredients'}
               </Button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: CONFIRMATION & OPERATOR DETAILS */}
+        {/* ======================================================== */}
+        {/* STEP 3: SELECT INGREDIENTS TO TICK (WITH RULER)          */}
+        {/* ======================================================== */}
         {step === 3 && selectedProduct && (
+          <div className="space-y-3">
+            {/* Header info bar */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="relative flex-1">
+                <Input
+                  placeholder={language === 'ml' ? 'ചേരുവകൾ തിരയുക...' : 'Search ingredients...'}
+                  value={ingredientSearch}
+                  onChange={(e) => setIngredientSearch(e.target.value)}
+                  leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
+                />
+              </div>
+              <div className="px-3 py-2 rounded-xl bg-stone-100 dark:bg-[#252020] text-stone-700 dark:text-stone-300 text-xs font-bold font-mono shrink-0">
+                {consumptionItems.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-stone-400 font-malayalam">
+              {language === 'ml'
+                ? 'ഉപയോഗിക്കുന്ന ചേരുവകളിൽ ടിക്ക് ചെയ്യുക. അളവ് മാറ്റാൻ കാർഡിൽ ക്ലിക്ക് ചെയ്യാം.'
+                : 'Tick the ingredients needed. Tap card to measure exact quantity with ruler.'}
+            </p>
+
+            {/* Ingredients Selection Grid (Styled just like Step 1 Product cards!) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1">
+              {filteredIngredients.map((ing) => {
+                const consumedItem = consumptionItems.find((i) => i.ingredientId === ing.id);
+                const isSelected = !!consumedItem;
+                const inStock = ing.currentStock || 0;
+                const isZeroStock = inStock <= 0;
+                const isShortage = consumedItem ? consumedItem.actualQuantity > inStock : false;
+
+                return (
+                  <div
+                    key={ing.id}
+                    onClick={() => handleToggleIngredient(ing)}
+                    className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between select-none press-apple ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/30 shadow-xs'
+                        : 'border-charcoal-border dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:border-emerald-500/40 hover:bg-stone-50 dark:hover:bg-[#282323]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* Checkbox indicator */}
+                      <div
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shrink-0 ${
+                          isSelected
+                            ? 'bg-emerald-500 text-white shadow-xs'
+                            : 'border-2 border-stone-300 dark:border-stone-600 bg-transparent'
+                        }`}
+                      >
+                        {isSelected && <TbCheck className="w-4 h-4 stroke-[3]" />}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam truncate">
+                          {ing.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              isZeroStock
+                                ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400'
+                                : isShortage
+                                ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400'
+                                : 'bg-stone-100 dark:bg-[#252020] text-stone-600 dark:text-stone-400'
+                            }`}
+                          >
+                            {isZeroStock
+                              ? language === 'ml'
+                                ? 'സ്റ്റോക്കില്ല'
+                                : 'Out of Stock'
+                              : `${inStock} ${ing.unit} സ്റ്റോക്ക്`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Measured Quantity Pill & Ruler Button */}
+                    {isSelected && consumedItem && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenIngredientRuler(ing, consumedItem.actualQuantity);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#141212] border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-black text-xs shadow-2xs hover:border-emerald-500 transition-all shrink-0 ml-2"
+                        title={language === 'ml' ? 'അളവ് മാറ്റുക' : 'Tune Quantity'}
+                      >
+                        <span>
+                          {consumedItem.actualQuantity} {consumedItem.unit}
+                        </span>
+                        <TbRuler2 className="w-3.5 h-3.5 opacity-70" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+
+              {filteredIngredients.length === 0 && (
+                <div className="col-span-2 text-center py-8 text-stone-400 text-sm font-medium font-malayalam">
+                  ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല
+                </div>
+              )}
+            </div>
+
+            {/* Out of stock warning banner if any selected ingredient is 0 */}
+            {hasOutOfStockIngredient && (
+              <div className="p-3 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/60 flex items-start gap-2.5 text-xs text-red-800 dark:text-red-300">
+                <TbAlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
+                <div className="flex-1 font-malayalam">
+                  <span className="font-bold block">സ്റ്റോക്ക് മുന്നറിയിപ്പ്:</span>
+                  <span className="text-[11px] opacity-90 mt-0.5 block">
+                    {outOfStockIngredients.map((i) => i.name).join(', ')} സ്റ്റോക്ക് തീർന്നു (0 Stock).
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3 Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-charcoal-border dark:border-[#2E2828]">
+              <Button
+                variant="ghost"
+                onClick={() => setStep(2)}
+                icon={<TbChevronLeft className="w-4 h-4" />}
+              >
+                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
+              </Button>
+
+              <Button
+                variant="primary"
+                onClick={() => setStep(4)}
+                icon={<TbChevronRight className="w-4 h-4" />}
+                disabled={consumptionItems.length === 0 || hasOutOfStockIngredient}
+                className="font-bold px-5"
+              >
+                {language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Next: Review'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* STEP 4: REVIEW & CONFIRM (DEFAULT MODAL)                 */}
+        {/* ======================================================== */}
+        {step === 4 && selectedProduct && (
           <div className="space-y-4">
+            {/* Product Run Summary Card */}
             <div className="p-4 bg-red-50/60 dark:bg-red-950/30 rounded-2xl border border-red-200 dark:border-red-900/40 space-y-3">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-epso-red dark:text-red-400">
-                    Product Run Summary
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-epso-red dark:text-red-400 font-malayalam">
+                    ഉൽപ്പാദന ബാച്ച് സംഗ്രഹം
                   </span>
                   <h4 className="text-lg font-black text-stone-900 dark:text-white leading-tight mt-0.5 font-malayalam">
                     {selectedProduct.name}
                   </h4>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl font-black text-epso-red dark:text-amber-400">
+                  <span className="text-2xl font-black text-epso-red dark:text-amber-400 font-mono">
                     {actualOutputQty} {selectedProduct.unit}
                   </span>
-                  <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400">Finished Output</p>
+                  <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                    ലക്ഷ്യമിടുന്ന ഉൽപ്പാദനം
+                  </p>
                 </div>
               </div>
 
-              <div className="text-xs text-stone-700 dark:text-stone-300 border-t border-red-200/60 dark:border-red-900/40 pt-2 flex items-center justify-between">
-                <span>Total Ingredients: {consumptionItems.length} items</span>
-                <span>Date: {productionDate}</span>
+              <div className="text-xs text-stone-700 dark:text-stone-300 border-t border-red-200/60 dark:border-red-900/40 pt-2 flex items-center justify-between font-malayalam">
+                <span>തിരഞ്ഞെടുത്ത ചേരുവകൾ: {consumptionItems.length}</span>
+                <span className="font-bold text-stone-900 dark:text-white">
+                  ചേരുവ ചിലവ്: ₹{totalBatchIngredientCost.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* Selected Ingredients Breakdown List */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam">
+                  ചേരുവകളുടെ അളവ് ({consumptionItems.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  className="text-[11px] text-epso-orange font-bold font-malayalam hover:underline"
+                >
+                  ചേരുവകളിൽ മാറ്റം വരുത്തുക
+                </button>
+              </div>
+
+              <div className="space-y-1.5 max-h-[28vh] overflow-y-auto pr-1">
+                {consumptionItems.map((item) => {
+                  const ing = ingredients.find((i) => i.id === item.ingredientId);
+                  const inStock = ing ? ing.currentStock : 0;
+                  const unitCost = ing ? Number(ing.avgCostPerUnit) || 0 : 0;
+                  const itemCost = item.actualQuantity * unitCost;
+
+                  return (
+                    <div
+                      key={item.ingredientId}
+                      className="p-2.5 rounded-xl border border-stone-200/80 dark:border-[#282323] bg-white dark:bg-[#1E1B1B] flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <span className="font-bold text-stone-900 dark:text-white font-malayalam block">
+                          {ing?.name || 'Ingredient'}
+                        </span>
+                        <span className="text-[10px] text-stone-400 font-sans">
+                          സ്റ്റോക്ക്: {inStock} {item.unit} • ₹{unitCost.toFixed(1)}/{item.unit}
+                        </span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="font-mono font-black text-stone-900 dark:text-white block">
+                          {item.actualQuantity} {item.unit}
+                        </span>
+                        <span className="text-[10px] font-mono text-stone-500">
+                          ₹{itemCost.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Operator & Date Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block">{t.operator}</label>
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
+                  {t.operator}
+                </label>
                 <Input
                   value={operator}
                   onChange={(e) => setOperator(e.target.value)}
@@ -951,7 +867,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block">Production Date</label>
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
+                  തീയതി (Date)
+                </label>
                 <Input
                   type="date"
                   value={productionDate}
@@ -961,18 +879,24 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block">{t.notes}</label>
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
+                കുറിപ്പ് (Notes)
+              </label>
               <Input
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Batch quality notes, frying temperature, remarks..."
+                placeholder="ബാച്ച് വിവരങ്ങൾ, താപനില, പ്രത്യേക നിർദ്ദേശങ്ങൾ..."
               />
             </div>
 
             {/* Action buttons */}
             <div className="flex items-center justify-between pt-3 border-t border-charcoal-border dark:border-[#2E2828]">
-              <Button variant="ghost" onClick={() => setStep(2)} icon={<TbChevronLeft className="w-4 h-4" />}>
-                Back
+              <Button
+                variant="ghost"
+                onClick={() => setStep(3)}
+                icon={<TbChevronLeft className="w-4 h-4" />}
+              >
+                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
               </Button>
 
               <Button
@@ -982,7 +906,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 icon={<TbCircleCheck className="w-4 h-4" />}
                 className="font-black px-6"
               >
-                {t.confirmProduction}
+                {language === 'ml' ? 'ഉൽപ്പാദനം ആരംഭിക്കുക' : t.confirmProduction}
               </Button>
             </div>
           </div>
@@ -999,18 +923,12 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </div>
               <div>
                 <h4 className="text-sm font-black text-stone-900 dark:text-white leading-tight font-malayalam">
-                  {language === 'ml' ? 'ചേരുവ ഒഴിവാക്കണോ?' : 'Remove Ingredient?'}
+                  ചേരുവ ഒഴിവാക്കണോ?
                 </h4>
                 <p className="text-xs text-stone-600 dark:text-stone-300 font-bold mt-0.5">
                   {itemToDelete.name} ({itemToDelete.quantity} {itemToDelete.unit})
                 </p>
               </div>
-            </div>
-
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-900/40 text-xs text-amber-800 dark:text-amber-300 font-medium">
-              {language === 'ml'
-                ? 'ഈ പ്രത്യേക പ്രൊഡക്ഷൻ ബാച്ചിൽ നിന്ന് മാത്രമാണ് ഈ ചേരുവ ഒഴിവാക്കുന്നത്. പ്രധാന റെസിപ്പി ഫോർമുലയിൽ മാറ്റം വരില്ല.'
-                : 'This ingredient will only be removed from this custom production run. The original recipe formula remains unchanged.'}
             </div>
 
             <div className="flex items-center gap-2 pt-1">
@@ -1026,12 +944,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 className="flex-1 font-bold"
                 onClick={() => {
                   removeConsumptionItem(itemToDelete.id);
-                  addToast(
-                    language === 'ml'
-                      ? `${itemToDelete.name} ഈ ബാച്ചിൽ നിന്ന് ഒഴിവാക്കി`
-                      : `${itemToDelete.name} removed from this batch`,
-                    'info'
-                  );
                   setItemToDelete(null);
                 }}
               >
@@ -1042,7 +954,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         </div>
       )}
 
-      {/* Interactive Horizontal Smooth Scrolling Ruler Modal - Teleported to Body to Cover Background Completely */}
+      {/* Interactive Measurement Ruler Modal Overlay for Measuring Each Ingredient */}
       {activeRulerItem &&
         createPortal(
           <div
@@ -1057,7 +969,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 title={activeRulerItem.name}
                 subtitle={activeRulerItem.subtitle}
                 isZeroStock={activeRulerItem.isZeroStock}
-                presets={activeRulerItem.type === 'output' ? [5, 10, 25, 50, 100, 250] : undefined}
                 unit={activeRulerItem.unit}
                 value={activeRulerItem.value || 1}
                 min={activeRulerItem.min}
@@ -1068,13 +979,10 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   if (activeRulerItem.type === 'ingredient' && activeRulerItem.ingredientId) {
                     updateActualQty(activeRulerItem.ingredientId, newVal);
                   } else if (activeRulerItem.type === 'output') {
-                    setPlannedQty(newVal);
-                    setActualOutputQty(newVal);
-                  } else if (activeRulerItem.type === 'manual') {
-                    setManualIngQty(newVal);
+                    handlePlannedQtyChange(newVal);
                   }
                 }}
-                confirmLabel={language === 'ml' ? 'അളവ് രേഖപ്പെടുത്തുക' : 'Done / Set Quantity'}
+                confirmLabel={language === 'ml' ? 'സ്ഥിരീകരിക്കുക' : 'Done / Set Quantity'}
                 onConfirm={() => setActiveRulerItem(null)}
                 onClose={() => setActiveRulerItem(null)}
               />
