@@ -122,9 +122,9 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
       <div className="w-full max-w-sm flex justify-between items-center py-2">
         <div className="flex items-center gap-2">
           <img
-            src="/favicon.png"
+            src="/epso-swirl-transparent.png"
             alt="Epso Logo"
-            className="w-7 h-7 object-contain drop-shadow"
+            className="w-7 h-7 object-contain"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
