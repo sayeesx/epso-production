@@ -27,6 +27,22 @@ export const ProductionPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showSpinner, setShowSpinner] = useState<boolean>(false);
+
+  // Show loading spinner loader only if fetching takes time (e.g. slow network), avoid fake spinner flashes
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (loading) {
+      timer = setTimeout(() => {
+        setShowSpinner(true);
+      }, 150);
+    } else {
+      setShowSpinner(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [loading]);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -143,6 +159,25 @@ export const ProductionPage: React.FC = () => {
     }
   };
 
+  const todayDate = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const todayRuns = useMemo(() => {
+    return runs.filter((r) => r.productionDate === todayDate && r.status === 'completed');
+  }, [runs, todayDate]);
+
+  const todaySummary = useMemo(() => {
+    const map: Record<string, { name: string; quantity: number; batches: number; ingCost: number; unit: string }> = {};
+    for (const r of todayRuns) {
+      if (!map[r.productId]) {
+        map[r.productId] = { name: r.productName, quantity: 0, batches: 0, ingCost: 0, unit: r.unit };
+      }
+      map[r.productId].quantity += r.actualQuantity;
+      map[r.productId].batches += 1;
+      map[r.productId].ingCost += Number(r.totalIngredientCost) || 0;
+    }
+    return Object.values(map);
+  }, [todayRuns]);
+
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
       {/* Sleek header bar with prominent Epso logo */}
@@ -183,6 +218,54 @@ export const ProductionPage: React.FC = () => {
         </button>
       </div>
 
+      {/* Daily Production Summary Card (Section 8 - Step 2) */}
+      {todaySummary.length > 0 && (
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-charcoal-border/50 dark:border-[#2E2828] shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#282323] pb-2">
+            <div>
+              <h2 className="text-sm font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{language === 'ml' ? 'ഇന്നത്തെ ഉൽപ്പാദന സംഗ്രഹം' : 'Daily Production Summary'}</span>
+              </h2>
+              <p className="text-[11px] text-stone-400 font-malayalam mt-0.5">
+                {language === 'ml' ? 'ഇന്ന് പൂർത്തിയാക്കിയ എല്ലാ ബാച്ചുകളും' : 'All batches completed today'}
+              </p>
+            </div>
+            <span className="text-xs font-mono font-bold text-stone-500 dark:text-stone-400">
+              {todayRuns.length} {language === 'ml' ? 'ബാച്ചുകൾ' : 'batches'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {todaySummary.map((item) => (
+              <div
+                key={item.name}
+                className="p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200/60 dark:border-[#282323] flex items-center justify-between"
+              >
+                <div>
+                  <span className="font-bold text-stone-900 dark:text-white font-malayalam block">
+                    {item.name}
+                  </span>
+                  <span className="text-[10px] text-stone-400 font-malayalam">
+                    {item.batches} {language === 'ml' ? 'ബാച്ചുകൾ' : 'batches'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-extrabold text-stone-900 dark:text-white block">
+                    {item.quantity} {item.unit}
+                  </span>
+                  {item.ingCost > 0 && (
+                    <span className="font-mono text-[10px] text-stone-500 block">
+                      ₹{item.ingCost.toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Production History & Operational Search */}
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between gap-3">
@@ -216,10 +299,10 @@ export const ProductionPage: React.FC = () => {
           leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
         />
 
-        {/* Loading state with Epso Animated Swirl */}
-        {loading && (
+        {/* Loading state: clean loading spinner loader without text, shown only when fetching is active/slow */}
+        {loading && showSpinner && (
           <div className="py-12 flex justify-center">
-            <LoadingSpinner size="lg" label={t.loading} />
+            <LoadingSpinner size="lg" />
           </div>
         )}
 

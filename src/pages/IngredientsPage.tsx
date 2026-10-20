@@ -24,6 +24,22 @@ export const IngredientsPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showInactive, setShowInactive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showSpinner, setShowSpinner] = useState<boolean>(false);
+
+  // Show loading spinner loader only if fetching takes time (e.g. slow network), avoid fake spinner flashes
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (loading) {
+      timer = setTimeout(() => {
+        setShowSpinner(true);
+      }, 150);
+    } else {
+      setShowSpinner(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [loading]);
 
   useEffect(() => {
     const filterParam = searchParams.get('filter');
@@ -155,9 +171,11 @@ export const IngredientsPage: React.FC = () => {
 
       {/* Ingredient Items Grid */}
       {loading ? (
-        <div className="py-12 flex justify-center">
-          <LoadingSpinner size="lg" label={language === 'ml' ? 'ചേരുവകൾ ലോഡ് ചെയ്യുന്നു...' : 'Loading ingredients...'} />
-        </div>
+        showSpinner ? (
+          <div className="py-12 flex justify-center">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : null
       ) : filteredIngredients.length === 0 ? (
         <Card className="text-center py-12 text-stone-500 dark:text-stone-400 text-sm space-y-2">
           <TbCarrot className="w-8 h-8 text-stone-400 dark:text-stone-600 mx-auto" />

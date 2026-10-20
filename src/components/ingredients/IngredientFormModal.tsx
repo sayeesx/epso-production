@@ -29,8 +29,8 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
   const [unit, setUnit] = useState<string>('kg');
   const [customUnit, setCustomUnit] = useState('');
   const [isCustomUnit, setIsCustomUnit] = useState(false);
-  const [openingStock, setOpeningStock] = useState<number>(0);
-  const [minStock, setMinStock] = useState<number>(0);
+  const [openingStock, setOpeningStock] = useState<number | string>(0);
+  const [minStock, setMinStock] = useState<number | string>(0);
   const [notes, setNotes] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,7 +79,7 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
       addToast(language === 'ml' ? 'അളവ് യൂണിറ്റ് നൽകുക' : 'Please specify measurement unit', 'error');
       return;
     }
-    if (minStock < 0 || openingStock < 0) {
+    if (Number(minStock) < 0 || Number(openingStock) < 0) {
       addToast(language === 'ml' ? 'അളവുകൾ പൂജ്യത്തിൽ കുറവാകരുത്' : 'Quantities cannot be negative', 'error');
       return;
     }
@@ -91,7 +91,7 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
           name: name.trim(),
           category,
           unit: effectiveUnit,
-          minStock,
+          minStock: Number(minStock) || 0,
           notes: notes.trim() || undefined,
           isActive,
         });
@@ -107,17 +107,18 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
           category,
           unit: effectiveUnit,
           currentStock: 0,
-          minStock,
+          minStock: Number(minStock) || 0,
           avgCostPerUnit: 0,
           isActive,
           notes: notes.trim() || undefined,
         });
 
         // If user explicitly entered valid opening stock > 0, record opening movement
-        if (openingStock > 0) {
+        const openingStockNum = Number(openingStock) || 0;
+        if (openingStockNum > 0) {
           await repo.adjustStock({
             ingredientId: created.id,
-            quantityDelta: openingStock,
+            quantityDelta: openingStockNum,
             reason: 'Opening stock balance',
             operatorName: staffName || 'Operator',
           });
@@ -263,8 +264,8 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
                 type="number"
                 step="any"
                 min="0"
-                value={openingStock}
-                onChange={(e) => setOpeningStock(parseFloat(e.target.value) || 0)}
+                value={openingStock === 0 ? '' : openingStock}
+                onChange={(e) => setOpeningStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
                 helperText={
                   language === 'ml'
                     ? 'തുടക്കത്തിൽ ഉള്ള സ്റ്റോക്ക് ഉണ്ടെങ്കിൽ മാത്രം നൽകുക'
@@ -289,8 +290,8 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
             type="number"
             step="any"
             min="0"
-            value={minStock}
-            onChange={(e) => setMinStock(parseFloat(e.target.value) || 0)}
+            value={minStock === 0 ? '' : minStock}
+            onChange={(e) => setMinStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
             helperText={language === 'ml' ? 'ഈ അളവിൽ താഴെ ആയാൽ മുന്നറിയിപ്പ്' : 'Low stock threshold'}
           />
         </div>

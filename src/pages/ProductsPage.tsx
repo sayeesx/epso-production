@@ -22,6 +22,22 @@ export const ProductsPage: React.FC = () => {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
+  const [showSpinner, setShowSpinner] = useState<boolean>(false);
+
+  // Show loading spinner loader only if fetching takes time (e.g. slow network), avoid fake spinner flashes
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (loading) {
+      timer = setTimeout(() => {
+        setShowSpinner(true);
+      }, 150);
+    } else {
+      setShowSpinner(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [loading]);
 
   // Read-only Recipe Modal
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState<boolean>(false);
@@ -97,10 +113,10 @@ export const ProductsPage: React.FC = () => {
         leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
       />
 
-      {/* Loading state */}
-      {loading && (
+      {/* Loading state: clean loading spinner loader without text, shown only when fetching is active/slow */}
+      {loading && showSpinner && (
         <div className="py-12 flex justify-center">
-          <LoadingSpinner size="lg" label={t.loading} />
+          <LoadingSpinner size="lg" />
         </div>
       )}
 

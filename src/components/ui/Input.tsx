@@ -31,6 +31,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             id={inputId}
             ref={ref}
+            onFocus={(e) => {
+              if (props.type === 'number') {
+                e.target.select();
+              }
+              props.onFocus?.(e);
+            }}
             className={`w-full bg-white dark:bg-[#1E1B1B] border text-charcoal dark:text-stone-100 text-sm rounded-xl transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-epso-red min-h-[44px] px-3.5 py-2.5 ${
               leftAddon ? 'pl-9' : ''
             } ${rightAddon ? 'pr-12' : ''} ${

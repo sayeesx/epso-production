@@ -30,7 +30,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   const { repo, addToast } = useApp();
   const { language } = useLanguage();
   const [productId, setProductId] = useState('');
-  const [baseOutputQuantity, setBaseOutputQuantity] = useState<number>(10);
+  const [baseOutputQuantity, setBaseOutputQuantity] = useState<number | string>(10);
   const [baseOutputUnit, setBaseOutputUnit] = useState<UnitType>('kg');
   const [notes, setNotes] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -135,7 +135,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           productId: recipeToEdit.productId,
           productName: recipeToEdit.productName,
           version: recipeToEdit.version + 1,
-          baseOutputQuantity,
+          baseOutputQuantity: Number(baseOutputQuantity) || 1,
           baseOutputUnit,
           ingredients: recipeIngredients,
           notes: notes.trim() || undefined,
@@ -153,7 +153,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           productId: product.id,
           productName: product.name,
           version: 1,
-          baseOutputQuantity,
+          baseOutputQuantity: Number(baseOutputQuantity) || 1,
           baseOutputUnit,
           ingredients: recipeIngredients,
           notes: notes.trim() || undefined,
@@ -209,8 +209,8 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
             step="any"
             min="0.01"
             required
-            value={baseOutputQuantity}
-            onChange={(e) => setBaseOutputQuantity(parseFloat(e.target.value) || 0)}
+            value={baseOutputQuantity === 0 ? '' : baseOutputQuantity}
+            onChange={(e) => setBaseOutputQuantity(e.target.value === '' ? '' : parseFloat(e.target.value))}
           />
 
           <Select
@@ -220,6 +220,9 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
             options={[
               { value: 'kg', label: language === 'ml' ? 'കിലോഗ്രാം (kg)' : 'Kilograms (kg)' },
               { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ് (packs)' : 'Packs' },
+              { value: 'pcs', label: language === 'ml' ? 'എണ്ണം (pcs)' : 'Pieces (pcs)' },
+              { value: 'g', label: language === 'ml' ? 'ഗ്രാം (g)' : 'Gram (g)' },
+              { value: 'L', label: language === 'ml' ? 'ലിറ്റർ (L)' : 'Liter (L)' },
             ]}
           />
         </div>
@@ -264,8 +267,9 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                     type="number"
                     step="any"
                     min="0.001"
-                    value={item.quantity}
-                    onChange={(e) => handleQuantityChange(idx, parseFloat(e.target.value) || 0)}
+                    value={item.quantity === 0 ? '' : item.quantity}
+                    onChange={(e) => handleQuantityChange(idx, e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full text-xs font-black bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-charcoal-border dark:border-[#2E2828] rounded-xl p-2.5 text-center focus:ring-1 focus:ring-epso-red focus:outline-none min-h-[44px]"
                   />
                 </div>

@@ -22,10 +22,49 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700;800&family=Manjari:wght@400;700&family=Noto+Sans+Malayalam:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     
+    <style>
+      .pwa-preloader {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #F8F9FA;
+        opacity: 0;
+        animation: pwaPreloaderFadeIn 0.25s ease 180ms forwards;
+      }
+      .pwa-spinner {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 3px solid #E5E7EB;
+        border-top-color: #C6382B;
+        animation: pwaPreloaderSpin 0.75s linear infinite;
+      }
+      @keyframes pwaPreloaderSpin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes pwaPreloaderFadeIn {
+        to { opacity: 1; }
+      }
+      @media (prefers-color-scheme: dark) {
+        .pwa-preloader {
+          background-color: #141212;
+        }
+        .pwa-spinner {
+          border-color: #2E2828;
+          border-top-color: #F28C28;
+        }
+      }
+    </style>
+    
     <title>Epso: Production & Inventory</title>
   </head>
   <body class="bg-canvas dark:bg-canvas-dark text-charcoal dark:text-stone-100 font-sans antialiased min-h-screen selection:bg-red-100 selection:text-red-900 overflow-x-hidden">
-    <div id="root"></div>
+    <div id="root">
+      <div class="pwa-preloader" aria-label="Loading application">
+        <div class="pwa-spinner"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

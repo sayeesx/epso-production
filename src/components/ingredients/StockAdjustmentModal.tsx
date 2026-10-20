@@ -32,7 +32,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
   // Explicit direction: true for deduct (-), false for add (+)
   const [isDeduct, setIsDeduct] = useState<boolean>(true);
   const [actionCategory, setActionCategory] = useState<'usage' | 'wastage' | 'correction'>('usage');
-  const [quantity, setQuantity] = useState<number>(1);
+  const [quantity, setQuantity] = useState<number | string>(1);
   const [reason, setReason] = useState<string>('');
   const [customNotes, setCustomNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,10 +61,10 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
   const selectedIngredient = ingredients.find((i) => i.id === selectedId);
   const currentStock = selectedIngredient ? selectedIngredient.currentStock : 0;
   const isOutOfStock = currentStock <= 0;
-  const isExcessiveDeduction = isDeduct && quantity > currentStock;
+  const isExcessiveDeduction = isDeduct && Number(quantity) > currentStock;
   const projectedBalance = isDeduct
-    ? Number((currentStock - quantity).toFixed(3))
-    : Number((currentStock + quantity).toFixed(3));
+    ? Number((currentStock - (Number(quantity) || 0)).toFixed(3))
+    : Number((currentStock + (Number(quantity) || 0)).toFixed(3));
 
   const reasonPresets = {
     deduct: [
@@ -85,7 +85,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
     e.preventDefault();
     if (!selectedIngredient) return;
 
-    if (quantity <= 0) {
+    if (Number(quantity) <= 0) {
       addToast(
         language === 'ml' ? 'ശരിയായ അളവ് നൽകുക (പൂജ്യത്തിൽ കൂടുതൽ)' : 'Quantity must be greater than zero',
         'error'
@@ -104,8 +104,17 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       return;
     }
 
+    const qtyNum = Number(quantity) || 0;
+    if (qtyNum <= 0) {
+      addToast(
+        language === 'ml' ? 'ദയവായി സാധുവായ അളവ് നൽകുക' : 'Please enter a valid quantity',
+        'error'
+      );
+      return;
+    }
+
     // Critical check: cannot deduct more than current stock
-    if (isDeduct && quantity > currentStock) {
+    if (isDeduct && qtyNum > currentStock) {
       addToast(
         language === 'ml'
           ? `മുന്നറിയിപ്പ്: നിലവിലെ സ്റ്റോക്കിൽ (${currentStock} ${selectedIngredient.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല.`
@@ -122,7 +131,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       setIsSubmitting(true);
       const operator = staffName || (role === 'owner' ? 'Factory Owner' : 'Production Staff');
       // Deduct strictly applies negative delta, Add strictly applies positive delta
-      const delta = isDeduct ? -Math.abs(quantity) : Math.abs(quantity);
+      const delta = isDeduct ? -Math.abs(qtyNum) : Math.abs(qtyNum);
 
       await repo.adjustStock({
         ingredientId: selectedIngredient.id,
@@ -269,8 +278,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
             min="0.001"
             max={isDeduct && selectedIngredient ? selectedIngredient.currentStock : undefined}
             required
-            value={quantity}
-            onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
+            value={quantity === 0 ? '' : quantity}
+            onChange={(e) => setQuantity(e.target.value === '' ? '' : parseFloat(e.target.value))}
             rightAddon={selectedIngredient?.unit || 'unit'}
           />
         </div>

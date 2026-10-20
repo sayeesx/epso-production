@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, Package, UtensilsCrossed, Settings, UserCheck } from 'lucide-react';
+import { Home, Package, UtensilsCrossed, Settings, UserCheck, Lock } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -54,16 +54,28 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Operator identity footer */}
+      {/* Operator identity footer with Lock Screen button */}
       <div className="mt-auto pt-4 border-t border-charcoal-border/70 dark:border-charcoal-border-dark">
-        <div className="bg-stone-50 dark:bg-[#1E1B1B] p-3 rounded-xl border border-stone-200 dark:border-[#2E2828] transition-colors">
-          <div className="flex items-center gap-2 text-stone-600 dark:text-stone-400">
-            <UserCheck className="w-4 h-4 text-epso-red dark:text-amber-400" />
-            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-              Operator
-            </span>
+        <div className="bg-stone-50 dark:bg-[#1E1B1B] p-3 rounded-xl border border-stone-200 dark:border-[#2E2828] transition-colors flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-stone-600 dark:text-stone-400">
+              <UserCheck className="w-4 h-4 text-epso-red dark:text-amber-400" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                Operator
+              </span>
+            </div>
+            <p className="text-xs font-bold text-stone-900 dark:text-white mt-1 line-clamp-1">{staffName}</p>
           </div>
-          <p className="text-xs font-bold text-stone-900 dark:text-white mt-1 line-clamp-1">{staffName}</p>
+          <button
+            onClick={() => {
+              sessionStorage.removeItem('epso_production_unlocked');
+              window.location.reload();
+            }}
+            title="Lock Production Screen"
+            className="p-1.5 rounded-lg text-stone-400 hover:text-red-500 hover:bg-stone-200/60 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+          >
+            <Lock className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>

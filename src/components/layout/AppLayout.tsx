@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
 import { Sidebar } from './Sidebar';
@@ -6,11 +6,20 @@ import { ToastContainer } from '../ui/ToastContainer';
 import { NavigationProgress } from '../ui/NavigationProgress';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { ProductionPinGate } from '../auth/ProductionPinGate';
 import { TbWifiOff } from 'react-icons/tb';
 
 export const AppLayout: React.FC = () => {
   const { isOffline } = useApp();
   const { t } = useLanguage();
+
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem('epso_production_unlocked') === 'true';
+  });
+
+  if (!isUnlocked) {
+    return <ProductionPinGate onUnlock={() => setIsUnlocked(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-canvas dark:bg-canvas-dark text-charcoal dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">

@@ -22,18 +22,28 @@ export const NumberStepper: React.FC<NumberStepperProps> = ({
   unit,
   disabled = false,
 }) => {
+  const [rawInput, setRawInput] = React.useState<string | null>(null);
+
   const handleDecrement = () => {
+    setRawInput(null);
     const next = Math.max(min, Number((value - step).toFixed(3)));
     onChange(next);
   };
 
   const handleIncrement = () => {
+    setRawInput(null);
     const next = max !== undefined ? Math.min(max, Number((value + step).toFixed(3))) : Number((value + step).toFixed(3));
     onChange(next);
   };
 
   const handleManualInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const parsed = parseFloat(e.target.value);
+    const text = e.target.value;
+    setRawInput(text);
+    if (text === '') {
+      onChange(min);
+      return;
+    }
+    const parsed = parseFloat(text);
     if (!isNaN(parsed)) {
       if (max !== undefined && parsed > max) {
         onChange(max);
@@ -42,9 +52,11 @@ export const NumberStepper: React.FC<NumberStepperProps> = ({
       } else {
         onChange(Number(parsed.toFixed(3)));
       }
-    } else if (e.target.value === '') {
-      onChange(0);
     }
+  };
+
+  const handleBlur = () => {
+    setRawInput(null);
   };
 
   return (
@@ -59,7 +71,7 @@ export const NumberStepper: React.FC<NumberStepperProps> = ({
           type="button"
           onClick={handleDecrement}
           disabled={disabled || value <= min}
-          className="w-10 h-10 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-800 dark:text-stone-200 disabled:opacity-30 disabled:pointer-events-none transition-colors active:scale-95 press-apple"
+          className="w-10 h-10 flex items-center justify-center rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-800 dark:text-stone-200 disabled:opacity-30 disabled:pointer-events-none transition-colors active:scale-95 press-apple cursor-pointer"
           aria-label="Decrease quantity"
         >
           <TbMinus className="w-4 h-4" />
@@ -69,8 +81,10 @@ export const NumberStepper: React.FC<NumberStepperProps> = ({
           <input
             type="number"
             step={step}
-            value={value === 0 ? '0' : value}
+            value={rawInput !== null ? rawInput : (value === 0 ? '' : value)}
             onChange={handleManualInput}
+            onFocus={(e) => e.target.select()}
+            onBlur={handleBlur}
             disabled={disabled}
             className="w-full text-center font-bold text-base text-charcoal dark:text-white bg-transparent focus:outline-none"
           />
