@@ -3,6 +3,7 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { MeasurementRulerSelector, getUnitConfig } from '../ui/MeasurementRulerSelector';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Product, Recipe, Ingredient } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -17,6 +18,20 @@ import {
   TbRuler2,
   TbCheck,
 } from 'react-icons/tb';
+
+export const isDailySharedBasic = (name: string) => {
+  const n = (name || '').trim().toLowerCase();
+  return (
+    n.includes('ഓയിൽ') ||
+    n.includes('oil') ||
+    n.includes('ഉപ്പ്') ||
+    n.includes('salt') ||
+    n.includes('അണ്ടി തോട്') ||
+    n.includes('തോട്') ||
+    n.includes('കറിവേപ്പില') ||
+    n.includes('curry leaves')
+  );
+};
 
 interface StartProductionModalProps {
   isOpen: boolean;
@@ -124,7 +139,22 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       setOperator(staffName);
       setNotes('');
       setConsumptionItems([]);
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      document.body.classList.add('modal-open');
+      document.documentElement.classList.add('modal-open');
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove('modal-open');
     }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      document.body.classList.remove('modal-open');
+      document.documentElement.classList.remove('modal-open');
+    };
   }, [isOpen, staffName]);
 
   // Filter products for Step 1
@@ -135,11 +165,24 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     );
   }, [products, productSearch]);
 
-  // Filter ingredients for Step 3: show ONLY the added recipe ingredients, don't show all
+  // Check if active recipe has valid non-basic ingredients set
+  const hasRecipeIngredients = useMemo(() => {
+    if (!activeRecipe || !activeRecipe.ingredients || activeRecipe.ingredients.length === 0) return false;
+    return activeRecipe.ingredients.some(
+      (ri) => !isDailySharedBasic(ri.ingredientName || '')
+    );
+  }, [activeRecipe]);
+
+  // Filter ingredients for Step 3: show ONLY the added recipe ingredients (excluding daily shared basics like oil, salt, thodu, curry leaves)
   const displayedRecipeIngredients = useMemo(() => {
     if (activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0) {
-      const recipeMap = new Map(activeRecipe.ingredients.map((ri) => [ri.ingredientId, ri]));
-      return ingredients.filter((ing) => ing.isActive && recipeMap.has(ing.id));
+      const validRecipeIngs = activeRecipe.ingredients.filter(
+        (ri) => !isDailySharedBasic(ri.ingredientName || '')
+      );
+      const recipeMap = new Map(validRecipeIngs.map((ri) => [ri.ingredientId, ri]));
+      return ingredients.filter(
+        (ing) => ing.isActive && !isDailySharedBasic(ing.name) && recipeMap.has(ing.id)
+      );
     }
     return [];
   }, [ingredients, activeRecipe]);
@@ -155,7 +198,10 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
     // Pre-populate with recipe ingredients scaled for initial planned quantity
     if (prodRecipe && prodRecipe.ingredients.length > 0) {
-      const scaled = prodRecipe.ingredients.map((item) => {
+      const validItems = prodRecipe.ingredients.filter(
+        (item) => !isDailySharedBasic(item.ingredientName || '')
+      );
+      const scaled = validItems.map((item) => {
         const requiredQty = Number(item.quantity.toFixed(3));
         return {
           ingredientId: item.ingredientId,
@@ -178,9 +224,12 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     setActualOutputQty(newQty);
 
     if (activeRecipe && activeRecipe.ingredients.length > 0 && activeRecipe.baseOutputQuantity > 0) {
+      const validItems = activeRecipe.ingredients.filter(
+        (item) => !isDailySharedBasic(item.ingredientName || '')
+      );
       const scaleFactor = newQty / activeRecipe.baseOutputQuantity;
       setConsumptionItems((prev) => {
-        return activeRecipe.ingredients.map((item) => {
+        return validItems.map((item) => {
           const scaledQty = Number((item.quantity * scaleFactor).toFixed(3));
           const existing = prev.find((p) => p.ingredientId === item.ingredientId);
           return {
@@ -596,12 +645,24 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 unit={selectedProduct.unit}
                 value={plannedQty}
                 presets={[5, 10, 25, 50, 100, 250]}
-                min={0.1}
-                max={999999}
-                step={selectedProduct.unit.toLowerCase().includes('kg') ? 0.5 : 1}
+                min={0}
+                max={250}
+                step={0.5}
                 onChange={handlePlannedQtyChange}
               />
             </div>
+
+            {/* Error box if no ingredients are set for selected product */}
+            {!hasRecipeIngredients && (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                <TbAlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                <span className="font-bold">
+                  {language === 'ml'
+                    ? 'ഈ ഉൽപ്പന്നത്തിന് ചേരുവകൾ (Recipe) ചേർത്തിട്ടില്ല. Admin-ൽ റെസിപ്പി നൽകിയ ശേഷം മാത്രം ഉൽപ്പാദനം സാധ്യമാകൂ.'
+                    : 'No ingredients are set for this product. Please set up a recipe in Admin first.'}
+                </span>
+              </div>
+            )}
 
             {/* Step 2 Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
@@ -615,11 +676,15 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
               <Button
                 variant="primary"
-                onClick={() => setStep(3)}
+                onClick={() => {
+                  if (!hasRecipeIngredients) return;
+                  setStep(3);
+                }}
+                disabled={!hasRecipeIngredients}
                 icon={<TbChevronRight className="w-4 h-4" />}
                 className="font-bold px-6"
               >
-                {language === 'ml' ? 'ചേരുവകൾ തിരഞ്ഞെടുക്കുക' : 'Next: Ingredients'}
+                {language === 'ml' ? 'ചേരുവകൾ' : 'Ingredients'}
               </Button>
             </div>
           </div>
@@ -795,27 +860,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         {/* ======================================================== */}
         {step === 4 && selectedProduct && (
           <div className="space-y-3.5">
-            {/* Step 4 Top Action Bar: Back and Confirm buttons fixed on top */}
-            <div className="flex items-center justify-between gap-3 pb-3 border-b border-charcoal-border/50 dark:border-[#2E2828]/50">
-              <Button
-                variant="ghost"
-                onClick={() => setStep(3)}
-                icon={<TbChevronLeft className="w-4 h-4" />}
-              >
-                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
-              </Button>
-
-              <Button
-                variant="primary"
-                onClick={handleFinalSubmit}
-                isLoading={isSubmitting}
-                icon={<TbCircleCheck className="w-4 h-4" />}
-                className="font-black px-6 flex-1 max-w-xs"
-              >
-                {language === 'ml' ? 'ഉൽപ്പാദനം ആരംഭിക്കുക' : t.confirmProduction}
-              </Button>
-            </div>
-
             {/* Product Run Summary Card - NO COST / EXPENSE */}
             <div className="p-3.5 bg-red-50/60 dark:bg-red-950/30 rounded-2xl border border-red-200 dark:border-red-900/40">
               <div className="flex items-start justify-between">
@@ -922,6 +966,34 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 placeholder="ബാച്ച് വിവരങ്ങൾ, താപനില, പ്രത്യേക നിർദ്ദേശങ്ങൾ..."
               />
             </div>
+
+            {/* Step 4 Bottom Action Bar - placed at bottom matching step 2 */}
+            <div className="flex items-center justify-between pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
+              <Button
+                variant="ghost"
+                onClick={() => setStep(3)}
+                icon={<TbChevronLeft className="w-4 h-4" />}
+              >
+                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
+              </Button>
+
+              <Button
+                variant="primary"
+                onClick={handleFinalSubmit}
+                isLoading={isSubmitting}
+                icon={<TbCircleCheck className="w-4 h-4" />}
+                className="font-bold px-6"
+              >
+                Confirm & Save
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Spinner Animation during submission */}
+        {isSubmitting && (
+          <div className="absolute inset-0 bg-white/85 dark:bg-[#1E1B1B]/85 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center z-50 animate-in fade-in">
+            <LoadingSpinner size="lg" label={language === 'ml' ? 'ബാച്ച് സേവ് ചെയ്യുന്നു...' : 'Saving production batch...'} />
           </div>
         )}
       </div>
