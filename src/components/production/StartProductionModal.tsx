@@ -663,9 +663,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
                 return (
                   <div className="p-3 bg-white dark:bg-[#1E1B1B] rounded-xl border border-charcoal-border dark:border-[#2E2828] shadow-xs transition-colors">
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                    <div className="flex items-center gap-2 relative">
                       {/* Theme-Related Ingredient Custom Dropdown */}
-                      <div className="relative flex-1 min-w-[170px]" ref={ingredientDropdownRef}>
+                      <div className="relative flex-1 min-w-0" ref={ingredientDropdownRef}>
                         <button
                           type="button"
                           onClick={() => setIsIngDropdownOpen((prev) => !prev)}
@@ -708,23 +708,23 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         {/* Theme Dropdown Menu popup (drops upward to avoid getting clipped) */}
                         {isIngDropdownOpen && (
                           <div
-                            className="absolute left-0 right-0 bottom-full mb-1.5 z-50 bg-white dark:bg-[#1E1B1B] border border-charcoal-border dark:border-[#2E2828] rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 origin-bottom"
+                            className="absolute left-0 right-0 bottom-full mb-1.5 z-50 bg-white dark:bg-[#1E1B1B] border border-charcoal-border dark:border-[#2E2828] rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 origin-bottom"
                             role="listbox"
                           >
-                            <div className="p-1.5 border-b border-stone-100 dark:border-[#282323]">
+                            <div className="p-1.5 border-b border-stone-100 dark:border-[#282323] bg-stone-50/50 dark:bg-[#181515]">
                               <input
                                 type="text"
                                 placeholder={language === 'ml' ? 'ചേരുവ തിരയുക...' : 'Search ingredient...'}
                                 value={ingFilterSearch}
                                 onChange={(e) => setIngFilterSearch(e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="w-full px-2.5 py-1.5 text-xs bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border border-stone-200 dark:border-[#2E2828] rounded-lg font-malayalam focus:outline-none focus:ring-1 focus:ring-epso-orange"
+                                className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-[#141212] text-stone-900 dark:text-white border border-stone-200 dark:border-[#2E2828] rounded-lg font-malayalam focus:outline-none focus:ring-1 focus:ring-epso-orange"
                                 autoFocus
                               />
                             </div>
-                            <div className="max-h-52 overflow-y-auto p-1 space-y-0.5">
+                            <div className="max-h-48 overflow-y-auto p-1 divide-y divide-stone-100/60 dark:divide-[#282323]/60">
                               {filteredManualIngredients.length === 0 ? (
-                                <div className="px-3 py-2 text-xs text-stone-400 text-center font-medium font-malayalam">
+                                <div className="px-3 py-3 text-xs text-stone-400 text-center font-medium font-malayalam">
                                   {language === 'ml' ? 'ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല' : 'No ingredients found'}
                                 </div>
                               ) : (
@@ -776,6 +776,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         )}
                       </div>
 
+                      {/* Quantity button */}
                       <button
                         type="button"
                         onClick={() => {
@@ -802,7 +803,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                             });
                           }
                         }}
-                        className={`px-3 py-2 rounded-xl border text-xs font-extrabold flex items-center gap-1 cursor-pointer press-apple shadow-xs transition-all ${
+                        className={`px-3 py-2 rounded-xl border text-xs font-extrabold shrink-0 flex items-center gap-1 cursor-pointer press-apple shadow-xs transition-all ${
                           isManualZeroStock
                             ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
                             : isManualExceedsStock
@@ -816,20 +817,23 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         </span>
                       </button>
 
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={isAddDisabled}
-                        onClick={isAddDisabled ? undefined : addManualIngredient}
-                        className={
-                          isAddDisabled
-                            ? '!bg-stone-200 dark:!bg-stone-800 !text-stone-400 dark:!text-stone-500 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none shadow-none'
-                            : ''
-                        }
-                        icon={<TbPlus className="w-3.5 h-3.5" />}
-                      >
-                        Add
-                      </Button>
+                      {/* Add button - Hidden when dropdown is open on mobile/all */}
+                      {!isIngDropdownOpen && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isAddDisabled}
+                          onClick={isAddDisabled ? undefined : addManualIngredient}
+                          className={
+                            isAddDisabled
+                              ? '!bg-stone-200 dark:!bg-stone-800 !text-stone-400 dark:!text-stone-500 !border-stone-300 dark:!border-stone-700 opacity-60 cursor-not-allowed pointer-events-none shadow-none shrink-0'
+                              : 'shrink-0'
+                          }
+                          icon={<TbPlus className="w-3.5 h-3.5" />}
+                        >
+                          Add
+                        </Button>
+                      )}
                     </div>
 
                     {/* Red warning text INSIDE the container, just like added ingredients */}
