@@ -34,9 +34,20 @@ export const ProductionPage: React.FC = () => {
   const [packingRecords, setPackingRecords] = useState<PackingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const yesterdayStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+
   // Filters
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'cancelled'>('all');
+  type ProductionFilter = 'all' | 'yesterday' | 'completed' | 'cancelled';
+  const [activeFilter, setActiveFilter] = useState<ProductionFilter>('all');
+
+  const todayRunsCount = useMemo(() => runs.filter((r) => r.productionDate === todayStr).length, [runs, todayStr]);
+  const yesterdayRunsCount = useMemo(() => runs.filter((r) => r.productionDate === yesterdayStr).length, [runs, yesterdayStr]);
 
   // Modals
   const [runToCancel, setRunToCancel] = useState<ProductionRun | null>(null);
@@ -94,10 +105,23 @@ export const ProductionPage: React.FC = () => {
         r.operatorName.toLowerCase().includes(q);
 
       if (!matchSearch) return false;
-      if (statusFilter === 'all') return true;
-      return r.status === statusFilter;
+
+      if (activeFilter === 'yesterday') {
+        return r.productionDate === yesterdayStr;
+      }
+
+      if (activeFilter === 'completed') {
+        return r.status === 'completed' && r.productionDate !== yesterdayStr;
+      }
+
+      if (activeFilter === 'cancelled') {
+        return r.status === 'cancelled';
+      }
+
+      // 'all' = Show today's and active production, explicitly excluding yesterday's production
+      return r.productionDate !== yesterdayStr;
     });
-  }, [runs, searchTerm, statusFilter]);
+  }, [runs, searchTerm, activeFilter, yesterdayStr]);
 
   const handleCancelRun = async () => {
     if (!runToCancel) return;
@@ -210,59 +234,55 @@ export const ProductionPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Today's oil status strip if recorded */}
-      {todayOilClosing && (todayOilClosing.oilConsumed > 0 || todayOilClosing.oilClosingBalance > 0) && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
-              <TbDroplet className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="font-extrabold text-amber-900 dark:text-amber-200">
-                {language === 'ml' ? 'ഇന്നത്തെ ഓയിൽ' : "Today's Oil"}:
-              </span>{' '}
-              <span className="font-bold text-amber-800 dark:text-amber-300">
-                {language === 'ml' ? 'ഉപയോഗിച്ചത്' : 'Used'}: {todayOilClosing.oilConsumed} L
-              </span>
-              {todayOilClosing.oilClosingBalance > 0 && (
-                <span className="text-amber-700/80 dark:text-amber-400/80 ml-2">
-                  • {language === 'ml' ? 'ബാക്കി' : 'Leftover'}: {todayOilClosing.oilClosingBalance} L
-                </span>
-              )}
-            </div>
-          </div>
-          <button
-            onClick={() => setIsDailyOilModalOpen(true)}
-            className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:underline cursor-pointer shrink-0"
-          >
-            {language === 'ml' ? 'മാറ്റുക' : 'Edit'}
-          </button>
-        </div>
-      )}
-
-
       {/* Production History & Operational Search */}
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between gap-3">
-          {/* Quick status tabs */}
-          <div className="flex items-center gap-1.5 text-xs bg-stone-100 dark:bg-[#1E1B1B] p-1 rounded-xl border border-charcoal-border/40 dark:border-[#2E2828]">
-            {(['all', 'completed', 'cancelled'] as const).map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer ${
-                  statusFilter === st
-                    ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
-                    : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
-                }`}
-              >
-                {st === 'all'
-                  ? `All (${runs.length})`
-                  : st === 'completed'
-                  ? t.runStatusCompleted
-                  : t.runStatusCancelled}
-              </button>
-            ))}
+          {/* Quick status tabs including dedicated Yesterday filter */}
+          <div className="flex items-center gap-1.5 text-xs bg-stone-100 dark:bg-[#1E1B1B] p-1 rounded-xl border border-charcoal-border/40 dark:border-[#2E2828] overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setActiveFilter('all')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
+                activeFilter === 'all'
+                  ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              {language === 'ml' ? `ഇന്ന് (${todayRunsCount})` : `Today (${todayRunsCount})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter('yesterday')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
+                activeFilter === 'yesterday'
+                  ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              {language === 'ml' ? `ഇന്നലെ (${yesterdayRunsCount})` : `Yesterday (${yesterdayRunsCount})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter('completed')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
+                activeFilter === 'completed'
+                  ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              {t.runStatusCompleted}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter('cancelled')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
+                activeFilter === 'cancelled'
+                  ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              {t.runStatusCancelled}
+            </button>
           </div>
         </div>
 
@@ -364,19 +384,6 @@ export const ProductionPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Ingredients consumed summary */}
-                  {run.ingredientsConsumed && run.ingredientsConsumed.length > 0 && (
-                    <div className="bg-stone-50 dark:bg-[#141212] rounded-xl p-2.5 text-xs text-stone-600 dark:text-stone-300 flex flex-wrap items-center gap-x-3 gap-y-1 border border-charcoal-border/70 dark:border-[#2E2828]">
-                      <span className="font-bold text-stone-700 dark:text-stone-200 text-[11px]">
-                        {t.requiredIngredients}:
-                      </span>
-                      {run.ingredientsConsumed.map((c) => (
-                        <span key={c.ingredientId} className="text-[11px] font-medium font-malayalam">
-                          {c.ingredientName} ({c.actualQuantity} {c.unit})
-                        </span>
-                      ))}
-                    </div>
-                  )}
 
                   {/* Cancellation Reason if cancelled */}
                   {run.status === 'cancelled' && run.cancellationReason && (
