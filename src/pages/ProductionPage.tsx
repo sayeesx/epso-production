@@ -437,24 +437,24 @@ export const ProductionPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3 sm:gap-3.5">
                       {/* 1. Cancel Run Icon Box */}
                       {isCompleted ? (
                         <button
                           type="button"
                           onClick={() => setRunToCancel(run)}
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
                           title={language === 'ml' ? 'ബാച്ച് റദ്ദാക്കുക' : 'Cancel Run'}
                           aria-label="Cancel Run"
                         >
-                          <TbRotateClockwise2 className="w-4 h-4 stroke-[2.2]" />
+                          <TbRotateClockwise2 className="w-5 h-5 stroke-[2.2]" />
                         </button>
                       ) : (
                         <div
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
                           title={language === 'ml' ? 'ഇതിനകം റദ്ദാക്കി' : 'Already Cancelled'}
                         >
-                          <TbRotateClockwise2 className="w-4 h-4" />
+                          <TbRotateClockwise2 className="w-5 h-5" />
                         </div>
                       )}
 
@@ -463,17 +463,25 @@ export const ProductionPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setBatchForPacking(run)}
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
                           title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                           aria-label="Add Packets"
                         >
-                          <TbPackage className="w-4 h-4 stroke-[2.2]" />
+                          <TbPackage className="w-5 h-5 stroke-[2.2]" />
+                          {batchPackings.length === 0 && (
+                            <span
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-epso-red text-white text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
+                              title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തിട്ടില്ല' : 'No packets added yet'}
+                            >
+                              !
+                            </span>
+                          )}
                         </button>
                       ) : (
                         <div
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
                         >
-                          <TbPackage className="w-4 h-4" />
+                          <TbPackage className="w-5 h-5" />
                         </div>
                       )}
 
@@ -481,11 +489,11 @@ export const ProductionPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setRunToDelete(run)}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                        className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
                         title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
                         aria-label="Delete Batch"
                       >
-                        <TbTrash className="w-4 h-4 stroke-[2.2]" />
+                        <TbTrash className="w-5 h-5 stroke-[2.2]" />
                       </button>
                     </div>
                   </div>

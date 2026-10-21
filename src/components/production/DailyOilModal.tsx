@@ -360,10 +360,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                         <div
                           className={`rounded-full transition-colors ${
                             isMajor
-                              ? 'h-8 bg-stone-500/25 dark:bg-stone-400/20 w-[2px]'
+                              ? 'h-8 bg-stone-500/12 dark:bg-stone-400/10 w-[2px]'
                               : isMedium
-                              ? 'h-5 bg-stone-400/15 dark:bg-stone-500/15 w-[1.5px]'
-                              : 'h-3 bg-stone-300/10 dark:bg-stone-700/10 w-[1px]'
+                              ? 'h-5 bg-stone-400/8 dark:bg-stone-500/7 w-[1.5px]'
+                              : 'h-3 bg-stone-300/5 dark:bg-stone-700/5 w-[1px]'
                           }`}
                         />
                       </div>
