@@ -404,7 +404,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                     onChange(currentStepVal);
                     scrollToValue(currentStepVal, true);
                   }}
-                  className="flex flex-col items-center justify-end shrink-0 cursor-pointer"
+                  className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-12 pb-1"
                   style={{ width: '2px' }}
                 >
                   <div
@@ -416,15 +416,6 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                         : 'h-4 bg-stone-200 dark:bg-stone-700 w-[1px]'
                     }`}
                   />
-                  {label ? (
-                    <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 mt-1 select-none pointer-events-none whitespace-nowrap">
-                      {label}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] opacity-0 mt-1 select-none pointer-events-none">
-                      -
-                    </span>
-                  )}
                 </div>
               );
             })}
@@ -439,95 +430,97 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
         <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-white dark:from-[#1E1B1B] to-transparent pointer-events-none z-10" />
       </div>
 
-      {/* LARGE VALUE DISPLAY WITH SMOOTH STEPPERS (-) AND (+) */}
+      {/* LARGE VALUE DISPLAY WITH SMOOTH STEPPERS (-) AND (+) - FIXED POSITION */}
       <div className="my-1 flex items-center justify-center gap-3 w-full">
         <button
           type="button"
           onClick={() => adjustBy(-effectiveStep)}
           disabled={isZeroStock || value <= effectiveMin}
-          className="w-10 h-10 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple shrink-0"
+          className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple"
           title={`Decrease by ${effectiveStep}`}
         >
           <Minus className="w-5 h-5 stroke-[2.5]" />
         </button>
 
-        {isEditing && !isZeroStock ? (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              commitTypedValue();
-            }}
-            className="flex items-baseline gap-2"
-          >
-            <input
-              ref={inputRef}
-              type="number"
-              step="any"
-              min={effectiveMin}
-              value={typedValue}
-              onChange={(e) => {
-                setTypedValue(e.target.value);
+        <div className="w-44 sm:w-52 shrink-0 flex items-center justify-center">
+          {isEditing && !isZeroStock ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                commitTypedValue();
               }}
-              onBlur={commitTypedValue}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commitTypedValue();
-                } else if (e.key === 'Escape') {
-                  setIsEditing(false);
-                }
-              }}
-              className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight w-36 text-center bg-stone-100 dark:bg-[#282323] rounded-2xl px-2 py-1 border-2 border-epso-orange focus:outline-none"
-            />
-            <span className="text-xl sm:text-2xl font-extrabold text-epso-orange dark:text-amber-400">
-              {unit}
-            </span>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              if (isZeroStock) return;
-              setTypedValue(String(value));
-              setIsEditing(true);
-            }}
-            disabled={isZeroStock}
-            className={`flex items-baseline gap-2 px-4 py-1 rounded-2xl transition-all press-apple border border-transparent ${
-              isZeroStock
-                ? 'cursor-not-allowed opacity-40'
-                : 'cursor-pointer group hover:bg-stone-100 dark:hover:bg-[#282323] hover:border-charcoal-border/40'
-            }`}
-            title={isZeroStock ? 'Stock is 0' : 'Click to manually type custom quantity'}
-          >
-            <div className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight">
-              <CountUp
-                to={value}
-                digitEffect="slide"
-                duration={0.2}
-                separator=","
-                className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white"
-              />
-            </div>
-            <span
-              className={`text-xl sm:text-2xl font-extrabold ${
-                isZeroStock ? 'text-stone-400 dark:text-stone-500' : 'text-epso-orange dark:text-amber-400'
-              }`}
+              className="flex items-baseline justify-center gap-2 w-full"
             >
-              {unit}
-            </span>
-            {!isZeroStock && (
-              <span className="text-xs text-stone-400 group-hover:text-epso-orange font-bold ml-1 transition-colors">
-                ✏️
+              <input
+                ref={inputRef}
+                type="number"
+                step="any"
+                min={effectiveMin}
+                value={typedValue}
+                onChange={(e) => {
+                  setTypedValue(e.target.value);
+                }}
+                onBlur={commitTypedValue}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitTypedValue();
+                  } else if (e.key === 'Escape') {
+                    setIsEditing(false);
+                  }
+                }}
+                className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight w-28 text-center bg-stone-100 dark:bg-[#282323] rounded-2xl px-1 py-1 border-2 border-epso-orange focus:outline-none"
+              />
+              <span className="text-xl sm:text-2xl font-extrabold text-epso-orange dark:text-amber-400">
+                {unit}
               </span>
-            )}
-          </button>
-        )}
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (isZeroStock) return;
+                setTypedValue(String(value));
+                setIsEditing(true);
+              }}
+              disabled={isZeroStock}
+              className={`flex items-baseline justify-center gap-2 px-3 py-1 rounded-2xl transition-all press-apple border border-transparent w-full ${
+                isZeroStock
+                  ? 'cursor-not-allowed opacity-40'
+                  : 'cursor-pointer group hover:bg-stone-100 dark:hover:bg-[#282323] hover:border-charcoal-border/40'
+              }`}
+              title={isZeroStock ? 'Stock is 0' : 'Click to manually type custom quantity'}
+            >
+              <div className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums tracking-tight">
+                <CountUp
+                  to={value}
+                  digitEffect="slide"
+                  duration={0.2}
+                  separator=","
+                  className="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tabular-nums"
+                />
+              </div>
+              <span
+                className={`text-xl sm:text-2xl font-extrabold ${
+                  isZeroStock ? 'text-stone-400 dark:text-stone-500' : 'text-epso-orange dark:text-amber-400'
+                }`}
+              >
+                {unit}
+              </span>
+              {!isZeroStock && (
+                <span className="text-xs text-stone-400 group-hover:text-epso-orange font-bold ml-1 transition-colors">
+                  ✏️
+                </span>
+              )}
+            </button>
+          )}
+        </div>
 
         <button
           type="button"
           onClick={() => adjustBy(effectiveStep)}
           disabled={isZeroStock || value >= effectiveMax}
-          className="w-10 h-10 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple shrink-0"
+          className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center text-stone-700 dark:text-stone-200 transition-all active:scale-95 cursor-pointer press-apple"
           title={`Increase by ${effectiveStep}`}
         >
           <Plus className="w-5 h-5 stroke-[2.5]" />
