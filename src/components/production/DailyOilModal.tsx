@@ -360,10 +360,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                         <div
                           className={`rounded-full transition-colors ${
                             isMajor
-                              ? 'h-8 bg-stone-700/50 dark:bg-stone-300/40 w-[2px]'
+                              ? 'h-8 bg-stone-500/25 dark:bg-stone-400/20 w-[2px]'
                               : isMedium
-                              ? 'h-5 bg-stone-400/35 dark:bg-stone-500/30 w-[1.5px]'
-                              : 'h-3 bg-stone-300/20 dark:bg-stone-700/20 w-[1px]'
+                              ? 'h-5 bg-stone-400/15 dark:bg-stone-500/15 w-[1.5px]'
+                              : 'h-3 bg-stone-300/10 dark:bg-stone-700/10 w-[1px]'
                           }`}
                         />
                       </div>
@@ -451,7 +451,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                 <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none select-none">
                   {[0, 25, 50, 75, 100].map((pct) => (
                     <div key={pct} className="flex flex-col items-center">
-                      <div className="w-[1.5px] h-4 bg-stone-400/25 dark:bg-stone-500/25 rounded-full" />
+                      <div className="w-[1.5px] h-4 bg-stone-400/15 dark:bg-stone-500/15 rounded-full" />
                     </div>
                   ))}
                 </div>
@@ -474,24 +474,6 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                 </span>
                 <span>{usedOil.toFixed(1)} kg (Max)</span>
               </div>
-            </div>
-          </div>
-
-          {/* Calculation Summary Card */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
-            <div>
-              <span className="font-extrabold text-amber-900 dark:text-amber-200">
-                {language === 'ml' ? 'ആകെ ഓയിൽ കണക്ക്' : 'Total Oil Accounted'}:
-              </span>
-              <p className="text-[11px] text-amber-800/80 dark:text-amber-400/80 mt-0.5">
-                {usedOil.toFixed(1)} kg ({language === 'ml' ? 'ഉപയോഗിച്ചത്' : 'used'}) + {leftoverOil.toFixed(1)} kg ({language === 'ml' ? 'ബാക്കി' : 'leftover'})
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="text-xl font-black text-amber-900 dark:text-amber-200">
-                {(usedOil + leftoverOil).toFixed(1)} kg
-              </span>
-              <p className="text-[10px] text-stone-400 font-semibold uppercase">Total</p>
             </div>
           </div>
         </div>

@@ -931,41 +931,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </div>
             </div>
 
-            {/* Operator & Date Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
-                  {t.operator}
-                </label>
-                <Input
-                  value={operator}
-                  onChange={(e) => setOperator(e.target.value)}
-                  placeholder="Cook / Operator Name"
-                />
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
-                  തീയതി (Date)
-                </label>
-                <Input
-                  type="date"
-                  value={productionDate}
-                  onChange={(e) => setProductionDate(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block font-malayalam">
-                കുറിപ്പ് (Notes)
-              </label>
-              <Input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="ബാച്ച് വിവരങ്ങൾ, താപനില, പ്രത്യേക നിർദ്ദേശങ്ങൾ..."
-              />
-            </div>
 
             {/* Step 4 Bottom Action Bar - placed at bottom matching step 2 */}
             <div className="flex items-center justify-between pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
