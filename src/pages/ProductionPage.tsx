@@ -423,44 +423,71 @@ export const ProductionPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Actions: Add Packets, Cancel Run and Delete Batch */}
-                  <div className="flex items-center justify-between pt-1 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      {isCompleted ? (
-                        <button
-                          onClick={() => setRunToCancel(run)}
-                          className="text-xs font-semibold text-stone-500 hover:text-red-600 dark:hover:text-red-400 flex items-center gap-1 transition-colors press-apple cursor-pointer"
-                        >
-                          <TbRotateClockwise2 className="w-3.5 h-3.5" />
-                          <span>{t.cancelRun}</span>
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-stone-400 font-medium">
-                          {language === 'ml' ? 'റദ്ദാക്കിയ ബാച്ച്' : 'Cancelled batch'}
+                  {/* Actions: 3 Square Icon Buttons (Cancel Run, Add Packet, Delete) */}
+                  <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 gap-2">
+                    <div className="text-[11px] font-semibold text-stone-400 dark:text-stone-500">
+                      {run.status === 'cancelled' ? (
+                        <span className="text-red-500 dark:text-red-400">
+                          {language === 'ml' ? 'റദ്ദാക്കിയ ബാച്ച്' : 'Cancelled'}
                         </span>
-                      )}
-
-                      {/* Add Packets Button on batch */}
-                      {isCompleted && (
-                        <button
-                          onClick={() => setBatchForPacking(run)}
-                          className="text-xs font-bold text-stone-700 dark:text-stone-200 bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342e2e] px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all press-apple cursor-pointer border border-charcoal-border/40 dark:border-[#2E2828]"
-                          title={language === 'ml' ? 'ഈ ബാച്ചിൽ പാക്കറ്റുകൾ ചേർക്കുക' : 'Add packets for this batch'}
-                        >
-                          <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
-                          <span>{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
-                        </button>
+                      ) : (
+                        <span>
+                          {language === 'ml' ? 'ബാച്ച് നടപടികൾ' : 'Actions'}
+                        </span>
                       )}
                     </div>
 
-                    <button
-                      onClick={() => setRunToDelete(run)}
-                      className="text-xs font-bold text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors press-apple cursor-pointer"
-                      title={language === 'ml' ? 'ബാച്ച് പൂർണ്ണമായി ഒഴിവാക്കുക' : 'Delete batch completely'}
-                    >
-                      <TbTrash className="w-3.5 h-3.5" />
-                      <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete'}</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* 1. Cancel Run Icon Box */}
+                      {isCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => setRunToCancel(run)}
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          title={language === 'ml' ? 'ബാച്ച് റദ്ദാക്കുക' : 'Cancel Run'}
+                          aria-label="Cancel Run"
+                        >
+                          <TbRotateClockwise2 className="w-4 h-4 stroke-[2.2]" />
+                        </button>
+                      ) : (
+                        <div
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
+                          title={language === 'ml' ? 'ഇതിനകം റദ്ദാക്കി' : 'Already Cancelled'}
+                        >
+                          <TbRotateClockwise2 className="w-4 h-4" />
+                        </div>
+                      )}
+
+                      {/* 2. Add Packet Icon Box */}
+                      {isCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => setBatchForPacking(run)}
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                          aria-label="Add Packets"
+                        >
+                          <TbPackage className="w-4 h-4 stroke-[2.2]" />
+                        </button>
+                      ) : (
+                        <div
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
+                        >
+                          <TbPackage className="w-4 h-4" />
+                        </div>
+                      )}
+
+                      {/* 3. Delete Batch Icon Box */}
+                      <button
+                        type="button"
+                        onClick={() => setRunToDelete(run)}
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                        title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
+                        aria-label="Delete Batch"
+                      >
+                        <TbTrash className="w-4 h-4 stroke-[2.2]" />
+                      </button>
+                    </div>
                   </div>
                 </Card>
               );

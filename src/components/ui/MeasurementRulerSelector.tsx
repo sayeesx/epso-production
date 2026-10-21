@@ -18,7 +18,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
       min: 1,
       step: 1,
       decimals: 0,
-      presets: [25, 50, 100, 250, 500],
+      presets: [1, 2, 5, 10, 15, 20],
     };
   }
   if (['ml', 'mls', 'milliliter', 'millilitre'].includes(u)) {
@@ -27,7 +27,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
       min: 1,
       step: 1,
       decimals: 0,
-      presets: [50, 100, 250, 500, 1000],
+      presets: [1, 2, 5, 10, 15, 20],
     };
   }
   if (['kg', 'kgs', 'kilogram', 'kilograms'].includes(u)) {
@@ -36,7 +36,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
       min: 0,
       step: 0.5,
       decimals: 1,
-      presets: [5, 10, 25, 50, 100, 250],
+      presets: [0.5, 1, 2, 5, 10, 20],
     };
   }
   if (['l', 'ltr', 'ltrs', 'liter', 'liters', 'litre', 'litres'].includes(u)) {
@@ -45,7 +45,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
       min: 0.1,
       step: 0.1,
       decimals: 1,
-      presets: [0.5, 1, 2, 5, 10],
+      presets: [0.5, 1, 2, 5, 10, 20],
     };
   }
   if (['pcs', 'piece', 'pieces', 'packs', 'pack', 'packet', 'packets', 'rolls', 'roll', 'box', 'boxes', 'bottle', 'bottles', 'pkt'].includes(u)) {
@@ -54,7 +54,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
       min: 1,
       step: 1,
       decimals: 0,
-      presets: [1, 5, 10, 25, 50],
+      presets: [1, 2, 5, 10, 15, 20],
     };
   }
   return {
@@ -62,7 +62,7 @@ export function getUnitConfig(unitStr?: string): UnitConfig {
     min: 0.1,
     step: 0.1,
     decimals: 1,
-    presets: [0.5, 1, 2, 5, 10],
+    presets: [0.5, 1, 2, 5, 10, 20],
   };
 }
 
@@ -93,7 +93,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   subtitle,
   icon,
   min,
-  max = 999999,
+  max = 20,
   step,
   presets: customPresets,
   isZeroStock = false,
@@ -110,7 +110,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   // Unit configuration with fallback
   const unitConfig = useMemo(() => getUnitConfig(unit), [unit]);
   const effectiveMin = min ?? unitConfig.min;
-  const effectiveMax = max ?? 999999;
+  const effectiveMax = max ?? 20;
   const effectiveStep = step ?? unitConfig.step;
   const decimals = effectiveStep < 1 ? 1 : 0;
 
@@ -237,15 +237,18 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
     }
     const num = parseFloat(typedValue);
     if (!isNaN(num) && num > 0) {
-      const cleanNum = Number(num.toFixed(3));
+      const cleanNum = Math.min(effectiveMax, Math.max(effectiveMin, Number(num.toFixed(3))));
       onChange(cleanNum);
       scrollToValue(cleanNum, true);
     }
     setIsEditing(false);
-  }, [typedValue, isZeroStock, onChange, scrollToValue]);
+  }, [typedValue, isZeroStock, effectiveMax, effectiveMin, onChange, scrollToValue]);
 
-  // Unit-aware preset buttons (custom presets take priority)
-  const presets = customPresets ?? unitConfig.presets;
+  // Unit-aware preset buttons (custom presets take priority, capped at effectiveMax)
+  const presets = useMemo(() => {
+    const list = customPresets ?? unitConfig.presets;
+    return list.filter((p) => p <= effectiveMax && p >= effectiveMin);
+  }, [customPresets, unitConfig.presets, effectiveMax, effectiveMin]);
 
   return (
     <div
@@ -410,10 +413,10 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                   <div
                     className={`rounded-full transition-colors ${
                       isMajor
-                        ? 'h-10 bg-stone-700 dark:bg-stone-300 w-[2px]'
+                        ? 'h-10 bg-stone-700/50 dark:bg-stone-300/40 w-[2px]'
                         : isMedium
-                        ? 'h-6 bg-stone-400 dark:bg-stone-500 w-[1.5px]'
-                        : 'h-4 bg-stone-200 dark:bg-stone-700 w-[1px]'
+                        ? 'h-6 bg-stone-400/35 dark:bg-stone-500/30 w-[1.5px]'
+                        : 'h-4 bg-stone-300/20 dark:bg-stone-700/20 w-[1px]'
                     }`}
                   />
                 </div>

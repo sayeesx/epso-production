@@ -285,10 +285,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                       <div
                         className={`rounded-full transition-colors ${
                           isMajor
-                            ? 'h-8 bg-stone-800 dark:bg-stone-200 w-[2px]'
+                            ? 'h-8 bg-stone-700/50 dark:bg-stone-300/40 w-[2px]'
                             : isMedium
-                            ? 'h-5 bg-stone-400 dark:bg-stone-500 w-[1.5px]'
-                            : 'h-3 bg-stone-300 dark:bg-stone-700 w-[1px]'
+                            ? 'h-5 bg-stone-400/35 dark:bg-stone-500/30 w-[1.5px]'
+                            : 'h-3 bg-stone-300/20 dark:bg-stone-700/20 w-[1px]'
                         }`}
                       />
                     </div>

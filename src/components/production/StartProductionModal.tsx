@@ -299,7 +299,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         isZeroStock: false,
         value: initialQty,
         min: uConfig.min,
-        max: 999999,
+        max: 20,
         step: uConfig.step,
       });
     }
@@ -318,7 +318,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       isZeroStock: false,
       value: currentVal,
       min: uConfig.min,
-      max: 999999,
+      max: 20,
       step: uConfig.step,
     });
   };
@@ -706,7 +706,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   unit={activeRulerItem.unit}
                   value={activeRulerItem.value || 1}
                   min={activeRulerItem.min}
-                  max={activeRulerItem.max ?? 999999}
+                  max={activeRulerItem.max ?? 20}
                   step={activeRulerItem.step}
                   onChange={(newVal) => {
                     setActiveRulerItem((prev) => (prev ? { ...prev, value: newVal } : null));
@@ -722,31 +722,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
-              {/* FIXED ON TOP: Back and Review Buttons */}
-              <div className="flex items-center justify-between gap-3 pb-2 border-b border-charcoal-border/50 dark:border-[#2E2828]/50">
-                <Button
-                  variant="ghost"
-                  onClick={() => setStep(2)}
-                  icon={<TbChevronLeft className="w-4 h-4" />}
-                >
-                  {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
-                </Button>
-
-                <div className="text-xs font-bold text-stone-500 dark:text-stone-400 font-mono">
-                  {consumptionItems.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
-                </div>
-
-                <Button
-                  variant="primary"
-                  onClick={() => setStep(4)}
-                  icon={<TbChevronRight className="w-4 h-4" />}
-                  disabled={consumptionItems.length === 0}
-                  className="font-bold px-5"
-                >
-                  {language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Next: Review'}
-                </Button>
-              </div>
-
               {/* Recipe Ingredients Selection Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1">
                 {displayedRecipeIngredients.map((ing) => {
@@ -850,6 +825,31 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                       : 'No recipe ingredients added for this product'}
                   </div>
                 )}
+              </div>
+
+              {/* Step 3 Actions: Back and Review Buttons on BOTTOM */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
+                <Button
+                  variant="ghost"
+                  onClick={() => setStep(2)}
+                  icon={<TbChevronLeft className="w-4 h-4" />}
+                >
+                  {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
+                </Button>
+
+                <div className="text-xs font-bold text-stone-500 dark:text-stone-400 font-mono">
+                  {consumptionItems.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
+                </div>
+
+                <Button
+                  variant="primary"
+                  onClick={() => setStep(4)}
+                  icon={<TbChevronRight className="w-4 h-4" />}
+                  disabled={consumptionItems.length === 0}
+                  className="font-bold px-5"
+                >
+                  {language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Next: Review'}
+                </Button>
               </div>
             </div>
           )
