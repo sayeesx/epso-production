@@ -413,10 +413,10 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                   <div
                     className={`rounded-full transition-colors ${
                       isMajor
-                        ? 'h-10 bg-stone-500/12 dark:bg-stone-400/10 w-[2px]'
+                        ? 'h-10 bg-stone-700 dark:bg-stone-200 w-[2.5px]'
                         : isMedium
-                        ? 'h-6 bg-stone-400/8 dark:bg-stone-500/7 w-[1.5px]'
-                        : 'h-4 bg-stone-300/5 dark:bg-stone-700/5 w-[1px]'
+                        ? 'h-6 bg-stone-500/80 dark:bg-stone-400/80 w-[2px]'
+                        : 'h-4 bg-stone-400/60 dark:bg-stone-500/60 w-[1.5px]'
                     }`}
                   />
                 </div>

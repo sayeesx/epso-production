@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { MeasurementRulerSelector, getUnitConfig } from '../ui/MeasurementRulerSelector';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
 import { Product, Recipe, Ingredient } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -77,6 +78,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const [operator, setOperator] = useState<string>(staffName);
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
+  const [savedRunData, setSavedRunData] = useState<any>(null);
 
   // Ingredients consumption list: { ingredientId, expectedQuantity, actualQuantity, unit }
   const [consumptionItems, setConsumptionItems] = useState<
@@ -407,15 +410,23 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         ingredientsConsumed: itemsWithCost,
       });
 
-      addToast(t.productionSavedSuccess, 'success');
-      onSuccess(saved);
-      onClose();
+      setSavedRunData(saved);
+      setIsSubmitting(false);
+      setShowSuccessAnim(true);
     } catch (err: any) {
       console.error('Production save error', err);
       addToast(err?.message || 'Failed to save production run', 'error');
-    } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSuccessAnimComplete = () => {
+    setShowSuccessAnim(false);
+    addToast(t.productionSavedSuccess, 'success');
+    if (savedRunData) {
+      onSuccess(savedRunData);
+    }
+    onClose();
   };
 
   const stepTitles = {
@@ -1019,6 +1030,18 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Lottie-like Themed Success Animation */}
+      <BatchSuccessAnimation
+        isVisible={showSuccessAnim}
+        onComplete={handleSuccessAnimComplete}
+        message={language === 'ml' ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!' : 'Production Batch Saved!'}
+        subMessage={
+          language === 'ml'
+            ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
+            : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} added to stock`
+        }
+      />
     </Modal>
   );
 };

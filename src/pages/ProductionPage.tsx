@@ -391,7 +391,7 @@ export const ProductionPage: React.FC = () => {
                           ) : (
                             <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1 font-malayalam">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              <span>{language === 'ml' ? 'അപൂർണ്ണം (പാക്കറ്റ് ചേർക്കുക)' : 'Incomplete (Add Packets)'}</span>
+                              <span>{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
                             </span>
                           )}
                         </div>

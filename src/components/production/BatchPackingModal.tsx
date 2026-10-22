@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Modal } from '../ui/Modal';
+import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
 import { ProductionRun } from '../../types';
 import {
   TbPackage,
@@ -47,6 +48,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   const [selectedSize, setSelectedSize] = useState<string>(AVAILABLE_PACKET_SIZES[0]);
   const [packetCount, setPacketCount] = useState<number>(50);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
 
   // Ruler track ref
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -104,8 +106,8 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     if (!packetCount || packetCount <= 0) {
       addToast(
         language === 'ml'
-          ? 'പാക്കറ്റുകളുടെ കൃത്യമായ എണ്ണം നൽകുക'
-          : 'Please enter a valid count of packets packed',
+          ? 'പാക്കറ്റുകൾ ചേർക്കുക'
+          : 'Add packets',
         'warning'
       );
       return;
@@ -122,22 +124,26 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
         notes: `Batch #${batch.runNumber}`,
       });
 
-      addToast(
-        language === 'ml'
-          ? `ബാച്ച് #${batch.runNumber} ലേക്ക് ${packetCount} പാക്കറ്റ് (${selectedSize}) ചേർത്തു`
-          : `Added ${packetCount} packets of ${selectedSize} for Batch #${batch.runNumber}`,
-        'success'
-      );
-
-      triggerRefresh();
-      if (onSuccess) onSuccess();
-      onClose();
+      setIsSubmitting(false);
+      setShowSuccessAnim(true);
     } catch (err: any) {
       console.error('Failed to record batch packaging', err);
       addToast(err?.message || 'Failed to add packets', 'error');
-    } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSuccessAnimComplete = () => {
+    setShowSuccessAnim(false);
+    addToast(
+      language === 'ml'
+        ? `ബാച്ച് #${batch.runNumber} ലേക്ക് ${packetCount} പാക്കറ്റ് (${selectedSize}) ചേർത്തു`
+        : `Added ${packetCount} packets of ${selectedSize} for Batch #${batch.runNumber}`,
+      'success'
+    );
+    triggerRefresh();
+    if (onSuccess) onSuccess();
+    onClose();
   };
 
   const totalTicks = MAX_PACKETS - MIN_PACKETS;
@@ -408,10 +414,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                           <div
                             className={`rounded-full transition-colors ${
                               isMajor
-                                ? 'h-8 bg-stone-500/12 dark:bg-stone-400/10 w-[2px]'
+                                ? 'h-8 bg-stone-700 dark:bg-stone-200 w-[2.5px]'
                                 : isMedium
-                                ? 'h-5 bg-stone-400/8 dark:bg-stone-500/7 w-[1.5px]'
-                                : 'h-3 bg-stone-300/5 dark:bg-stone-700/5 w-[1px]'
+                                ? 'h-5 bg-stone-500/80 dark:bg-stone-400/80 w-[2px]'
+                                : 'h-3 bg-stone-400/60 dark:bg-stone-500/60 w-[1.5px]'
                             }`}
                           />
                         </div>
@@ -512,6 +518,17 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           </>
         )}
       </div>
+
+      <BatchSuccessAnimation
+        isVisible={showSuccessAnim}
+        onComplete={handleSuccessAnimComplete}
+        message={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തു!' : 'Packets Added Successfully!'}
+        subMessage={
+          language === 'ml'
+            ? `${packetCount} പാക്കറ്റുകൾ (${selectedSize}) രേഖപ്പെടുത്തി`
+            : `${packetCount} packets (${selectedSize}) recorded`
+        }
+      />
     </Modal>
   );
 };
