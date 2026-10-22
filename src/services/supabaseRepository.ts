@@ -427,7 +427,7 @@ export class SupabaseRepository implements IEpsoRepository {
     const client = this.checkClient();
     const { data, error } = await client
       .from('recipes')
-      .select('*, products(name), recipe_items(*, ingredients(name))')
+      .select('*, products!recipes_product_id_fkey(name), recipe_items(*, ingredients(name))')
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
