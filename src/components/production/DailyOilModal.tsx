@@ -409,10 +409,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                         <div
                           className={`rounded-full transition-colors ${
                             isMajor
-                              ? 'h-8 bg-stone-500/12 dark:bg-stone-400/10 w-[2px]'
+                              ? 'h-8 bg-stone-700 dark:bg-stone-200 w-[2.5px]'
                               : isMedium
-                              ? 'h-5 bg-stone-400/8 dark:bg-stone-500/7 w-[1.5px]'
-                              : 'h-3 bg-stone-300/5 dark:bg-stone-700/5 w-[1px]'
+                              ? 'h-5 bg-stone-500/80 dark:bg-stone-400/80 w-[2px]'
+                              : 'h-3 bg-stone-400/60 dark:bg-stone-500/60 w-[1.5px]'
                           }`}
                         />
                       </div>
@@ -430,14 +430,14 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
 
           {/* 2. LEFTOVER OIL: MEASURED BY A HORIZONTAL PROGRESS RULER */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider truncate">
                   {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ (Leftover Oil)' : 'Leftover Oil (Remaining)'}
                 </label>
               </div>
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50">
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50 whitespace-nowrap shrink-0">
                 Max: {usedOil.toFixed(1)} kg
               </span>
             </div>
@@ -506,9 +506,14 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                   +5
                 </button>
               </div>
-              <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold">
-                {language === 'ml' ? `ടൈപ്പ് ചെയ്യാം അല്ലെങ്കിൽ +/- ഉപയോഗിക്കാം (പരമാവധി ${usedOil.toFixed(1)} kg)` : `Type directly or use +/- steps (Max ${usedOil.toFixed(1)} kg)`}
-              </span>
+              <div className="flex items-center justify-center gap-1.5 flex-wrap text-center">
+                <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold whitespace-nowrap">
+                  {language === 'ml' ? 'ടൈപ്പ് ചെയ്യാം അല്ലെങ്കിൽ +/- ഉപയോഗിക്കാം' : 'Type directly or use +/- steps'}
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200/50">
+                  Max: {usedOil.toFixed(1)} kg
+                </span>
+              </div>
             </div>
 
             {/* Interactive Horizontal Progress Ruler Track */}
@@ -550,11 +555,11 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               </div>
 
               <div className="flex items-center justify-between text-[10px] text-stone-400 font-medium px-1">
-                <span>0 kg</span>
-                <span className="font-bold text-stone-500 dark:text-stone-400">
+                <span className="whitespace-nowrap">0 kg</span>
+                <span className="font-bold text-stone-500 dark:text-stone-400 whitespace-nowrap">
                   {leftoverOil.toFixed(1)} / {usedOil.toFixed(1)} kg
                 </span>
-                <span>{usedOil.toFixed(1)} kg (Max)</span>
+                <span className="whitespace-nowrap">{usedOil.toFixed(1)} kg (Max)</span>
               </div>
             </div>
           </div>

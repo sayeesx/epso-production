@@ -125,7 +125,7 @@ export class DemoRepository implements IEpsoRepository {
     }
 
     const existingRecs = this.getItem<Recipe[]>(STORAGE_KEYS.RECIPES, []);
-    if (!existingRecs) {
+    if (!existingRecs || existingRecs.length === 0) {
       this.setItem(STORAGE_KEYS.RECIPES, INITIAL_RECIPES);
     }
 

@@ -15,11 +15,15 @@ describe('Epso Production & Inventory Management System Tests', () => {
 
   // 1. EXACT MALAYALAM CATALOGUE VERIFICATION
   describe('Initial Catalogue Seeding', () => {
-    it('seeds exactly 26 snack products with exact Malayalam spelling', async () => {
+    it('seeds exactly 28 snack products with exact Malayalam spelling', async () => {
       const products = await repo.listProducts(true);
-      expect(products).toHaveLength(26);
+      expect(products).toHaveLength(28);
 
       const expectedFirstNames = [
+        'ദാൽ മിക്സ്ചർ',
+        'ദാൽ സേവ',
+        'കടല മിക്സ്ചർ',
+        'പയോളി മിക്സ്ചർ',
         'പെരി പെരി മിക്സ്ചർ',
         'First മിക്സ്ചർ',
         'സാമ്പാർ SP',
@@ -37,9 +41,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
         'മുളക് മിക്സ്ചർ',
         'സുടാൻ മിക്സ്ചർ',
         'ചില്ലി മിക്സ്ചർ',
-        'പയോളി മിക്സ്ചർ',
         'PT മിക്സ്ചർ',
-        'ദാൽ മിക്സ്ചർ',
         'Sr മിക്സ്ചർ',
         'SPSR മിക്സ്ചർ',
         'സാമ്പാർ LC',
@@ -55,12 +57,12 @@ describe('Epso Production & Inventory Management System Tests', () => {
       }
     });
 
-    it('seeds exactly 43 ingredients partitioned into 7 Basic and 36 Other', async () => {
+    it('seeds exactly 46 ingredients partitioned into 8 Basic and 38 Other', async () => {
       const ingredients = await repo.listIngredients(true);
-      expect(ingredients).toHaveLength(43);
+      expect(ingredients).toHaveLength(46);
 
       const basic = ingredients.filter((i) => i.category === 'basic');
-      expect(basic).toHaveLength(7);
+      expect(basic).toHaveLength(8);
 
       const expectedBasicNames = [
         'ഓയിൽ',
@@ -70,15 +72,16 @@ describe('Epso Production & Inventory Management System Tests', () => {
         'കവർ',
         'കൂലി',
         'കൂലി പാക്കിങ്',
+        'ഉപ്പ്',
       ];
       for (const name of expectedBasicNames) {
         expect(basic.find((i) => i.name === name), `Expected basic ingredient "${name}"`).toBeDefined();
       }
 
       const other = ingredients.filter((i) => i.category === 'other');
-      expect(other).toHaveLength(36);
+      expect(other).toHaveLength(38);
       expect(other.find((i) => i.name === 'കടല പൊടി 99')).toBeDefined();
-      expect(other.find((i) => i.name === 'ഉപ്പ്')).toBeDefined();
+      expect(other.find((i) => i.name === 'മസൂർ')).toBeDefined();
     });
 
     it('starts with honest zero transactions, zero batches, and zero fabricated stock', async () => {
@@ -218,7 +221,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
   // 4. RECIPE & BILL OF MATERIALS (BOM)
   describe('Recipe Formulations (BOM)', () => {
     it('creates and saves recipe associating products with ingredients', async () => {
-      const prod = (await repo.listProducts())[0];
+      const prod = (await repo.listProducts()).find((p) => p.name === 'പെരി പെരി മിക്സ്ചർ')!;
       const ings = (await repo.listIngredients()).slice(0, 3);
 
       const recipe = await repo.saveRecipe({
@@ -257,10 +260,12 @@ describe('Epso Production & Inventory Management System Tests', () => {
   // 5. ATOMIC PRODUCTION WORKFLOW & STOCK LEDGER
   describe('Atomic Production Runs & Inventory Ledger', () => {
     it('executes production run, deducts ingredients, updates output, and writes stock movements', async () => {
-      const prod = (await repo.listProducts())[0];
+      const prod = (await repo.listProducts()).find((p) => p.name === 'പെരി പെരി മിക്സ്ചർ')!;
       const ings = await repo.listIngredients();
       const oil = ings.find((i) => i.name === 'ഓയിൽ')!;
       const flour = ings.find((i) => i.name === 'കടല പൊടി 99')!;
+      const initialOil = oil.currentStock;
+      const initialFlour = flour.currentStock;
 
       // Step 1: Record valid opening stock for the ingredients
       await repo.adjustStock({
@@ -278,8 +283,8 @@ describe('Epso Production & Inventory Management System Tests', () => {
 
       const oilBefore = (await repo.getIngredientById(oil.id))!.currentStock;
       const flourBefore = (await repo.getIngredientById(flour.id))!.currentStock;
-      expect(oilBefore).toBe(50);
-      expect(flourBefore).toBe(100);
+      expect(oilBefore).toBe(initialOil + 50);
+      expect(flourBefore).toBe(initialFlour + 100);
 
       // Step 2: Record a production run
       const run = await repo.recordProductionRun({
@@ -313,12 +318,12 @@ describe('Epso Production & Inventory Management System Tests', () => {
       // Verify stock deducted
       const oilAfter = (await repo.getIngredientById(oil.id))!.currentStock;
       const flourAfter = (await repo.getIngredientById(flour.id))!.currentStock;
-      expect(oilAfter).toBe(45);
-      expect(flourAfter).toBe(85);
+      expect(oilAfter).toBe(initialOil + 45);
+      expect(flourAfter).toBe(initialFlour + 85);
 
       // Verify product stock increased
       const prodAfter = (await repo.getProductById(prod.id))!.currentStock;
-      expect(prodAfter).toBe(20);
+      expect(prodAfter).toBe(prod.currentStock + 20);
 
       // Verify movements ledger
       const movements = await repo.getStockMovements();
@@ -402,6 +407,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
   // 6. DASHBOARD METRICS CALCULATION
   describe('Admin Dashboard Metrics Aggregation', () => {
     it('accurately computes metrics from real records and excludes cancelled batches from completed totals', async () => {
+      const today = new Date().toISOString().split('T')[0];
       const prod1 = (await repo.listProducts())[0];
       const prod2 = (await repo.listProducts())[1];
 
@@ -409,7 +415,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
       await repo.recordProductionRun({
         runNumber: 'METRIC-001',
         productId: prod1.id,
-        productionDate: '2026-10-11',
+        productionDate: today,
         plannedQuantity: 25,
         actualQuantity: 25,
         unit: 'kg',
@@ -421,7 +427,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
       await repo.recordProductionRun({
         runNumber: 'METRIC-002',
         productId: prod2.id,
-        productionDate: '2026-10-11',
+        productionDate: today,
         plannedQuantity: 15,
         actualQuantity: 15,
         unit: 'kg',
@@ -433,7 +439,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
       const run3 = await repo.recordProductionRun({
         runNumber: 'METRIC-003',
         productId: prod1.id,
-        productionDate: '2026-10-11',
+        productionDate: today,
         plannedQuantity: 50,
         actualQuantity: 50,
         unit: 'kg',
@@ -446,7 +452,7 @@ describe('Epso Production & Inventory Management System Tests', () => {
         operatorName: 'Admin',
       });
 
-      const metrics = await repo.getAdminDashboardMetrics('2026-10-11', '2026-10-11');
+      const metrics = await repo.getAdminDashboardMetrics(today, today);
       // Only 2 completed runs
       expect(metrics.runsToday).toBe(2);
       // Total completed qty = 25 + 15 = 40 (cancelled 50 is excluded!)
