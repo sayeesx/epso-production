@@ -37,6 +37,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   // Ruler track ref for used oil
   const usedRulerRef = useRef<HTMLDivElement>(null);
   const isUsedScrollingRef = useRef<boolean>(false);
+  const isManualTypingUsed = useRef<boolean>(false);
+  const isManualTypingLeftover = useRef<boolean>(false);
 
   // Progress ruler ref for leftover oil
   const leftoverTrackRef = useRef<HTMLDivElement>(null);
@@ -89,11 +91,11 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     isUsedScrollingRef.current = true;
     usedRulerRef.current.scrollTo({
       left: scrollTarget,
-      behavior: 'smooth',
+      behavior: 'auto',
     });
     setTimeout(() => {
       isUsedScrollingRef.current = false;
-    }, 200);
+    }, 100);
   }, []);
 
   useEffect(() => {
@@ -106,7 +108,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
 
   // Handle ruler scroll
   const handleUsedRulerScroll = () => {
-    if (!usedRulerRef.current || isUsedScrollingRef.current) return;
+    if (!usedRulerRef.current || isUsedScrollingRef.current || isManualTypingUsed.current) return;
     const scrollLeft = usedRulerRef.current.scrollLeft;
     const tickIndex = Math.round(scrollLeft / TICK_WIDTH);
     const calculatedVal = Number((USED_MIN + tickIndex * USED_STEP).toFixed(1));
@@ -118,6 +120,25 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
       setLeftoverOil(clamped);
       setLeftoverInputStr(String(clamped));
     }
+  };
+
+  const adjustUsedOil = (delta: number) => {
+    isManualTypingUsed.current = false;
+    const next = Math.min(USED_MAX, Math.max(0, Number((usedOil + delta).toFixed(1))));
+    setUsedOil(next);
+    setUsedInputStr(String(next));
+    scrollUsedRulerTo(next);
+    if (leftoverOil > next) {
+      setLeftoverOil(next);
+      setLeftoverInputStr(String(next));
+    }
+  };
+
+  const adjustLeftoverOil = (delta: number) => {
+    isManualTypingLeftover.current = false;
+    const next = Math.min(usedOil, Math.max(0, Number((leftoverOil + delta).toFixed(1))));
+    setLeftoverOil(next);
+    setLeftoverInputStr(String(next));
   };
 
   // Leftover Progress Ruler calculation (max scale is usedOil)
@@ -279,44 +300,72 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               </span>
             </div>
 
-            {/* Touchable Value Display - Manual entry up to 250 */}
-            <div className="flex flex-col items-center justify-center py-1">
-              <div className="flex items-center justify-center gap-1.5 px-5 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="250"
-                  value={usedInputStr}
-                  onChange={(e) => {
-                    const str = e.target.value;
-                    setUsedInputStr(str);
-                    const parsed = parseFloat(str);
-                    if (!isNaN(parsed)) {
-                      const clamped = Math.min(USED_MAX, Math.max(0, parsed));
-                      setUsedOil(clamped);
-                      scrollUsedRulerTo(clamped);
-                      if (leftoverOil > clamped) {
-                        setLeftoverOil(clamped);
-                        setLeftoverInputStr(String(clamped));
+            {/* Quick Stepper & Touchable Value Display */}
+            <div className="flex flex-col items-center justify-center py-1 gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustUsedOil(-5)}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="-5 kg"
+                >
+                  -5
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustUsedOil(-1)}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="-1 kg"
+                >
+                  -1
+                </button>
+
+                <div className="flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={usedInputStr}
+                    onFocus={() => {
+                      isManualTypingUsed.current = true;
+                    }}
+                    onChange={(e) => {
+                      isManualTypingUsed.current = true;
+                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                      setUsedInputStr(val);
+                    }}
+                    onBlur={handleUsedInputCommit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleUsedInputCommit();
                       }
-                    }
-                  }}
-                  onBlur={handleUsedInputCommit}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleUsedInputCommit();
-                    }
-                  }}
-                  className="text-4xl sm:text-5xl font-black text-amber-900 dark:text-amber-200 tabular-nums text-center w-36 bg-transparent focus:outline-none"
-                />
-                <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 uppercase select-none">
-                  kg
-                </span>
+                    }}
+                    className="text-3xl sm:text-4xl font-black text-amber-900 dark:text-amber-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
+                  />
+                  <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 uppercase select-none">
+                    kg
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => adjustUsedOil(+1)}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="+1 kg"
+                >
+                  +1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustUsedOil(+5)}
+                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="+5 kg"
+                >
+                  +5
+                </button>
               </div>
-              <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mt-1">
-                {language === 'ml' ? 'നമ്പറിൽ തൊട്ട് അളവ് ടൈപ്പ് ചെയ്യാം (Max 250)' : 'Touch number to type manually (Max 250)'}
+              <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold">
+                {language === 'ml' ? 'ടൈപ്പ് ചെയ്യാം അല്ലെങ്കിൽ +/- ഉപയോഗിക്കാം (Max 250)' : 'Type directly or use +/- steps (Max 250)'}
               </span>
             </div>
 
@@ -393,39 +442,72 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               </span>
             </div>
 
-            {/* Touchable Value Display - Manual entry up to usedOil */}
-            <div className="flex flex-col items-center justify-center py-1">
-              <div className="flex items-center justify-center gap-1.5 px-5 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max={usedOil}
-                  value={leftoverInputStr}
-                  onChange={(e) => {
-                    const str = e.target.value;
-                    setLeftoverInputStr(str);
-                    const parsed = parseFloat(str);
-                    if (!isNaN(parsed)) {
-                      const clamped = Math.min(usedOil, Math.max(0, parsed));
-                      setLeftoverOil(clamped);
-                    }
-                  }}
-                  onBlur={handleLeftoverInputCommit}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleLeftoverInputCommit();
-                    }
-                  }}
-                  className="text-4xl sm:text-5xl font-black text-emerald-900 dark:text-emerald-200 tabular-nums text-center w-36 bg-transparent focus:outline-none"
-                />
-                <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 uppercase select-none">
-                  kg
-                </span>
+            {/* Quick Stepper & Touchable Value Display */}
+            <div className="flex flex-col items-center justify-center py-1 gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => adjustLeftoverOil(-5)}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="-5 kg"
+                >
+                  -5
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustLeftoverOil(-1)}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="-1 kg"
+                >
+                  -1
+                </button>
+
+                <div className="flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={leftoverInputStr}
+                    onFocus={() => {
+                      isManualTypingLeftover.current = true;
+                    }}
+                    onChange={(e) => {
+                      isManualTypingLeftover.current = true;
+                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                      setLeftoverInputStr(val);
+                    }}
+                    onBlur={handleLeftoverInputCommit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleLeftoverInputCommit();
+                      }
+                    }}
+                    className="text-3xl sm:text-4xl font-black text-emerald-900 dark:text-emerald-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
+                  />
+                  <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 uppercase select-none">
+                    kg
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => adjustLeftoverOil(+1)}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="+1 kg"
+                >
+                  +1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustLeftoverOil(+5)}
+                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
+                  title="+5 kg"
+                >
+                  +5
+                </button>
               </div>
-              <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mt-1">
-                {language === 'ml' ? `നമ്പറിൽ തൊട്ട് അളവ് ടൈപ്പ് ചെയ്യാം (പരമാവധി ${usedOil.toFixed(1)} kg)` : `Touch number to type manually (Cannot exceed used oil)`}
+              <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold">
+                {language === 'ml' ? `ടൈപ്പ് ചെയ്യാം അല്ലെങ്കിൽ +/- ഉപയോഗിക്കാം (പരമാവധി ${usedOil.toFixed(1)} kg)` : `Type directly or use +/- steps (Max ${usedOil.toFixed(1)} kg)`}
               </span>
             </div>
 

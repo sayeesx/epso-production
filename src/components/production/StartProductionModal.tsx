@@ -118,7 +118,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const activeRecipe = useMemo(
     () =>
       recipes.find(
-        (r) => r.productId === selectedProductId && r.isActive
+        (r) => String(r.productId) === String(selectedProductId) && (r.isActive ?? true)
       ),
     [recipes, selectedProductId]
   );
@@ -165,43 +165,57 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     );
   }, [products, productSearch]);
 
-  // Check if active recipe has valid non-basic ingredients set
+  // Check if active recipe has valid ingredients set
   const hasRecipeIngredients = useMemo(() => {
-    if (!activeRecipe || !activeRecipe.ingredients || activeRecipe.ingredients.length === 0) return false;
-    return activeRecipe.ingredients.some(
-      (ri) => !isDailySharedBasic(ri.ingredientName || '')
-    );
+    return Boolean(activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0);
   }, [activeRecipe]);
 
-  // Filter ingredients for Step 3: show ONLY the added recipe ingredients (excluding daily shared basics like oil, salt, thodu, curry leaves)
+  // Filter ingredients for Step 3: show all recipe ingredients configured for this product
   const displayedRecipeIngredients = useMemo(() => {
     if (activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0) {
-      const validRecipeIngs = activeRecipe.ingredients.filter(
-        (ri) => !isDailySharedBasic(ri.ingredientName || '')
-      );
-      const recipeMap = new Map(validRecipeIngs.map((ri) => [ri.ingredientId, ri]));
-      return ingredients.filter(
-        (ing) => ing.isActive && !isDailySharedBasic(ing.name) && recipeMap.has(ing.id)
-      );
+      return activeRecipe.ingredients.map((ri) => {
+        const found = ingredients.find((ing) => ing.id === ri.ingredientId);
+        if (found) {
+          return found;
+        }
+        return {
+          id: ri.ingredientId,
+          name: ri.ingredientName || 'Ingredient',
+          unit: ri.unit || 'kg',
+          currentStock: 999, // default if inventory entry not yet loaded
+          minStock: 0,
+          costPerUnit: 0,
+          avgCostPerUnit: 0,
+          isActive: true,
+          category: 'other',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as unknown as Ingredient;
+      });
     }
     return [];
   }, [ingredients, activeRecipe]);
+
+  // Check if any recipe ingredient is out of stock (stock <= 0)
+  const isAnyIngredientOutOfStock = useMemo(() => {
+    if (!displayedRecipeIngredients || displayedRecipeIngredients.length === 0) return true;
+    return displayedRecipeIngredients.some((ing) => (ing.currentStock || 0) <= 0);
+  }, [displayedRecipeIngredients]);
 
   // When a product is selected in Step 1, advance to Step 2 (measure quantity)
   const handleSelectProduct = (productId: string) => {
     setSelectedProductId(productId);
     setIsModalExpanded(false);
-    const prodRecipe = recipes.find((r) => r.productId === productId && r.isActive);
+    const prodRecipe = recipes.find(
+      (r) => String(r.productId) === String(productId) && (r.isActive ?? true)
+    );
     const initialQty = prodRecipe?.baseOutputQuantity || 10;
     setPlannedQty(initialQty);
     setActualOutputQty(initialQty);
 
     // Pre-populate with recipe ingredients scaled for initial planned quantity
-    if (prodRecipe && prodRecipe.ingredients.length > 0) {
-      const validItems = prodRecipe.ingredients.filter(
-        (item) => !isDailySharedBasic(item.ingredientName || '')
-      );
-      const scaled = validItems.map((item) => {
+    if (prodRecipe && prodRecipe.ingredients && prodRecipe.ingredients.length > 0) {
+      const scaled = prodRecipe.ingredients.map((item) => {
         const requiredQty = Number(item.quantity.toFixed(3));
         return {
           ingredientId: item.ingredientId,
@@ -223,13 +237,10 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     setPlannedQty(newQty);
     setActualOutputQty(newQty);
 
-    if (activeRecipe && activeRecipe.ingredients.length > 0 && activeRecipe.baseOutputQuantity > 0) {
-      const validItems = activeRecipe.ingredients.filter(
-        (item) => !isDailySharedBasic(item.ingredientName || '')
-      );
+    if (activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0 && activeRecipe.baseOutputQuantity > 0) {
       const scaleFactor = newQty / activeRecipe.baseOutputQuantity;
       setConsumptionItems((prev) => {
-        return validItems.map((item) => {
+        return activeRecipe.ingredients.map((item) => {
           const scaledQty = Number((item.quantity * scaleFactor).toFixed(3));
           const existing = prev.find((p) => p.ingredientId === item.ingredientId);
           return {
@@ -537,13 +548,13 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 }`}
               >
                 {filteredProducts.map((p) => {
-                  const productRecipe = recipes.find((r) => r.productId === p.id && r.isActive);
-                  const hasRecipe = !!productRecipe;
+                  const productRecipe = recipes.find((r) => String(r.productId) === String(p.id) && (r.isActive ?? true));
+                  const hasRecipe = Boolean(productRecipe && productRecipe.ingredients && productRecipe.ingredients.length > 0);
                   const isSelected = p.id === selectedProductId;
-                  const hasOutOfStockIng = productRecipe?.ingredients.some((ingItem) => {
+                  const hasOutOfStockIng = Boolean(productRecipe?.ingredients?.some((ingItem) => {
                     const ing = ingredients.find((i) => i.id === ingItem.ingredientId);
-                    return !ing || ing.currentStock <= 0;
-                  });
+                    return ing && ing.currentStock <= 0;
+                  }));
 
                   return (
                     <div
@@ -837,19 +848,23 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
                 </Button>
 
-                <div className="text-xs font-bold text-stone-500 dark:text-stone-400 font-mono">
-                  {consumptionItems.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
-                </div>
-
-                <Button
-                  variant="primary"
-                  onClick={() => setStep(4)}
-                  icon={<TbChevronRight className="w-4 h-4" />}
-                  disabled={consumptionItems.length === 0}
-                  className="font-bold px-5"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isAnyIngredientOutOfStock && consumptionItems.length > 0) {
+                      setStep(4);
+                    }
+                  }}
+                  disabled={isAnyIngredientOutOfStock || consumptionItems.length === 0}
+                  className={`flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all select-none ${
+                    isAnyIngredientOutOfStock || consumptionItems.length === 0
+                      ? 'bg-stone-200 dark:bg-stone-800 text-stone-400 dark:text-stone-600 border border-stone-200 dark:border-stone-800 cursor-not-allowed opacity-80 pointer-events-none'
+                      : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white shadow-md press-apple cursor-pointer'
+                  }`}
                 >
-                  {language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Next: Review'}
-                </Button>
+                  <span>{language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Review & Next'}</span>
+                  <TbChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                </button>
               </div>
             </div>
           )

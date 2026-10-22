@@ -182,6 +182,27 @@ export const ProductionPage: React.FC = () => {
 
 
 
+  const handleOpenNewBatch = async () => {
+    try {
+      setIsOpeningNewBatch(true);
+      // Proactively fetch latest recipes, products, and ingredients from Supabase
+      const [freshRecipes, freshProducts, freshIngredients] = await Promise.all([
+        repo.listRecipes(),
+        repo.listProducts(false),
+        repo.listIngredients(false),
+      ]);
+      if (freshRecipes && freshRecipes.length > 0) setRecipes(freshRecipes);
+      if (freshProducts && freshProducts.length > 0) setProducts(freshProducts);
+      if (freshIngredients && freshIngredients.length > 0) setIngredients(freshIngredients);
+      setIsStartProductionOpen(true);
+    } catch (err) {
+      console.error('Failed to pre-fetch recipes before opening batch modal', err);
+      setIsStartProductionOpen(true);
+    } finally {
+      setIsOpeningNewBatch(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
       {/* Sleek header bar with prominent Epso logo */}
@@ -206,13 +227,7 @@ export const ProductionPage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => {
-              setIsOpeningNewBatch(true);
-              setTimeout(() => {
-                setIsStartProductionOpen(true);
-                setIsOpeningNewBatch(false);
-              }, 100);
-            }}
+            onClick={handleOpenNewBatch}
             disabled={isOpeningNewBatch}
             className="flex items-center gap-1.5 bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md transition-all active:scale-95 press-apple select-none cursor-pointer"
           >
@@ -318,8 +333,9 @@ export const ProductionPage: React.FC = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setIsStartProductionOpen(true)}
-              icon={<TbPlus className="w-4 h-4" />}
+              onClick={handleOpenNewBatch}
+              disabled={isOpeningNewBatch}
+              icon={isOpeningNewBatch ? <LoadingSpinner size="sm" /> : <TbPlus className="w-4 h-4" />}
             >
               {t.startProduction}
             </Button>
@@ -337,6 +353,8 @@ export const ProductionPage: React.FC = () => {
                   (p.notes && p.notes.includes(run.runNumber)) ||
                   (p.productId === run.productId && p.packingDate === run.productionDate)
               );
+              const totalPacketsPacked = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
+              const hasPackedPackets = totalPacketsPacked > 0;
 
               return (
                 <Card
@@ -349,7 +367,9 @@ export const ProductionPage: React.FC = () => {
                       <div
                         className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
                           isCompleted
-                            ? 'bg-red-100 dark:bg-red-950/60 text-epso-red dark:text-red-300'
+                            ? hasPackedPackets
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
                             : 'bg-stone-100 dark:bg-[#282323] text-stone-500 line-through'
                         }`}
                       >
@@ -360,15 +380,20 @@ export const ProductionPage: React.FC = () => {
                           <h4 className="text-sm font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam">
                             {run.productName}
                           </h4>
-                          <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                              isCompleted
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                                : 'bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 line-through'
-                            }`}
-                          >
-                            {isCompleted ? t.runStatusCompleted : t.runStatusCancelled}
-                          </span>
+                          {run.status === 'cancelled' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 line-through">
+                              {t.runStatusCancelled}
+                            </span>
+                          ) : hasPackedPackets ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800">
+                              {t.runStatusCompleted}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1 font-malayalam">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                              <span>{language === 'ml' ? 'അപൂർണ്ണം (പാക്കറ്റ് ചേർക്കുക)' : 'Incomplete (Add Packets)'}</span>
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-0.5">
                           #{run.runNumber} • {run.productionDate} • {run.operatorName}
