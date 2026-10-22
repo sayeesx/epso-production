@@ -20,29 +20,56 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const fetchLatestPin = async (): Promise<string | null> => {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('details')
+        .eq('action', 'PRODUCTION_PIN_CHANGED')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && data && data.length > 0 && data[0].details?.pin) {
+        const fetched = String(data[0].details.pin);
+        setTargetPin(fetched);
+        localStorage.setItem('epso_production_pin', fetched);
+        return fetched;
+      }
+    } catch {
+      // fallback to cached pin
+    }
+    return null;
+  };
+
   useEffect(() => {
     inputRefs.current[0]?.focus();
 
-    // Fetch latest production pin from Supabase audit_logs
-    if (supabase) {
-      (async () => {
-        try {
-          const { data } = await supabase
-            .from('audit_logs')
-            .select('details')
-            .eq('action', 'PRODUCTION_PIN_CHANGED')
-            .order('created_at', { ascending: false })
-            .limit(1);
+    // 1. Initial fetch of latest production pin from Supabase audit_logs
+    fetchLatestPin();
 
-          if (data && data.length > 0 && data[0].details?.pin) {
-            const fetched = String(data[0].details.pin);
-            setTargetPin(fetched);
-            localStorage.setItem('epso_production_pin', fetched);
+    // 2. Real-time subscription: when PIN is updated in Admin, sync immediately without page refresh
+    if (supabase) {
+      const channel = supabase
+        .channel('production-pin-sync')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'audit_logs' },
+          (payload: any) => {
+            if (payload.new?.action === 'PRODUCTION_PIN_CHANGED' && payload.new?.details?.pin) {
+              const livePin = String(payload.new.details.pin);
+              setTargetPin(livePin);
+              localStorage.setItem('epso_production_pin', livePin);
+            }
           }
-        } catch {
-          // fallback to cached pin
+        )
+        .subscribe();
+
+      return () => {
+        if (supabase) {
+          supabase.removeChannel(channel);
         }
-      })();
+      };
     }
   }, []);
 
@@ -96,24 +123,35 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
     setIsVerifying(true);
     setErrorMsg('');
 
-    // Quick verification feel (250ms)
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Quick verification feel (150ms)
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
-    // Also re-check latest cached pin
+    // Check latest cached pin
     const currentValidPin = localStorage.getItem('epso_production_pin') || targetPin;
 
     if (enteredPin === currentValidPin) {
       sessionStorage.setItem('epso_production_unlocked', 'true');
       setIsVerifying(false);
       onUnlock();
-    } else {
-      setIsVerifying(false);
-      setErrorMsg('തെറ്റായ പാസ്‌കോഡ് (Incorrect PIN)');
-      setShake(true);
-      setTimeout(() => setShake(false), 500);
-      setDigits(['', '', '', '']);
-      inputRefs.current[0]?.focus();
+      return;
     }
+
+    // If enteredPin didn't match local cached pin, do a quick network check to see if admin just changed it!
+    const livePin = await fetchLatestPin();
+    if (livePin && enteredPin === livePin) {
+      sessionStorage.setItem('epso_production_unlocked', 'true');
+      setIsVerifying(false);
+      onUnlock();
+      return;
+    }
+
+    // Incorrect PIN
+    setIsVerifying(false);
+    setErrorMsg('തെറ്റായ പാസ്‌കോഡ് (Incorrect PIN)');
+    setShake(true);
+    setTimeout(() => setShake(false), 500);
+    setDigits(['', '', '', '']);
+    inputRefs.current[0]?.focus();
   };
 
   return (
