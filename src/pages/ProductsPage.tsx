@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { GridCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { RecipeViewModal } from '../components/recipes/RecipeViewModal';
 import { Product, Recipe, Ingredient } from '../types';
 import {
@@ -97,11 +98,9 @@ export const ProductsPage: React.FC = () => {
         leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
       />
 
-      {/* Loading state: clean loading spinner loader */}
+      {/* Loading state: shimmer skeleton effect */}
       {loading ? (
-        <div className="py-16 flex justify-center items-center">
-          <LoadingSpinner size="lg" />
-        </div>
+        <GridCardSkeleton count={6} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {filteredProducts.map((prod) => {

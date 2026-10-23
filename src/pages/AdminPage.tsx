@@ -9,7 +9,7 @@ import { Input } from '../components/ui/Input';
 import { RecipeFormModal } from '../components/recipes/RecipeFormModal';
 import { RecipeDetailModal } from '../components/recipes/RecipeDetailModal';
 import { StockAdjustmentModal } from '../components/ingredients/StockAdjustmentModal';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import {
   AdminDashboardMetrics,
   ProductionRun,
@@ -536,7 +536,11 @@ const AdminDashboardContent: React.FC = () => {
               </Button>
             </div>
 
-            {productionRuns.length === 0 ? (
+            {loading ? (
+              <div className="py-2">
+                <BatchCardSkeleton count={3} />
+              </div>
+            ) : productionRuns.length === 0 ? (
               <p className="text-center py-6 text-xs text-charcoal-muted">
                 {t('noProductionRecordsYet')}
               </p>
@@ -626,7 +630,9 @@ const AdminDashboardContent: React.FC = () => {
           </div>
 
           {/* Runs List */}
-          {productionRuns.length === 0 ? (
+          {loading ? (
+            <BatchCardSkeleton count={5} />
+          ) : productionRuns.length === 0 ? (
             <Card className="text-center py-12 text-charcoal-muted text-xs">
               <TbChefHat className="w-8 h-8 text-charcoal-muted/40 mx-auto mb-2" />
               <p className="font-bold">{t('noProductionRecordsYet')}</p>
