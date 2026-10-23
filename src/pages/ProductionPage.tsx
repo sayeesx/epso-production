@@ -6,6 +6,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { StartProductionModal } from '../components/production/StartProductionModal';
 import { DailyOilModal } from '../components/production/DailyOilModal';
 import { BatchPackingModal } from '../components/production/BatchPackingModal';
@@ -122,6 +123,62 @@ export const ProductionPage: React.FC = () => {
       return r.productionDate !== yesterdayStr;
     });
   }, [runs, searchTerm, activeFilter, yesterdayStr]);
+
+  // Batch number in chronological ascending order (Batch 1, 2, 3...)
+  const batchNumberMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const byDate: Record<string, ProductionRun[]> = {};
+    runs.forEach((r) => {
+      const d = r.productionDate || 'default';
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(r);
+    });
+
+    Object.values(byDate).forEach((dateRuns) => {
+      const sorted = [...dateRuns].sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.productionDate).getTime();
+        const timeB = new Date(b.createdAt || b.productionDate).getTime();
+        if (timeA !== timeB) return timeA - timeB;
+        return a.runNumber.localeCompare(b.runNumber);
+      });
+      sorted.forEach((r, idx) => {
+        map.set(r.id, idx + 1);
+      });
+    });
+    return map;
+  }, [runs]);
+
+  // Show batch cards at top where packets are yet to be added, in ascending batch order
+  const sortedRuns = useMemo(() => {
+    const isPacketsPending = (run: ProductionRun) => {
+      if (run.status === 'cancelled') return false;
+      const batchPackings = packingRecords.filter(
+        (p) =>
+          p.productionRunId === run.id ||
+          (p.notes && p.notes.includes(run.runNumber)) ||
+          (p.productId === run.productId && p.packingDate === run.productionDate)
+      );
+      const total = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
+      return total === 0;
+    };
+
+    return [...filteredRuns].sort((a, b) => {
+      const aPending = isPacketsPending(a);
+      const bPending = isPacketsPending(b);
+      // Batches where packets are yet to be added go to the top
+      if (aPending && !bPending) return -1;
+      if (!aPending && bPending) return 1;
+
+      // Within each group, display in ascending order of creation (Batch 1, 2, 3...)
+      const numA = batchNumberMap.get(a.id) || 0;
+      const numB = batchNumberMap.get(b.id) || 0;
+      if (numA !== numB) return numA - numB;
+
+      const timeA = new Date(a.createdAt || a.productionDate).getTime();
+      const timeB = new Date(b.createdAt || b.productionDate).getTime();
+      return timeA - timeB;
+    });
+  }, [filteredRuns, packingRecords, batchNumberMap]);
 
   const handleCancelRun = async () => {
     if (!runToCancel) return;
@@ -309,15 +366,15 @@ export const ProductionPage: React.FC = () => {
           leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
         />
 
-        {/* Loading state: clean loading spinner loader */}
+        {/* Loading state: skeleton shimmer effect */}
         {loading && (
-          <div className="py-16 flex justify-center items-center">
-            <LoadingSpinner size="lg" />
+          <div className="py-2">
+            <BatchCardSkeleton count={4} />
           </div>
         )}
 
         {/* Honest Empty State when no records exist */}
-        {!loading && filteredRuns.length === 0 && (
+        {!loading && sortedRuns.length === 0 && (
           <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl border border-charcoal-border dark:border-[#2E2828] p-8 sm:p-12 text-center space-y-3 transition-colors">
             <div className="w-14 h-14 bg-stone-100 dark:bg-[#282323] text-stone-400 dark:text-stone-500 rounded-2xl flex items-center justify-center mx-auto">
               <TbHistory className="w-7 h-7" />
@@ -343,9 +400,9 @@ export const ProductionPage: React.FC = () => {
         )}
 
         {/* Runs List */}
-        {!loading && filteredRuns.length > 0 && (
+        {!loading && sortedRuns.length > 0 && (
           <div className="space-y-2.5">
-            {filteredRuns.map((run) => {
+            {sortedRuns.map((run) => {
               const isCompleted = run.status === 'completed';
               const batchPackings = packingRecords.filter(
                 (p) =>
@@ -355,6 +412,7 @@ export const ProductionPage: React.FC = () => {
               );
               const totalPacketsPacked = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
               const hasPackedPackets = totalPacketsPacked > 0;
+              const batchOrderNumber = batchNumberMap.get(run.id) ?? 1;
 
               return (
                 <Card
@@ -365,15 +423,16 @@ export const ProductionPage: React.FC = () => {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 tabular-nums ${
                           isCompleted
                             ? hasPackedPackets
                               ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
                               : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
                             : 'bg-stone-100 dark:bg-[#282323] text-stone-500 line-through'
                         }`}
+                        title={`Batch #${batchOrderNumber}`}
                       >
-                        {run.productName.slice(0, 1)}
+                        {batchOrderNumber}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">

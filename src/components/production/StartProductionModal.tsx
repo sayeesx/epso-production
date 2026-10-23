@@ -985,7 +985,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         {/* Loading Spinner Animation during submission */}
         {isSubmitting && (
           <div className="absolute inset-0 bg-white/85 dark:bg-[#1E1B1B]/85 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center z-50 animate-in fade-in">
-            <LoadingSpinner size="lg" label={language === 'ml' ? 'ബാച്ച് സേവ് ചെയ്യുന്നു...' : 'Saving production batch...'} />
+            <LoadingSpinner size="lg" />
           </div>
         )}
       </div>

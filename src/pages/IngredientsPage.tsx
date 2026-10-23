@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
+import { GridCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { Ingredient } from '../types';
 import {
   TbCarrot,
@@ -155,9 +156,7 @@ export const IngredientsPage: React.FC = () => {
 
       {/* Ingredient Items Grid */}
       {loading ? (
-        <div className="py-16 flex justify-center items-center">
-          <LoadingSpinner size="lg" />
-        </div>
+        <GridCardSkeleton count={6} columns="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" />
       ) : filteredIngredients.length === 0 ? (
         <Card className="text-center py-12 text-stone-500 dark:text-stone-400 text-sm space-y-2">
           <TbCarrot className="w-8 h-8 text-stone-400 dark:text-stone-600 mx-auto" />

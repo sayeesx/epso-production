@@ -146,6 +146,14 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     return Math.max(0.1, usedOil);
   }, [usedOil]);
 
+  // Keep leftover oil strictly clamped to current usedOil
+  useEffect(() => {
+    if (leftoverOil > usedOil) {
+      setLeftoverOil(usedOil);
+      setLeftoverInputStr(String(usedOil));
+    }
+  }, [usedOil, leftoverOil]);
+
   const leftoverPercentage = useMemo(() => {
     if (maxLeftoverScale <= 0) return 0;
     return Math.min(100, Math.max(0, (leftoverOil / maxLeftoverScale) * 100));
@@ -155,13 +163,13 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     if (!leftoverTrackRef.current) return;
     const rect = leftoverTrackRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const rawVal = ratio * maxLeftoverScale;
+    const rawVal = ratio * Math.max(0.1, usedOil);
     // Snap to 0.5 kg, clamp to max usedOil
     const snapped = Math.round(rawVal * 2) / 2;
     const clamped = Math.min(usedOil, Math.max(0, snapped));
     setLeftoverOil(clamped);
     setLeftoverInputStr(String(clamped));
-  }, [maxLeftoverScale, usedOil]);
+  }, [usedOil]);
 
   const handleLeftoverMouseDown = (e: React.MouseEvent) => {
     isDraggingLeftover.current = true;
@@ -332,8 +340,21 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                       isManualTypingUsed.current = true;
                       const val = e.target.value.replace(/[^0-9.]/g, '');
                       setUsedInputStr(val);
+                      const parsed = parseFloat(val);
+                      if (!isNaN(parsed) && parsed >= 0) {
+                        const clamped = Math.min(USED_MAX, parsed);
+                        const clean = Number(clamped.toFixed(1));
+                        setUsedOil(clean);
+                        if (leftoverOil > clean) {
+                          setLeftoverOil(clean);
+                          setLeftoverInputStr(String(clean));
+                        }
+                      }
                     }}
-                    onBlur={handleUsedInputCommit}
+                    onBlur={() => {
+                      isManualTypingUsed.current = false;
+                      handleUsedInputCommit();
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -409,10 +430,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                         <div
                           className={`rounded-full transition-colors ${
                             isMajor
-                              ? 'h-8 bg-stone-700 dark:bg-stone-200 w-[2.5px]'
+                              ? 'h-8 bg-stone-500/40 dark:bg-stone-400/35 w-[2px]'
                               : isMedium
-                              ? 'h-5 bg-stone-500/80 dark:bg-stone-400/80 w-[2px]'
-                              : 'h-3 bg-stone-400/60 dark:bg-stone-500/60 w-[1.5px]'
+                              ? 'h-5 bg-stone-400/30 dark:bg-stone-500/25 w-[1.5px]'
+                              : 'h-3 bg-stone-300/25 dark:bg-stone-600/20 w-[1px]'
                           }`}
                         />
                       </div>

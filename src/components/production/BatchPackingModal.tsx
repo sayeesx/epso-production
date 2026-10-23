@@ -277,15 +277,28 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                       }`}
                     >
                       <span className="text-base tracking-tight">{size}</span>
-                      <span
-                        className={`text-[10px] uppercase font-bold tracking-wider ${
-                          isSelected
-                            ? 'text-white/85 dark:text-stone-900/85'
-                            : 'text-stone-400'
-                        }`}
-                      >
-                        {isSelected ? '✓ Selected' : 'Packet'}
-                      </span>
+                      {isSelected ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] uppercase font-black tracking-wider text-white dark:text-stone-950">
+                          <span className="w-4 h-4 rounded-full bg-white dark:bg-stone-950 text-epso-red dark:text-amber-500 flex items-center justify-center shadow-xs shrink-0">
+                            <svg
+                              className="w-2.5 h-2.5"
+                              viewBox="0 0 12 12"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M2.5 6.2L4.8 8.5L9.5 3.5" />
+                            </svg>
+                          </span>
+                          <span>Selected</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-stone-400">
+                          Packet
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -414,10 +427,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                           <div
                             className={`rounded-full transition-colors ${
                               isMajor
-                                ? 'h-8 bg-stone-700 dark:bg-stone-200 w-[2.5px]'
+                                ? 'h-8 bg-stone-500/40 dark:bg-stone-400/35 w-[2px]'
                                 : isMedium
-                                ? 'h-5 bg-stone-500/80 dark:bg-stone-400/80 w-[2px]'
-                                : 'h-3 bg-stone-400/60 dark:bg-stone-500/60 w-[1.5px]'
+                                ? 'h-5 bg-stone-400/30 dark:bg-stone-500/25 w-[1.5px]'
+                                : 'h-3 bg-stone-300/25 dark:bg-stone-600/20 w-[1px]'
                             }`}
                           />
                         </div>
