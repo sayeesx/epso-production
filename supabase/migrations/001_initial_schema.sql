@@ -914,7 +914,6 @@ INSERT INTO public.ingredients (name, category, unit, is_active) VALUES
     ('അണ്ടി തോട്', 'basic', 'kg', true),
     ('ചിപ്പ്ളി പൊടി', 'basic', 'kg', true),
     ('കറിവേപ്പില', 'basic', 'kg', true),
-    ('കവർ', 'basic', 'pcs', true),
     ('കൂലി', 'basic', 'pcs', true),
     ('കൂലി പാക്കിങ്', 'basic', 'pcs', true)
 ON CONFLICT (name) DO NOTHING;

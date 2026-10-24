@@ -52,83 +52,79 @@ export const BatchSuccessAnimation: React.FC<BatchSuccessAnimationProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none transition-opacity duration-300 ${
+      className={`absolute inset-0 z-50 bg-white dark:bg-white text-stone-900 rounded-t-3xl sm:rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center gap-4 transition-opacity duration-300 pointer-events-auto ${
         fadeOut ? 'opacity-0' : 'opacity-100'
       }`}
     >
-      {/* Backdrop glow */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm batch-success-backdrop" />
+      {/* Animated ring + checkmark */}
+      <div className="relative w-24 h-24 flex items-center justify-center my-1">
+        {/* Outer ripple rings */}
+        <div className="absolute inset-0 batch-ripple-1 rounded-full border-2 border-epso-red/50" />
+        <div className="absolute inset-[-8px] batch-ripple-2 rounded-full border border-amber-500/35" />
+        <div className="absolute inset-[-16px] batch-ripple-3 rounded-full border border-amber-400/20" />
 
-      {/* White Modal Card */}
-      <div className="relative w-full max-w-sm mx-auto bg-white dark:bg-white text-stone-900 rounded-3xl p-6 sm:p-8 flex flex-col items-center gap-4 z-10 batch-success-container shadow-2xl border border-stone-200">
-        {/* Animated ring + checkmark */}
-        <div className="relative w-24 h-24 flex items-center justify-center my-1">
-          {/* Outer ripple rings */}
-          <div className="absolute inset-0 batch-ripple-1 rounded-full border-2 border-epso-red/50" />
-          <div className="absolute inset-[-8px] batch-ripple-2 rounded-full border border-amber-500/35" />
-          <div className="absolute inset-[-16px] batch-ripple-3 rounded-full border border-amber-400/20" />
+        {/* Main circle */}
+        <div className="absolute inset-0 rounded-full batch-success-circle flex items-center justify-center shadow-[0_10px_30px_rgba(198,56,43,0.35)]">
+          {/* Background gradient fill */}
+          <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#991B1B] via-epso-red to-amber-500 batch-circle-fill" />
 
-          {/* Main circle */}
-          <div className="absolute inset-0 rounded-full batch-success-circle flex items-center justify-center shadow-[0_10px_30px_rgba(198,56,43,0.35)]">
-            {/* Background gradient fill */}
-            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#991B1B] via-epso-red to-amber-500 batch-circle-fill" />
-
-            {/* Checkmark SVG */}
-            <svg
-              className="relative z-10 w-12 h-12 text-white batch-checkmark"
-              viewBox="0 0 52 52"
+          {/* Checkmark SVG */}
+          <svg
+            className="relative z-10 w-12 h-12 text-white batch-checkmark"
+            viewBox="0 0 52 52"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              className="batch-checkmark-path"
+              d="M14 27L22 35L38 17"
+              stroke="currentColor"
+              strokeWidth="5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                className="batch-checkmark-path"
-                d="M14 27L22 35L38 17"
-                stroke="currentColor"
-                strokeWidth="5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-            </svg>
-          </div>
-
-          {/* Particle bursts */}
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div
-              key={`p-${i}`}
-              className="absolute left-1/2 top-1/2 batch-particle"
-              style={{
-                '--particle-angle': `${i * 36}deg`,
-                '--particle-delay': `${0.25 + i * 0.04}s`,
-                '--particle-color': i % 2 === 0 ? '#C6382B' : '#F59E0B',
-              } as React.CSSProperties}
             />
-          ))}
-
-          {/* Mini confetti dots */}
-          {Array.from({ length: 14 }).map((_, i) => (
-            <div
-              key={`confetti-${i}`}
-              className="absolute left-1/2 top-1/2 batch-confetti"
-              style={{
-                '--confetti-angle': `${i * 25.7}deg`,
-                '--confetti-delay': `${0.3 + i * 0.03}s`,
-                '--confetti-distance': `${48 + (i % 3) * 12}px`,
-                '--confetti-color': ['#C6382B', '#F59E0B', '#10B981', '#FBBF24', '#EF4444'][i % 5],
-              } as React.CSSProperties}
-            />
-          ))}
+          </svg>
         </div>
 
-        {/* Text inside White Modal */}
-        <div className="text-center batch-success-text px-2">
-          <p className="text-lg sm:text-xl font-black text-stone-900 font-malayalam tracking-tight leading-snug">
-            {message}
-          </p>
-          <p className="text-xs sm:text-sm font-bold text-stone-500 mt-1">
+        {/* Particle bursts */}
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div
+            key={`p-${i}`}
+            className="absolute left-1/2 top-1/2 batch-particle"
+            style={{
+              '--particle-angle': `${i * 36}deg`,
+              '--particle-delay': `${0.25 + i * 0.04}s`,
+              '--particle-color': i % 2 === 0 ? '#C6382B' : '#F59E0B',
+            } as React.CSSProperties}
+          />
+        ))}
+
+        {/* Mini confetti dots */}
+        {Array.from({ length: 14 }).map((_, i) => (
+          <div
+            key={`confetti-${i}`}
+            className="absolute left-1/2 top-1/2 batch-confetti"
+            style={{
+              '--confetti-angle': `${i * 25.7}deg`,
+              '--confetti-delay': `${0.3 + i * 0.03}s`,
+              '--confetti-distance': `${48 + (i % 3) * 12}px`,
+              '--confetti-color': ['#C6382B', '#F59E0B', '#10B981', '#FBBF24', '#EF4444'][i % 5],
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
+
+      {/* Text inside White Modal */}
+      <div className="text-center batch-success-text px-2 max-w-sm">
+        <p className="text-xl sm:text-2xl font-black text-stone-900 font-malayalam tracking-tight leading-snug">
+          {message}
+        </p>
+        {subMessage && (
+          <p className="text-xs sm:text-sm font-bold text-stone-500 mt-1.5">
             {subMessage}
           </p>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -57,19 +57,18 @@ describe('Epso Production & Inventory Management System Tests', () => {
       }
     });
 
-    it('seeds exactly 46 ingredients partitioned into 8 Basic and 38 Other', async () => {
+    it('seeds exactly 45 ingredients partitioned into 7 Basic and 38 Other', async () => {
       const ingredients = await repo.listIngredients(true);
-      expect(ingredients).toHaveLength(46);
+      expect(ingredients).toHaveLength(45);
 
       const basic = ingredients.filter((i) => i.category === 'basic');
-      expect(basic).toHaveLength(8);
+      expect(basic).toHaveLength(7);
 
       const expectedBasicNames = [
         'ഓയിൽ',
         'അണ്ടി തോട്',
         'ചിപ്പ്ളി പൊടി',
         'കറിവേപ്പില',
-        'കവർ',
         'കൂലി',
         'കൂലി പാക്കിങ്',
         'ഉപ്പ്',
