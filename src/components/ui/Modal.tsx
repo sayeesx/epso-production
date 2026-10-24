@@ -10,6 +10,7 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
   size?: 'sm' | 'md' | 'lg' | 'xl';
   expanded?: boolean;
+  overlay?: React.ReactNode;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -21,6 +22,7 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth,
   size,
   expanded = false,
+  overlay,
 }) => {
   const effectiveMaxWidth = maxWidth || size || 'md';
   useEffect(() => {
@@ -90,6 +92,9 @@ export const Modal: React.FC<ModalProps> = ({
         <div className={`p-4 sm:p-6 overflow-y-auto space-y-4 ${expanded ? 'flex-1 max-h-[calc(96vh-85px)]' : 'max-h-[calc(92vh-130px)]'}`}>
           {children}
         </div>
+
+        {/* In-modal overlay (e.g. success animation with white background directly on the modal) */}
+        {overlay}
       </div>
     </div>
   );

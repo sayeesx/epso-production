@@ -7,6 +7,7 @@ import {
   TbDroplet,
   TbCheck,
 } from 'react-icons/tb';
+import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
 
 interface DailyOilModalProps {
   isOpen: boolean;
@@ -19,12 +20,23 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  initialDate,
 }) => {
   const { repo, staffName, addToast, triggerRefresh } = useApp();
   const { language } = useLanguage();
 
-  // Date is locked to today internally (not displayed)
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const getLocalDateStr = (offsetDays = 0) => {
+    const d = new Date();
+    if (offsetDays !== 0) d.setDate(d.getDate() + offsetDays);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = useMemo(() => getLocalDateStr(0), []);
+  const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
+  const targetDate = initialDate || todayStr;
 
   // Measured oil states (max 250 kg)
   const [usedOil, setUsedOil] = useState<number>(15);
@@ -32,6 +44,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const [usedInputStr, setUsedInputStr] = useState<string>('15');
   const [leftoverInputStr, setLeftoverInputStr] = useState<string>('10');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
 
   // Ruler track ref for used oil
@@ -50,12 +63,12 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const USED_STEP = 0.5;
   const TICK_WIDTH = 10; // px per step
 
-  // Load existing data if recorded for today
+  // Load existing data if recorded for target date
   useEffect(() => {
     if (isOpen) {
       setIsLoadingExisting(true);
       let isMounted = true;
-      repo.getDailyClosing(todayStr).then((existing) => {
+      repo.getDailyClosing(targetDate).then((existing) => {
         if (!isMounted) return;
         if (existing) {
           const u = existing.oilConsumed > 0 ? Number(existing.oilConsumed) : 15;
@@ -81,7 +94,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         isMounted = false;
       };
     }
-  }, [isOpen, repo, todayStr]);
+  }, [isOpen, repo, targetDate]);
 
   // Center ruler on used oil change
   const scrollUsedRulerTo = useCallback((val: number) => {
@@ -244,7 +257,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
       const opening = usedOil + safeLeftover;
 
       await repo.saveDailyClosing({
-        productionDate: todayStr,
+        productionDate: targetDate,
         oilOpeningBalance: opening,
         oilPurchases: 0,
         oilClosingBalance: safeLeftover,
@@ -254,22 +267,27 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         closedBy: staffName || 'Kitchen Staff',
       });
 
-      addToast(
-        language === 'ml'
-          ? `ഇന്നത്തെ ഓയിൽ (${usedOil}kg ഉപയോഗം, ${safeLeftover}kg ബാക്കി) രേഖപ്പെടുത്തി`
-          : `Recorded daily oil: ${usedOil} kg used, ${safeLeftover} kg leftover`,
-        'success'
-      );
-
-      triggerRefresh();
-      if (onSuccess) onSuccess();
-      onClose();
+      setShowSuccessAnim(true);
     } catch (err: any) {
       console.error('Failed to save daily oil usage', err);
       addToast(err?.message || 'Failed to record oil usage', 'error');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSuccessAnimComplete = () => {
+    setShowSuccessAnim(false);
+    const safeLeftover = Math.min(usedOil, Math.max(0, leftoverOil));
+    addToast(
+      language === 'ml'
+        ? `${targetDate === yesterdayStr ? 'ഇന്നലത്തെ' : 'ഇന്നത്തെ'} ഓയിൽ (${usedOil}kg ഉപയോഗം, ${safeLeftover}kg ബാക്കി) രേഖപ്പെടുത്തി`
+        : `Recorded oil: ${usedOil} kg used, ${safeLeftover} kg leftover`,
+      'success'
+    );
+    triggerRefresh();
+    if (onSuccess) onSuccess();
+    onClose();
   };
 
   const totalUsedTicks = Math.round((USED_MAX - USED_MIN) / USED_STEP);
@@ -285,12 +303,33 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
           </span>
           <div>
             <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white leading-tight">
-              {language === 'ml' ? 'ദിവസേനയുള്ള ഓയിൽ രേഖപ്പെടുത്തുക' : 'Record Daily Oil Usage'}
+              {targetDate === yesterdayStr
+                ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ രേഖപ്പെടുത്തുക' : "Record Yesterday's Oil Usage")
+                : (language === 'ml' ? 'ദിവസേനയുള്ള ഓയിൽ രേഖപ്പെടുത്തുക' : 'Record Daily Oil Usage')}
             </h2>
+            <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
+              {targetDate}
+            </p>
           </div>
         </div>
       }
       size="md"
+      overlay={
+        <BatchSuccessAnimation
+          isVisible={showSuccessAnim}
+          onComplete={handleSuccessAnimComplete}
+          message={
+            targetDate === yesterdayStr
+              ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ രേഖപ്പെടുത്തി!' : 'Yesterday Oil Saved!')
+              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തി!' : 'Oil Usage Saved!')
+          }
+          subMessage={
+            language === 'ml'
+              ? `${usedOil} kg ഉപയോഗം • ${Math.min(usedOil, Math.max(0, leftoverOil))} kg ബാക്കി`
+              : `${usedOil} kg used • ${Math.min(usedOil, Math.max(0, leftoverOil))} kg leftover`
+          }
+        />
+      }
     >
       <form onSubmit={handleSubmit} className="flex flex-col min-h-full">
         <div className="space-y-4 pb-4">

@@ -168,6 +168,18 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
         </div>
       }
       size="md"
+      overlay={
+        <BatchSuccessAnimation
+          isVisible={showSuccessAnim}
+          onComplete={handleSuccessAnimComplete}
+          message={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തു!' : 'Packets Added Successfully!'}
+          subMessage={
+            language === 'ml'
+              ? `${packetCount} പാക്കറ്റുകൾ (${selectedSize}) രേഖപ്പെടുത്തി`
+              : `${packetCount} packets (${selectedSize}) recorded`
+          }
+        />
+      }
     >
       <div className="space-y-4 pb-24 -mx-1">
         {/* ======================================================== */}
@@ -531,17 +543,6 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           </>
         )}
       </div>
-
-      <BatchSuccessAnimation
-        isVisible={showSuccessAnim}
-        onComplete={handleSuccessAnimComplete}
-        message={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തു!' : 'Packets Added Successfully!'}
-        subMessage={
-          language === 'ml'
-            ? `${packetCount} പാക്കറ്റുകൾ (${selectedSize}) രേഖപ്പെടുത്തി`
-            : `${packetCount} packets (${selectedSize}) recorded`
-        }
-      />
     </Modal>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -20,6 +20,7 @@ import {
   TbTrash,
   TbDroplet,
   TbPackage,
+  TbAlertTriangle,
 } from 'react-icons/tb';
 
 export const ProductionPage: React.FC = () => {
@@ -32,25 +33,44 @@ export const ProductionPage: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [todayOilClosing, setTodayOilClosing] = useState<DailyClosing | null>(null);
+  const [yesterdayOilClosing, setYesterdayOilClosing] = useState<DailyClosing | null>(null);
   const [packingRecords, setPackingRecords] = useState<PackingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
-  const yesterdayStr = useMemo(() => {
+  // Timezone-safe local date calculation
+  const getLocalDateStr = (offsetDays = 0) => {
+    const d = new Date();
+    if (offsetDays !== 0) d.setDate(d.getDate() + offsetDays);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = useMemo(() => getLocalDateStr(0), []);
+  const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
+  const utcTodayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const utcYesterdayStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   }, []);
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState<string>('');
-  type ProductionFilter = 'all' | 'yesterday' | 'completed' | 'cancelled';
-  const [activeFilter, setActiveFilter] = useState<ProductionFilter>('all');
+  const isTodayDate = useCallback((date: string) => {
+    return date === todayStr || (todayStr !== utcTodayStr && date === utcTodayStr);
+  }, [todayStr, utcTodayStr]);
 
-  const todayRunsCount = useMemo(() => runs.filter((r) => r.productionDate === todayStr).length, [runs, todayStr]);
-  const yesterdayRunsCount = useMemo(() => runs.filter((r) => r.productionDate === yesterdayStr).length, [runs, yesterdayStr]);
+  const isYesterdayDate = useCallback((date: string) => {
+    return date === yesterdayStr || (yesterdayStr !== utcYesterdayStr && date === utcYesterdayStr);
+  }, [yesterdayStr, utcYesterdayStr]);
+
+  // Filters - Default to 'today' so home page specifically shows today's batches
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  type ProductionFilter = 'today' | 'yesterday' | 'completed' | 'cancelled' | 'all';
+  const [activeFilter, setActiveFilter] = useState<ProductionFilter>('today');
 
   // Modals
+  const [oilModalDate, setOilModalDate] = useState<string>(todayStr);
   const [runToCancel, setRunToCancel] = useState<ProductionRun | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
@@ -65,21 +85,22 @@ export const ProductionPage: React.FC = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const todayStr = new Date().toISOString().split('T')[0];
-        const [rList, pList, recList, iList, oilClose, packList] = await Promise.all([
-          repo.listProductionRuns({ limit: 40 }),
+        const [rList, pList, recList, iList, oilCloseToday, oilCloseYesterday, packList] = await Promise.all([
+          repo.listProductionRuns({ limit: 60 }),
           repo.listProducts(false),
           repo.listRecipes(),
           repo.listIngredients(false),
           repo.getDailyClosing(todayStr).catch(() => null),
-          repo.listPackingRecords({ limit: 60 }).catch(() => []),
+          repo.getDailyClosing(yesterdayStr).catch(() => null),
+          repo.listPackingRecords({ limit: 100 }).catch(() => []),
         ]);
         if (mounted) {
           setRuns(rList);
           setProducts(pList);
           setRecipes(recList);
           setIngredients(iList);
-          setTodayOilClosing(oilClose);
+          setTodayOilClosing(oilCloseToday);
+          setYesterdayOilClosing(oilCloseYesterday);
           setPackingRecords(packList || []);
         }
       } catch (err: any) {
@@ -94,7 +115,68 @@ export const ProductionPage: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [repo, dataVersion, addToast]);
+  }, [repo, dataVersion, addToast, todayStr, yesterdayStr]);
+
+  // Helper to count packed packets for a batch
+  const getBatchPacketsCount = useCallback((run: ProductionRun) => {
+    const batchPackings = packingRecords.filter(
+      (p) =>
+        p.productionRunId === run.id ||
+        (p.notes && p.notes.includes(run.runNumber)) ||
+        (p.productId === run.productId && p.packingDate === run.productionDate)
+    );
+    return batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
+  }, [packingRecords]);
+
+  // Helper to verify if oil has been logged
+  const hasRecordedOil = useCallback((closing: DailyClosing | null) => {
+    if (!closing) return false;
+    return (
+      Number(closing.oilConsumed || 0) > 0 ||
+      Number(closing.oilClosingBalance || 0) > 0 ||
+      closing.status === 'closed'
+    );
+  }, []);
+
+  // Today runs and warning detection
+  const todayRuns = useMemo(
+    () => runs.filter((r) => isTodayDate(r.productionDate)),
+    [runs, isTodayDate]
+  );
+  const todayRunsCount = todayRuns.length;
+  const todayActiveRuns = useMemo(
+    () => todayRuns.filter((r) => r.status !== 'cancelled'),
+    [todayRuns]
+  );
+  const todayMissingPackets = useMemo(
+    () => todayActiveRuns.filter((r) => getBatchPacketsCount(r) === 0),
+    [todayActiveRuns, getBatchPacketsCount]
+  );
+  const todayMissingOil = useMemo(
+    () => todayActiveRuns.length > 0 && !hasRecordedOil(todayOilClosing),
+    [todayActiveRuns, hasRecordedOil, todayOilClosing]
+  );
+  const todayHasWarning = todayMissingPackets.length > 0 || todayMissingOil;
+
+  // Yesterday runs and warning detection
+  const yesterdayRuns = useMemo(
+    () => runs.filter((r) => isYesterdayDate(r.productionDate)),
+    [runs, isYesterdayDate]
+  );
+  const yesterdayRunsCount = yesterdayRuns.length;
+  const yesterdayActiveRuns = useMemo(
+    () => yesterdayRuns.filter((r) => r.status !== 'cancelled'),
+    [yesterdayRuns]
+  );
+  const yesterdayMissingPackets = useMemo(
+    () => yesterdayActiveRuns.filter((r) => getBatchPacketsCount(r) === 0),
+    [yesterdayActiveRuns, getBatchPacketsCount]
+  );
+  const yesterdayMissingOil = useMemo(
+    () => yesterdayActiveRuns.length > 0 && !hasRecordedOil(yesterdayOilClosing),
+    [yesterdayActiveRuns, hasRecordedOil, yesterdayOilClosing]
+  );
+  const yesterdayHasWarning = yesterdayMissingPackets.length > 0 || yesterdayMissingOil;
 
   const filteredRuns = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -107,22 +189,26 @@ export const ProductionPage: React.FC = () => {
 
       if (!matchSearch) return false;
 
+      if (activeFilter === 'today') {
+        return isTodayDate(r.productionDate);
+      }
+
       if (activeFilter === 'yesterday') {
-        return r.productionDate === yesterdayStr;
+        return isYesterdayDate(r.productionDate);
       }
 
       if (activeFilter === 'completed') {
-        return r.status === 'completed' && r.productionDate !== yesterdayStr;
+        return r.status === 'completed';
       }
 
       if (activeFilter === 'cancelled') {
         return r.status === 'cancelled';
       }
 
-      // 'all' = Show today's and active production, explicitly excluding yesterday's production
-      return r.productionDate !== yesterdayStr;
+      // 'all' = Show all production runs
+      return true;
     });
-  }, [runs, searchTerm, activeFilter, yesterdayStr]);
+  }, [runs, searchTerm, activeFilter, isTodayDate, isYesterdayDate]);
 
   // Batch number in chronological ascending order (Batch 1, 2, 3...)
   const batchNumberMap = useMemo(() => {
@@ -152,14 +238,7 @@ export const ProductionPage: React.FC = () => {
   const sortedRuns = useMemo(() => {
     const isPacketsPending = (run: ProductionRun) => {
       if (run.status === 'cancelled') return false;
-      const batchPackings = packingRecords.filter(
-        (p) =>
-          p.productionRunId === run.id ||
-          (p.notes && p.notes.includes(run.runNumber)) ||
-          (p.productId === run.productId && p.packingDate === run.productionDate)
-      );
-      const total = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
-      return total === 0;
+      return getBatchPacketsCount(run) === 0;
     };
 
     return [...filteredRuns].sort((a, b) => {
@@ -178,7 +257,7 @@ export const ProductionPage: React.FC = () => {
       const timeB = new Date(b.createdAt || b.productionDate).getTime();
       return timeA - timeB;
     });
-  }, [filteredRuns, packingRecords, batchNumberMap]);
+  }, [filteredRuns, getBatchPacketsCount, batchNumberMap]);
 
   const handleCancelRun = async () => {
     if (!runToCancel) return;
@@ -275,7 +354,10 @@ export const ProductionPage: React.FC = () => {
         <div className="flex items-center gap-2">
           {/* Daily Oil consumption & leftover button */}
           <button
-            onClick={() => setIsDailyOilModalOpen(true)}
+            onClick={() => {
+              setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
+              setIsDailyOilModalOpen(true);
+            }}
             className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
             title={language === 'ml' ? 'ദിവസത്തെ ഓയിൽ ഉപഭോഗവും ബാക്കിയും ചേർക്കുക' : 'Record daily oil consumed & leftover'}
           >
@@ -309,30 +391,50 @@ export const ProductionPage: React.FC = () => {
       {/* Production History & Operational Search */}
       <div className="space-y-3 pt-1">
         <div className="flex items-center justify-between gap-3">
-          {/* Quick status tabs including dedicated Yesterday filter */}
+          {/* Quick status tabs including dedicated Yesterday filter with warning */}
           <div className="flex items-center gap-1.5 text-xs bg-stone-100 dark:bg-[#1E1B1B] p-1 rounded-xl border border-charcoal-border/40 dark:border-[#2E2828] overflow-x-auto no-scrollbar">
+            {/* Today Tab */}
             <button
               type="button"
-              onClick={() => setActiveFilter('all')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
-                activeFilter === 'all'
+              onClick={() => setActiveFilter('today')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeFilter === 'today'
                   ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
                   : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
               }`}
             >
-              {language === 'ml' ? `ഇന്ന് (${todayRunsCount})` : `Today (${todayRunsCount})`}
+              <span>{language === 'ml' ? `ഇന്ന് (${todayRunsCount})` : `Today (${todayRunsCount})`}</span>
+              {todayHasWarning && (
+                <span
+                  className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0"
+                  title={language === 'ml' ? 'പാക്കറ്റുകൾ അല്ലെങ്കിൽ ഓയിൽ ബാക്കിയുണ്ട്' : 'Missing packets or oil'}
+                />
+              )}
             </button>
+
+            {/* Yesterday Tab */}
             <button
               type="button"
               onClick={() => setActiveFilter('yesterday')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                 activeFilter === 'yesterday'
                   ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
                   : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
               }`}
             >
-              {language === 'ml' ? `ഇന്നലെ (${yesterdayRunsCount})` : `Yesterday (${yesterdayRunsCount})`}
+              <span>{language === 'ml' ? `ഇന്നലെ (${yesterdayRunsCount})` : `Yesterday (${yesterdayRunsCount})`}</span>
+              {yesterdayHasWarning && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 text-[10px] font-black shrink-0"
+                  title={language === 'ml' ? 'ഇന്നലത്തെ ബാച്ചുകളിൽ പാക്കറ്റുകൾ അല്ലെങ്കിൽ ഓയിൽ ബാക്കിയുണ്ട്' : 'Missing packets or oil'}
+                >
+                  <TbAlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                  <span>!</span>
+                </span>
+              )}
             </button>
+
+            {/* Completed Tab */}
             <button
               type="button"
               onClick={() => setActiveFilter('completed')}
@@ -344,6 +446,8 @@ export const ProductionPage: React.FC = () => {
             >
               {t.runStatusCompleted}
             </button>
+
+            {/* Cancelled Tab */}
             <button
               type="button"
               onClick={() => setActiveFilter('cancelled')}
@@ -355,6 +459,19 @@ export const ProductionPage: React.FC = () => {
             >
               {t.runStatusCancelled}
             </button>
+
+            {/* All Tab */}
+            <button
+              type="button"
+              onClick={() => setActiveFilter('all')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all press-apple cursor-pointer whitespace-nowrap ${
+                activeFilter === 'all'
+                  ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              {language === 'ml' ? `എല്ലാം (${runs.length})` : `All (${runs.length})`}
+            </button>
           </div>
         </div>
 
@@ -365,6 +482,119 @@ export const ProductionPage: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
         />
+
+        {/* Yesterday Actionable Warning Banner */}
+        {activeFilter === 'yesterday' && yesterdayHasWarning && (
+          <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 rounded-2xl p-3.5 sm:p-4 text-xs space-y-2 animate-in fade-in shadow-xs">
+            <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 font-black text-sm">
+                  ⚠️
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-amber-950 dark:text-amber-200 text-xs sm:text-sm">
+                    {language === 'ml' ? 'ശ്രദ്ധിക്കുക: ഇന്നലത്തെ വിവരങ്ങൾ പൂർണ്ണമല്ല' : 'Warning: Incomplete Yesterday Records'}
+                  </h4>
+                  <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 font-medium">
+                    {language === 'ml' ? 'സ്റ്റോക്കും കണക്കുകളും ശരിയാക്കാൻ താഴെ പറയുന്നവ പൂർത്തിയാക്കുക:' : 'Complete the pending records to balance inventory:'}
+                  </p>
+                </div>
+              </div>
+
+              {yesterdayMissingOil && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOilModalDate(yesterdayStr);
+                    setIsDailyOilModalOpen(true);
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                >
+                  <TbDroplet className="w-3.5 h-3.5" />
+                  <span>{language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ ചേർക്കുക' : "Record Yesterday's Oil"}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1 text-amber-900 dark:text-amber-300/90 pl-9 font-medium text-[11px] sm:text-xs">
+              {yesterdayMissingOil && (
+                <p className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>
+                    {language === 'ml'
+                      ? 'ഇന്നലത്തെ ദിവസേന ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല.'
+                      : "Yesterday's daily oil consumption has not been recorded."}
+                  </span>
+                </p>
+              )}
+              {yesterdayMissingPackets.length > 0 && (
+                <p className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>
+                    {language === 'ml'
+                      ? `${yesterdayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല (ചുവടെ ബാച്ചിൽ 'Add Packets' ക്ലിക്ക് ചെയ്യുക).`
+                      : `${yesterdayMissingPackets.length} batch(es) missing packet counts (click 'Add Packets' on each batch card below).`}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Today Actionable Warning Banner */}
+        {activeFilter === 'today' && todayHasWarning && (
+          <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-3 sm:p-3.5 text-xs space-y-2 animate-in fade-in">
+            <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 font-bold text-xs">
+                  ⚠️
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-amber-900 dark:text-amber-200 text-xs">
+                    {language === 'ml' ? 'ഇന്നത്തെ നടപടികൾ പൂർത്തിയാക്കുക' : "Action Needed for Today's Batches"}
+                  </h4>
+                </div>
+              </div>
+
+              {todayMissingOil && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOilModalDate(todayStr);
+                    setIsDailyOilModalOpen(true);
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                >
+                  <TbDroplet className="w-3.5 h-3.5" />
+                  <span>{language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Record Oil'}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-0.5 text-amber-900 dark:text-amber-300/90 pl-8 font-medium text-[11px]">
+              {todayMissingOil && (
+                <p className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>
+                    {language === 'ml'
+                      ? 'ഇന്നത്തെ ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല.'
+                      : "Today's daily oil consumption has not been recorded."}
+                  </span>
+                </p>
+              )}
+              {todayMissingPackets.length > 0 && (
+                <p className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>
+                    {language === 'ml'
+                      ? `${todayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല.`
+                      : `${todayMissingPackets.length} batch(es) pending packet counts.`}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Loading state: skeleton shimmer effect */}
         {loading && (
@@ -380,22 +610,34 @@ export const ProductionPage: React.FC = () => {
               <TbHistory className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-base font-extrabold text-stone-900 dark:text-white">{t.noProductionRecordsYet}</h3>
+              <h3 className="text-base font-extrabold text-stone-900 dark:text-white">
+                {activeFilter === 'yesterday'
+                  ? (language === 'ml' ? 'ഇന്നലെ ബാച്ചുകൾ ഒന്നും ചേർത്തിട്ടില്ല' : 'No batches recorded for yesterday')
+                  : activeFilter === 'today'
+                  ? (language === 'ml' ? 'ഇന്ന് ബാച്ചുകൾ ഒന്നും ആരംഭിച്ചിട്ടില്ല' : 'No batches recorded for today yet')
+                  : t.noProductionRecordsYet}
+              </h3>
               <p className="text-xs text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
-                {language === 'ml'
-                  ? 'പ്രൊഡക്ഷൻ രേഖപ്പെടുത്താൻ മുകളിലുള്ള "പുതിയ പ്രൊഡക്ഷൻ ആരംഭിക്കുക" ബട്ടൺ ഉപയോഗിക്കുക.'
-                  : 'Click the "Start Production" button above to log your first production run.'}
+                {activeFilter === 'yesterday'
+                  ? (language === 'ml'
+                      ? 'ഇന്നലത്തെ തീയതിയിൽ യാതൊരു പ്രൊഡക്ഷൻ റണ്ണും കണ്ടെത്താനായില്ല.'
+                      : 'No production runs were logged for yesterday.')
+                  : (language === 'ml'
+                      ? 'പ്രൊഡക്ഷൻ രേഖപ്പെടുത്താൻ താഴെയുള്ള "പുതിയ ബാച്ച്" ബട്ടൺ ഉപയോഗിക്കുക.'
+                      : 'Click the "Start Production" button below to log your first production run.')}
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleOpenNewBatch}
-              disabled={isOpeningNewBatch}
-              icon={isOpeningNewBatch ? <LoadingSpinner size="sm" /> : <TbPlus className="w-4 h-4" />}
-            >
-              {t.startProduction}
-            </Button>
+            {activeFilter !== 'yesterday' && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleOpenNewBatch}
+                disabled={isOpeningNewBatch}
+                icon={isOpeningNewBatch ? <LoadingSpinner size="sm" /> : <TbPlus className="w-4 h-4" />}
+              >
+                {t.startProduction}
+              </Button>
+            )}
           </div>
         )}
 
@@ -664,6 +906,7 @@ export const ProductionPage: React.FC = () => {
       {/* Daily Oil Modal */}
       <DailyOilModal
         isOpen={isDailyOilModalOpen}
+        initialDate={oilModalDate}
         onClose={() => setIsDailyOilModalOpen(false)}
         onSuccess={() => {
           triggerRefresh();

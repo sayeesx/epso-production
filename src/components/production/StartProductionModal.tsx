@@ -67,14 +67,20 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
   // Form State
   const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [productSearch, setProductSearch] = useState<string>('');
   const [ingredientSearch, setIngredientSearch] = useState<string>('');
   const [isModalExpanded, setIsModalExpanded] = useState<boolean>(false);
   const [plannedQty, setPlannedQty] = useState<number>(10);
   const [actualOutputQty, setActualOutputQty] = useState<number>(10);
-  const [productionDate, setProductionDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
+  const [productionDate, setProductionDate] = useState<string>(getTodayDateStr);
   const [operator, setOperator] = useState<string>(staffName);
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -138,7 +144,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       setItemToDelete(null);
       setPlannedQty(10);
       setActualOutputQty(10);
-      setProductionDate(new Date().toISOString().split('T')[0]);
+      setProductionDate(getTodayDateStr());
       setOperator(staffName);
       setNotes('');
       setConsumptionItems([]);
@@ -455,6 +461,18 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         </div>
       }
       size="lg"
+      overlay={
+        <BatchSuccessAnimation
+          isVisible={showSuccessAnim}
+          onComplete={handleSuccessAnimComplete}
+          message={language === 'ml' ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!' : 'Production Batch Saved!'}
+          subMessage={
+            language === 'ml'
+              ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
+              : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} added to stock`
+          }
+        />
+      }
     >
       <div className="space-y-4">
         {/* ======================================================== */}
@@ -1030,18 +1048,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           </div>
         </div>
       )}
-
-      {/* Lottie-like Themed Success Animation */}
-      <BatchSuccessAnimation
-        isVisible={showSuccessAnim}
-        onComplete={handleSuccessAnimComplete}
-        message={language === 'ml' ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!' : 'Production Batch Saved!'}
-        subMessage={
-          language === 'ml'
-            ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
-            : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} added to stock`
-        }
-      />
     </Modal>
   );
 };

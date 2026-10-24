@@ -41,7 +41,6 @@ export const INITIAL_INGREDIENTS: Omit<Ingredient, 'id' | 'createdAt' | 'updated
   { name: 'അണ്ടി തോട്', category: 'basic', unit: 'kg', currentStock: 100, minStock: 10, avgCostPerUnit: 80, isActive: true },
   { name: 'ചിപ്പ്ളി പൊടി', category: 'basic', unit: 'kg', currentStock: 100, minStock: 10, avgCostPerUnit: 60, isActive: true },
   { name: 'കറിവേപ്പില', category: 'basic', unit: 'kg', currentStock: 50, minStock: 5, avgCostPerUnit: 40, isActive: true },
-  { name: 'കവർ', category: 'basic', unit: 'pcs', currentStock: 1000, minStock: 100, avgCostPerUnit: 1.5, isActive: true },
   { name: 'കൂലി', category: 'basic', unit: 'pcs', currentStock: 500, minStock: 50, avgCostPerUnit: 2, isActive: true },
   { name: 'കൂലി പാക്കിങ്', category: 'basic', unit: 'pcs', currentStock: 500, minStock: 50, avgCostPerUnit: 1.5, isActive: true },
   { name: 'ഉപ്പ്', category: 'basic', unit: 'kg', currentStock: 100, minStock: 10, avgCostPerUnit: 20, isActive: true },
