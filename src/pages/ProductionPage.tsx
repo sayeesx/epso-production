@@ -48,6 +48,29 @@ export const ProductionPage: React.FC = () => {
     return `${year}-${month}-${day}`;
   };
 
+  // Format YYYY-MM-DD or ISO string to DD-MM-YYYY
+  const formatBatchDate = (dStr: string) => {
+    if (!dStr) return '';
+    const clean = dStr.split('T')[0];
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      return `${d}-${m}-${y}`;
+    }
+    return clean;
+  };
+
+  const isKitchenStaffDefault = (name?: string) => {
+    if (!name) return true;
+    const lower = name.toLowerCase().trim();
+    return (
+      lower.includes('kitchen staff') ||
+      lower.includes('production team') ||
+      name.includes('പ്രൊഡക്ഷൻ ടീം') ||
+      lower === 'staff'
+    );
+  };
+
   const todayStr = useMemo(() => getLocalDateStr(0), []);
   const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
   const utcTodayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -650,7 +673,8 @@ export const ProductionPage: React.FC = () => {
                           {run.productName}
                         </h4>
                         <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-1">
-                          {run.productionDate} • {run.operatorName}
+                          {formatBatchDate(run.productionDate)}
+                          {!isKitchenStaffDefault(run.operatorName) ? ` • ${run.operatorName}` : ''}
                         </p>
                       </div>
                     </div>
@@ -855,7 +879,8 @@ export const ProductionPage: React.FC = () => {
                   {runToDelete.productName}
                 </h4>
                 <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-0.5">
-                  {runToDelete.productionDate} • {runToDelete.operatorName}
+                  {formatBatchDate(runToDelete.productionDate)}
+                  {!isKitchenStaffDefault(runToDelete.operatorName) ? ` • ${runToDelete.operatorName}` : ''}
                 </p>
               </div>
               <div className="text-right">

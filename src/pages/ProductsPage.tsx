@@ -10,7 +10,6 @@ import { Product, Recipe, Ingredient } from '../types';
 import {
   TbSearch,
   TbBook,
-  TbLock,
   TbCheck,
 } from 'react-icons/tb';
 
@@ -68,7 +67,7 @@ export const ProductsPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-4xl mx-auto pb-10">
-      {/* Header and Read-Only Admin Indicator */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white tracking-tight flex items-center gap-2">
@@ -82,11 +81,6 @@ export const ProductsPage: React.FC = () => {
               ? 'എപ്സോ ഉൽപ്പന്നങ്ങളുടെ കാറ്റലോഗും നിലവിലെ സ്റ്റോക്കും'
               : 'Epso snack product catalogue & stock inventory'}
           </p>
-        </div>
-
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 text-xs font-semibold">
-          <TbLock className="w-3.5 h-3.5 text-amber-500" />
-          <span>{language === 'ml' ? 'അഡ്മിൻ വഴി മാത്രം മാറ്റാം' : 'Admin Managed Products'}</span>
         </div>
       </div>
 
