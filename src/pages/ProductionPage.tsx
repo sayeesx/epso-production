@@ -740,10 +740,10 @@ export const ProductionPage: React.FC = () => {
                           type="button"
                           onClick={() => setBatchForPacking(run)}
                           className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs"
-                          title={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
+                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                          <span>{language === 'ml' ? 'ചേർക്കുക' : 'Add'}</span>
+                          <span>{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
                         </button>
                       )}
                     </div>
@@ -755,8 +755,8 @@ export const ProductionPage: React.FC = () => {
                           type="button"
                           onClick={() => setBatchForPacking(run)}
                           className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
-                          title={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
-                          aria-label={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
+                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                          aria-label={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                         >
                           <TbPackage className="w-5 h-5 stroke-[2.2]" />
                           {batchPackings.length === 0 && (
@@ -769,19 +769,21 @@ export const ProductionPage: React.FC = () => {
                           )}
                         </button>
 
-                        {/* 2. Delete Batch Icon Box (With Restock vs Wastage Prompt) */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRestockChoice('yes');
-                            setRunToDelete(run);
-                          }}
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
-                          title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
-                          aria-label="Delete Batch"
-                        >
-                          <TbTrash className="w-5 h-5 stroke-[2.2]" />
-                        </button>
+                        {/* 2. Delete Batch Icon Box (With Restock vs Wastage Prompt) - Only shown if NOT completed */}
+                        {!hasPackedPackets && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRestockChoice('yes');
+                              setRunToDelete(run);
+                            }}
+                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                            title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
+                            aria-label="Delete Batch"
+                          >
+                            <TbTrash className="w-5 h-5 stroke-[2.2]" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
