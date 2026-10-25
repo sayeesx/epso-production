@@ -2,6 +2,7 @@ import {
   Ingredient,
   Product,
   Recipe,
+  PacketType,
   ProductionRun,
   StockMovement,
   AuditLog,
@@ -120,6 +121,11 @@ export interface IEpsoRepository {
   }): Promise<DailyClosing>;
   listCostAllocations(dateOrClosingId: string): Promise<DailyCostAllocation[]>;
 
+  // Packet Types Catalog
+  listPacketTypes(): Promise<PacketType[]>;
+  savePacketType(data: Partial<PacketType> & { name: string }): Promise<PacketType>;
+  deletePacketType(id: string): Promise<void>;
+
   // Packaging & Packing
   listPackagingItems(productId?: string): Promise<PackagingItem[]>;
   savePackagingItem(item: Partial<PackagingItem> & { productId: string; sizeLabel: string }): Promise<PackagingItem>;
@@ -127,6 +133,7 @@ export interface IEpsoRepository {
   recordPacking(params: {
     packingDate: string;
     productId: string;
+    productionRunId?: string;
     packagingItemId?: string;
     packetSize: string;
     packetsPacked: number;

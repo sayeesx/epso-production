@@ -630,6 +630,11 @@ export const ProductionPage: React.FC = () => {
               const isCompleted = run.status === 'completed';
               const isDeleted = run.status === 'cancelled';
               const isRestocked = isDeleted && (run.cancellationReason?.toLowerCase().includes('restock') ?? false);
+
+              const batchRecipe = recipes.find((r) => r.id === run.recipeId || r.productId === run.productId);
+              const assignedPackets = batchRecipe?.packets && batchRecipe.packets.length > 0 ? batchRecipe.packets : [];
+              const totalExpectedPackets = assignedPackets.length;
+
               const batchPackings = packingRecords.filter(
                 (p) =>
                   p.productionRunId === run.id ||
@@ -638,6 +643,19 @@ export const ProductionPage: React.FC = () => {
               );
               const totalPacketsPacked = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
               const hasPackedPackets = totalPacketsPacked > 0;
+
+              // Unique packet sizes that have been packed for this batch:
+              const packedSizesSet = new Set(batchPackings.map((p) => p.packetSize));
+              const packedTypesCount = totalExpectedPackets > 0
+                ? assignedPackets.filter((p) => packedSizesSet.has(p.packetName)).length
+                : (hasPackedPackets ? 1 : 0);
+
+              // If not all packets are added, show warning yellow for the add packet button:
+              const isAllPacketsAdded = totalExpectedPackets > 0
+                ? packedTypesCount >= totalExpectedPackets
+                : hasPackedPackets;
+
+              const isWarningYellow = !isAllPacketsAdded;
               const batchOrderNumber = batchNumberMap.get(run.id) ?? 1;
 
               return (
@@ -647,6 +665,8 @@ export const ProductionPage: React.FC = () => {
                   className={`transition-all select-none space-y-3 press-apple ${
                     isDeleted
                       ? 'bg-stone-100/70 dark:bg-[#181515] border-stone-200 dark:border-[#282323] opacity-75'
+                      : isWarningYellow
+                      ? 'hover:border-yellow-400/60 dark:hover:border-yellow-500/60 border-yellow-200/50 dark:border-yellow-900/30'
                       : 'hover:border-epso-red/40 dark:hover:border-epso-red/50'
                   }`}
                 >
@@ -656,9 +676,9 @@ export const ProductionPage: React.FC = () => {
                         className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 tabular-nums shadow-xs ${
                           isDeleted
                             ? 'bg-stone-200/80 dark:bg-[#282323] text-stone-400 dark:text-stone-500 line-through'
-                            : hasPackedPackets
+                            : isAllPacketsAdded
                             ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                            : 'bg-yellow-100 dark:bg-yellow-950/60 text-yellow-800 dark:text-yellow-300 ring-2 ring-yellow-400/40'
                         }`}
                         title={`Batch #${batchOrderNumber}`}
                       >
@@ -754,41 +774,60 @@ export const ProductionPage: React.FC = () => {
                             <span>{language === 'ml' ? 'ഒഴിവാക്കി (Wastage)' : 'Deleted (Wastage)'}</span>
                           </span>
                         )
-                      ) : hasPackedPackets ? (
+                      ) : isAllPacketsAdded ? (
                         <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                           <span>{language === 'ml' ? 'പൂർത്തിയായി' : 'Completed'}</span>
                         </span>
                       ) : (
+                        /* Warning yellow button when not all packets are added */
                         <button
                           type="button"
                           onClick={() => setBatchForPacking(run)}
-                          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs"
+                          className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/60 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600/80 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs"
                           title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                         >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-                          <span>{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
+                          <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" />
+                          <span>
+                            {totalExpectedPackets > 0 && packedTypesCount > 0
+                              ? language === 'ml'
+                                ? `പാക്കറ്റുകൾ ബാക്കി (${packedTypesCount}/${totalExpectedPackets})`
+                                : `Packets Pending (${packedTypesCount}/${totalExpectedPackets})`
+                              : language === 'ml'
+                              ? 'പാക്കറ്റുകൾ ചേർക്കുക'
+                              : 'Add Packets'}
+                          </span>
                         </button>
                       )}
                     </div>
 
                     {!isDeleted && (
                       <div className="flex items-center gap-3 sm:gap-3.5">
-                        {/* 1. Add Packet Icon Box */}
+                        {/* 1. Add Packet Icon Box - Warning Yellow when not all packets added */}
                         <button
                           type="button"
                           onClick={() => setBatchForPacking(run)}
-                          className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs ${
+                            isWarningYellow
+                              ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
+                              : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50'
+                          }`}
                           title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                           aria-label={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                         >
                           <TbPackage className="w-5 h-5 stroke-[2.2]" />
-                          {batchPackings.length === 0 && (
+                          {isWarningYellow && (
                             <span
-                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-epso-red text-white text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
-                              title={language === 'ml' ? 'ചേർത്തിട്ടില്ല' : 'Not added yet'}
+                              className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
+                              title={
+                                totalExpectedPackets > 0
+                                  ? `${packedTypesCount} of ${totalExpectedPackets} packet types added`
+                                  : 'Packets not completed'
+                              }
                             >
-                              !
+                              {totalExpectedPackets > 0 && packedTypesCount > 0
+                                ? `${packedTypesCount}/${totalExpectedPackets}`
+                                : '!'}
                             </span>
                           )}
                         </button>
@@ -1023,6 +1062,7 @@ export const ProductionPage: React.FC = () => {
       <BatchPackingModal
         isOpen={!!batchForPacking}
         batch={batchForPacking}
+        recipes={recipes}
         onClose={() => setBatchForPacking(null)}
         onSuccess={() => {
           triggerRefresh();

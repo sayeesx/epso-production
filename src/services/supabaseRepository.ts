@@ -3,6 +3,8 @@ import {
   Ingredient,
   Product,
   Recipe,
+  PacketType,
+  RecipePacket,
   ProductionRun,
   StockMovement,
   AuditLog,
@@ -433,25 +435,58 @@ export class SupabaseRepository implements IEpsoRepository {
 
     if (error) throw new Error(error.message);
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      productId: row.product_id,
-      productName: row.products?.name || 'Snack Product',
-      version: row.version,
-      baseOutputQuantity: Number(row.base_output_quantity),
-      baseOutputUnit: row.base_output_unit,
-      instructions: row.instructions || undefined,
-      notes: row.notes || undefined,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      ingredients: (row.recipe_items || []).map((item: any) => ({
-        ingredientId: item.ingredient_id,
-        ingredientName: item.ingredients?.name || 'Ingredient',
-        quantity: Number(item.quantity),
-        unit: item.unit,
-      })),
-    }));
+    const { data: packetsData } = await client
+      .from('recipe_packets')
+      .select('*');
+
+    return (data || []).map((row: any) => {
+      let packets: RecipePacket[] = [];
+      if (packetsData && packetsData.length > 0) {
+        packets = packetsData
+          .filter((p: any) => p.recipe_id === row.id)
+          .map((p: any) => ({
+            id: p.id,
+            recipeId: p.recipe_id,
+            packetTypeId: p.packet_type_id,
+            packetName: p.packet_name,
+            costPerPacket: Number(p.cost_per_packet) || 0,
+            bundleCost: Number(p.bundle_cost) || 0,
+            bundleQuantity: Number(p.bundle_quantity) || 1,
+          }));
+      }
+      if (packets.length === 0 && Array.isArray(row.packets) && row.packets.length > 0) {
+        packets = row.packets.map((p: any) => ({
+          id: p.id,
+          recipeId: row.id,
+          packetTypeId: p.packetTypeId,
+          packetName: p.packetName || p.name || 'Packet',
+          costPerPacket: Number(p.costPerPacket) || 0,
+          bundleCost: Number(p.bundleCost) || 0,
+          bundleQuantity: Number(p.bundleQuantity) || 1,
+        }));
+      }
+
+      return {
+        id: row.id,
+        productId: row.product_id,
+        productName: row.products?.name || 'Snack Product',
+        version: row.version,
+        baseOutputQuantity: Number(row.base_output_quantity),
+        baseOutputUnit: row.base_output_unit,
+        instructions: row.instructions || undefined,
+        notes: row.notes || undefined,
+        isActive: row.is_active,
+        packets,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        ingredients: (row.recipe_items || []).map((item: any) => ({
+          ingredientId: item.ingredient_id,
+          ingredientName: item.ingredients?.name || 'Ingredient',
+          quantity: Number(item.quantity),
+          unit: item.unit,
+        })),
+      };
+    });
   }
 
   async getRecipeById(id: string): Promise<Recipe | null> {
@@ -470,6 +505,14 @@ export class SupabaseRepository implements IEpsoRepository {
     const client = this.checkClient();
 
     let recipeId = data.id;
+    const normalizedPackets = (data.packets || []).map((p) => ({
+      packetTypeId: p.packetTypeId,
+      packetName: p.packetName,
+      costPerPacket: Number(p.costPerPacket) || 0,
+      bundleCost: Number(p.bundleCost) || 0,
+      bundleQuantity: Number(p.bundleQuantity) || 1,
+    }));
+
     if (!recipeId) {
       const { data: rec, error } = await client
         .from('recipes')
@@ -480,6 +523,7 @@ export class SupabaseRepository implements IEpsoRepository {
           base_output_unit: data.baseOutputUnit || 'kg',
           instructions: data.instructions || null,
           notes: data.notes || null,
+          packets: normalizedPackets,
         })
         .select()
         .single();
@@ -494,13 +538,15 @@ export class SupabaseRepository implements IEpsoRepository {
           base_output_unit: data.baseOutputUnit,
           instructions: data.instructions,
           notes: data.notes,
+          packets: normalizedPackets,
           version: (data.version || 1) + 1,
           updated_at: new Date().toISOString(),
         })
         .eq('id', recipeId);
 
-      // Clear existing items for replacement
+      // Clear existing items and packets for replacement
       await client.from('recipe_items').delete().eq('recipe_id', recipeId);
+      await client.from('recipe_packets').delete().eq('recipe_id', recipeId);
     }
 
     // Insert recipe items
@@ -513,6 +559,24 @@ export class SupabaseRepository implements IEpsoRepository {
       }));
       const { error: itemErr } = await client.from('recipe_items').insert(items);
       if (itemErr) throw new Error(itemErr.message);
+    }
+
+    // Insert recipe packets
+    if (normalizedPackets.length > 0) {
+      const pktsPayload = normalizedPackets.map((pkt) => ({
+        recipe_id: recipeId,
+        packet_type_id: pkt.packetTypeId || null,
+        packet_name: pkt.packetName,
+        cost_per_packet: pkt.costPerPacket,
+        bundle_cost: pkt.bundleCost || 0,
+        bundle_quantity: pkt.bundleQuantity || 1,
+        created_at: new Date().toISOString(),
+      }));
+
+      const { error: pktsErr } = await client.from('recipe_packets').insert(pktsPayload);
+      if (pktsErr) {
+        console.error('Error saving recipe_packets:', pktsErr);
+      }
     }
 
     const saved = await this.getRecipeById(recipeId!);
@@ -1295,9 +1359,100 @@ export class SupabaseRepository implements IEpsoRepository {
     if (error) throw new Error(error.message);
   }
 
+  async listPacketTypes(): Promise<PacketType[]> {
+    const client = this.checkClient();
+    const { data, error } = await client
+      .from('packet_types')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching packet types:', error);
+      return [];
+    }
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      bundleCost: Number(row.bundle_cost) || 0,
+      bundleQuantity: Number(row.bundle_quantity) || 1,
+      costPerPacket: Number(row.cost_per_packet) || 0,
+      isActive: row.is_active ?? true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  async savePacketType(packet: Partial<PacketType> & { name: string }): Promise<PacketType> {
+    const client = this.checkClient();
+    const bundleCost = Number(packet.bundleCost) || 0;
+    const bundleQuantity = Math.max(1, Number(packet.bundleQuantity) || 1);
+    const costPerPacket = packet.costPerPacket !== undefined && packet.costPerPacket > 0
+      ? Number(packet.costPerPacket)
+      : bundleQuantity > 0 ? Number((bundleCost / bundleQuantity).toFixed(4)) : 0;
+
+    const payload = {
+      name: packet.name.trim(),
+      bundle_cost: bundleCost,
+      bundle_quantity: bundleQuantity,
+      cost_per_packet: costPerPacket,
+      is_active: packet.isActive ?? true,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (packet.id) {
+      const { data, error } = await client
+        .from('packet_types')
+        .update(payload)
+        .eq('id', packet.id)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return {
+        id: data.id,
+        name: data.name,
+        bundleCost: Number(data.bundle_cost) || 0,
+        bundleQuantity: Number(data.bundle_quantity) || 1,
+        costPerPacket: Number(data.cost_per_packet) || 0,
+        isActive: data.is_active,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    } else {
+      const { data, error } = await client
+        .from('packet_types')
+        .insert({
+          ...payload,
+          created_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return {
+        id: data.id,
+        name: data.name,
+        bundleCost: Number(data.bundle_cost) || 0,
+        bundleQuantity: Number(data.bundle_quantity) || 1,
+        costPerPacket: Number(data.cost_per_packet) || 0,
+        isActive: data.is_active,
+        createdAt: data.created_at,
+        updatedAt: data.updated_at,
+      };
+    }
+  }
+
+  async deletePacketType(id: string): Promise<void> {
+    const client = this.checkClient();
+    const { error } = await client.from('packet_types').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  }
+
   async recordPacking(params: {
     packingDate: string;
     productId: string;
+    productionRunId?: string;
     packagingItemId?: string;
     packetSize: string;
     packetsPacked: number;
@@ -1308,6 +1463,7 @@ export class SupabaseRepository implements IEpsoRepository {
     const {
       packingDate,
       productId,
+      productionRunId,
       packagingItemId,
       packetSize,
       packetsPacked,
@@ -1370,6 +1526,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .insert({
         packing_date: packingDate,
         product_id: productId,
+        production_run_id: productionRunId || null,
         packaging_item_id: packagingItemId || null,
         packet_size: packetSize,
         packets_packed: packetsPacked,
@@ -1394,6 +1551,7 @@ export class SupabaseRepository implements IEpsoRepository {
       packingDate: created.packing_date,
       productId: created.product_id,
       productName: created.products?.name || prodName,
+      productionRunId: created.production_run_id,
       packagingItemId: created.packaging_item_id,
       packetSize: created.packet_size,
       packetsPacked: Number(created.packets_packed),
@@ -1425,6 +1583,7 @@ export class SupabaseRepository implements IEpsoRepository {
       packingDate: row.packing_date,
       productId: row.product_id,
       productName: row.products?.name || 'Product',
+      productionRunId: row.production_run_id,
       packagingItemId: row.packaging_item_id,
       packetSize: row.packet_size,
       packetsPacked: Number(row.packets_packed) || 0,

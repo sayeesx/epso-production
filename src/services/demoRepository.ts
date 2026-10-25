@@ -3,6 +3,7 @@ import {
   Ingredient,
   Product,
   Recipe,
+  PacketType,
   ProductionRun,
   StockMovement,
   AuditLog,
@@ -1038,9 +1039,38 @@ export class DemoRepository implements IEpsoRepository {
     // Demo no-op
   }
 
+  async listPacketTypes(): Promise<PacketType[]> {
+    return [
+      { id: 'pkt-1', name: '3kg HM Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+      { id: 'pkt-2', name: '2KG HM Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+      { id: 'pkt-3', name: '10 x 12 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+      { id: 'pkt-4', name: '10 x 14 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+      { id: 'pkt-5', name: '10 x 16 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+      { id: 'pkt-6', name: '8 x 10 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+      { id: 'pkt-7', name: '8 x 12 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
+    ];
+  }
+
+  async savePacketType(data: Partial<PacketType> & { name: string }): Promise<PacketType> {
+    const bundleCost = Number(data.bundleCost) || 0;
+    const bundleQuantity = Math.max(1, Number(data.bundleQuantity) || 1);
+    const costPerPacket = data.costPerPacket ?? (bundleQuantity > 0 ? bundleCost / bundleQuantity : 0);
+    return {
+      id: data.id || `pkt-${Date.now()}`,
+      name: data.name,
+      bundleCost,
+      bundleQuantity,
+      costPerPacket,
+      isActive: data.isActive ?? true,
+    };
+  }
+
+  async deletePacketType(_id: string): Promise<void> {}
+
   async recordPacking(params: {
     packingDate: string;
     productId: string;
+    productionRunId?: string;
     packagingItemId?: string;
     packetSize: string;
     packetsPacked: number;
@@ -1051,6 +1081,7 @@ export class DemoRepository implements IEpsoRepository {
       id: `packing-${Date.now()}`,
       packingDate: params.packingDate,
       productId: params.productId,
+      productionRunId: params.productionRunId,
       packagingItemId: params.packagingItemId,
       packetSize: params.packetSize,
       packetsPacked: params.packetsPacked,
