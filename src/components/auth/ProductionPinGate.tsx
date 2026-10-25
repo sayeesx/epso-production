@@ -123,23 +123,26 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
     setIsVerifying(true);
     setErrorMsg('');
 
-    // Quick verification feel (150ms)
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    // Check latest cached pin
-    const currentValidPin = localStorage.getItem('epso_production_pin') || targetPin;
-
-    if (enteredPin === currentValidPin) {
-      sessionStorage.setItem('epso_production_unlocked', 'true');
-      setIsVerifying(false);
-      onUnlock();
-      return;
+    // 1. Fetch latest authoritative PIN directly from Supabase
+    let authoritativePin = targetPin;
+    try {
+      const livePin = await fetchLatestPin();
+      if (livePin) {
+        authoritativePin = livePin;
+      }
+    } catch {
+      // offline / network fallback
     }
 
-    // If enteredPin didn't match local cached pin, do a quick network check to see if admin just changed it!
-    const livePin = await fetchLatestPin();
-    if (livePin && enteredPin === livePin) {
+    if (!authoritativePin) {
+      authoritativePin = localStorage.getItem('epso_production_pin') || '1234';
+    }
+
+    // 2. Validate strictly against the latest authoritative PIN
+    if (enteredPin === authoritativePin) {
       sessionStorage.setItem('epso_production_unlocked', 'true');
+      sessionStorage.setItem('epso_production_unlocked_pin', authoritativePin);
+      localStorage.setItem('epso_production_pin', authoritativePin);
       setIsVerifying(false);
       onUnlock();
       return;
