@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { CountUp } from './count-up';
-import { Check, X, Minus, Plus } from 'lucide-react';
+import { Check, X, Minus, Plus, ChevronLeft, AlertCircle } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 
 export interface UnitConfig {
   type: 'weight_kg' | 'weight_g' | 'volume_l' | 'volume_ml' | 'count' | 'generic';
@@ -78,9 +79,11 @@ export interface MeasurementRulerSelectorProps {
   step?: number;
   presets?: number[];
   isZeroStock?: boolean;
+  availableStock?: number;
   onConfirm?: () => void;
   onClose?: () => void;
   confirmLabel?: string;
+  backLabel?: string;
   className?: string;
   hideHeader?: boolean;
 }
@@ -97,12 +100,15 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   step,
   presets: customPresets,
   isZeroStock = false,
+  availableStock,
   onConfirm,
   onClose,
   confirmLabel = 'Done / Set Quantity',
+  backLabel = 'Back',
   className = '',
   hideHeader = false,
 }) => {
+  const { language } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const isProgrammaticScrollRef = useRef<boolean>(false);
   const programmaticTimerRef = useRef<any>(null);
@@ -168,8 +174,8 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const target = isZeroStock ? 0 : value > 0 ? value : effectiveMin;
-    if (!isZeroStock && value <= 0) {
+    const target = isZeroStock ? 0 : value !== undefined ? Math.max(effectiveMin, value) : effectiveMin;
+    if (!isZeroStock && value < effectiveMin) {
       onChange(effectiveMin);
     }
     const timer = setTimeout(() => {
@@ -236,7 +242,7 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
       return;
     }
     const num = parseFloat(typedValue);
-    if (!isNaN(num) && num > 0) {
+    if (!isNaN(num) && num >= effectiveMin) {
       const cleanNum = Math.min(effectiveMax, Math.max(effectiveMin, Number(num.toFixed(3))));
       onChange(cleanNum);
       scrollToValue(cleanNum, true);
@@ -287,22 +293,6 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
               {unit}
             </span>
           </div>
-
-          {(onClose || onConfirm) && (
-            <button
-              type="button"
-              onClick={() => {
-                if (isEditing) commitTypedValue();
-                if (onClose) onClose();
-                else if (onConfirm) onConfirm();
-              }}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
-              title="Close"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4 stroke-[2.5]" />
-            </button>
-          )}
         </div>
       </div>
       )}
@@ -538,6 +528,18 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
           : 'റൂളർ നീക്കുകയോ നമ്പറിൽ തൊട്ട് ടൈപ്പ് ചെയ്യുകയോ ചെയ്യാം'}
       </p>
 
+      {/* Alert when selected measurement exceeds available stock */}
+      {availableStock !== undefined && value > availableStock && (
+        <div className="w-full my-1.5 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-200 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in">
+          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <span className="font-malayalam">
+            {language === 'ml'
+              ? `ബാക്കി ${availableStock} ${unit} മാത്രമേ ഉള്ളൂ..`
+              : `Only ${availableStock} ${unit} remaining..`}
+          </span>
+        </div>
+      )}
+
       {/* QUICK PRESET BUTTONS */}
       {presets.length > 0 && (
         <div
@@ -567,25 +569,55 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
         </div>
       )}
 
-      {/* BOTTOM ACTION BUTTON */}
-      {onConfirm && (
-        <button
-          type="button"
-          onClick={() => {
-            if (isEditing) {
-              commitTypedValue();
-            }
-            onConfirm();
-          }}
-          className={`w-full mt-3 py-3.5 px-6 rounded-2xl font-extrabold text-sm sm:text-base transition-all duration-150 active:scale-[0.98] press-apple flex items-center justify-center gap-2 cursor-pointer ${
-            isZeroStock
-              ? 'bg-stone-200 dark:bg-[#2A2525] text-stone-600 dark:text-stone-300 cursor-pointer hover:bg-stone-300 dark:hover:bg-[#322C2C]'
-              : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white'
-          }`}
-        >
-          <Check className="w-5 h-5 stroke-[2.5]" />
-          <span>{isZeroStock ? 'Close / തിരികെ പോകുക' : confirmLabel}</span>
-        </button>
+      {/* BOTTOM ACTION BUTTONS: Back & Done in single line */}
+      {(onConfirm || onClose) && (
+        <div className="flex items-center justify-between w-full mt-3 pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50 gap-3">
+          {onClose && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditing) commitTypedValue();
+                onClose();
+              }}
+              className="inline-flex items-center justify-center font-bold text-sm px-4 py-2.5 gap-1.5 rounded-xl text-charcoal dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#1E1B1B] transition-all duration-150 active:scale-[0.97] cursor-pointer select-none press-apple"
+            >
+              <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+              <span>{backLabel}</span>
+            </button>
+          )}
+
+          {onConfirm && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isEditing) {
+                  commitTypedValue();
+                }
+                onConfirm();
+              }}
+              className={`inline-flex items-center justify-center font-bold text-sm px-6 py-2.5 gap-2 rounded-xl transition-all duration-150 active:scale-[0.97] cursor-pointer select-none press-apple shadow-sm ${
+                !onClose ? 'w-full' : 'flex-1'
+              } ${
+                isZeroStock
+                  ? 'bg-stone-200 dark:bg-[#2A2525] text-stone-600 dark:text-stone-300 cursor-pointer hover:bg-stone-300 dark:hover:bg-[#322C2C]'
+                  : availableStock !== undefined && value > availableStock
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                  : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white'
+              }`}
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>
+                {isZeroStock
+                  ? 'Close / തിരികെ പോകുക'
+                  : availableStock !== undefined && value > availableStock
+                  ? language === 'ml'
+                    ? `ബാക്കി ${availableStock} ${unit} മാത്രമേ ഉള്ളൂ..`
+                    : `Only ${availableStock} ${unit} remaining..`
+                  : confirmLabel}
+              </span>
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

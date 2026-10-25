@@ -483,116 +483,75 @@ export const ProductionPage: React.FC = () => {
           leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
         />
 
-        {/* Yesterday Actionable Warning Banner */}
+        {/* Yesterday Actionable Warning Banner (Single Line) */}
         {activeFilter === 'yesterday' && yesterdayHasWarning && (
-          <div className="bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/60 rounded-2xl p-3.5 sm:p-4 text-xs space-y-2 animate-in fade-in shadow-xs">
-            <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-              <div className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 font-black text-sm">
-                  ⚠️
-                </span>
-                <div>
-                  <h4 className="font-extrabold text-amber-950 dark:text-amber-200 text-xs sm:text-sm">
-                    {language === 'ml' ? 'ശ്രദ്ധിക്കുക: ഇന്നലത്തെ വിവരങ്ങൾ പൂർണ്ണമല്ല' : 'Warning: Incomplete Yesterday Records'}
-                  </h4>
-                  <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 font-medium">
-                    {language === 'ml' ? 'സ്റ്റോക്കും കണക്കുകളും ശരിയാക്കാൻ താഴെ പറയുന്നവ പൂർത്തിയാക്കുക:' : 'Complete the pending records to balance inventory:'}
-                  </p>
-                </div>
-              </div>
-
-              {yesterdayMissingOil && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOilModalDate(yesterdayStr);
-                    setIsDailyOilModalOpen(true);
-                  }}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                >
-                  <TbDroplet className="w-3.5 h-3.5" />
-                  <span>{language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ ചേർക്കുക' : "Record Yesterday's Oil"}</span>
-                </button>
-              )}
+          <div className="bg-amber-50/90 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 animate-in fade-in shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-sm">⚠️</span>
+              <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam">
+                {yesterdayMissingOil && yesterdayMissingPackets.length > 0
+                  ? language === 'ml'
+                    ? `ഇന്നലത്തെ ഓയിലും ${yesterdayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റും ചേർത്തിട്ടില്ല`
+                    : `Yesterday's oil & ${yesterdayMissingPackets.length} batch(es) missing packets`
+                  : yesterdayMissingOil
+                  ? language === 'ml'
+                    ? 'ഇന്നലത്തെ ദിവസേന ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല'
+                    : "Yesterday's daily oil consumption has not been recorded"
+                  : language === 'ml'
+                  ? `${yesterdayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല`
+                  : `${yesterdayMissingPackets.length} batch(es) missing packet counts`}
+              </p>
             </div>
 
-            <div className="space-y-1 text-amber-900 dark:text-amber-300/90 pl-9 font-medium text-[11px] sm:text-xs">
-              {yesterdayMissingOil && (
-                <p className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span>
-                    {language === 'ml'
-                      ? 'ഇന്നലത്തെ ദിവസേന ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല.'
-                      : "Yesterday's daily oil consumption has not been recorded."}
-                  </span>
-                </p>
-              )}
-              {yesterdayMissingPackets.length > 0 && (
-                <p className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span>
-                    {language === 'ml'
-                      ? `${yesterdayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല (ചുവടെ ബാച്ചിൽ 'Add Packets' ക്ലിക്ക് ചെയ്യുക).`
-                      : `${yesterdayMissingPackets.length} batch(es) missing packet counts (click 'Add Packets' on each batch card below).`}
-                  </span>
-                </p>
-              )}
-            </div>
+            {yesterdayMissingOil && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOilModalDate(yesterdayStr);
+                  setIsDailyOilModalOpen(true);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              >
+                <TbDroplet className="w-3.5 h-3.5" />
+                <span>{language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Record Oil'}</span>
+              </button>
+            )}
           </div>
         )}
 
-        {/* Today Actionable Warning Banner */}
+        {/* Today Actionable Warning Banner (Single Line) */}
         {activeFilter === 'today' && todayHasWarning && (
-          <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-3 sm:p-3.5 text-xs space-y-2 animate-in fade-in">
-            <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 font-bold text-xs">
-                  ⚠️
-                </span>
-                <div>
-                  <h4 className="font-extrabold text-amber-900 dark:text-amber-200 text-xs">
-                    {language === 'ml' ? 'ഇന്നത്തെ നടപടികൾ പൂർത്തിയാക്കുക' : "Action Needed for Today's Batches"}
-                  </h4>
-                </div>
-              </div>
-
-              {todayMissingOil && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOilModalDate(todayStr);
-                    setIsDailyOilModalOpen(true);
-                  }}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-                >
-                  <TbDroplet className="w-3.5 h-3.5" />
-                  <span>{language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Record Oil'}</span>
-                </button>
-              )}
+          <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-800/50 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 animate-in fade-in shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-sm">⚠️</span>
+              <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam">
+                {todayMissingOil && todayMissingPackets.length > 0
+                  ? language === 'ml'
+                    ? `ഇന്നത്തെ ഓയിലും ${todayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റും ചേർത്തിട്ടില്ല`
+                    : `Today's oil & ${todayMissingPackets.length} batch(es) missing packets`
+                  : todayMissingOil
+                  ? language === 'ml'
+                    ? 'ഇന്നത്തെ ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല'
+                    : "Today's daily oil consumption has not been recorded"
+                  : language === 'ml'
+                  ? `${todayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല`
+                  : `${todayMissingPackets.length} batch(es) pending packet counts`}
+              </p>
             </div>
 
-            <div className="space-y-0.5 text-amber-900 dark:text-amber-300/90 pl-8 font-medium text-[11px]">
-              {todayMissingOil && (
-                <p className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span>
-                    {language === 'ml'
-                      ? 'ഇന്നത്തെ ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല.'
-                      : "Today's daily oil consumption has not been recorded."}
-                  </span>
-                </p>
-              )}
-              {todayMissingPackets.length > 0 && (
-                <p className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span>
-                    {language === 'ml'
-                      ? `${todayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല.`
-                      : `${todayMissingPackets.length} batch(es) pending packet counts.`}
-                  </span>
-                </p>
-              )}
-            </div>
+            {todayMissingOil && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOilModalDate(todayStr);
+                  setIsDailyOilModalOpen(true);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              >
+                <TbDroplet className="w-3.5 h-3.5" />
+                <span>{language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Record Oil'}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -665,7 +624,7 @@ export const ProductionPage: React.FC = () => {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm shrink-0 tabular-nums ${
+                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 tabular-nums shadow-xs ${
                           isCompleted
                             ? hasPackedPackets
                               ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
@@ -677,26 +636,10 @@ export const ProductionPage: React.FC = () => {
                         {batchOrderNumber}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam">
-                            {run.productName}
-                          </h4>
-                          {run.status === 'cancelled' ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 line-through">
-                              {t.runStatusCancelled}
-                            </span>
-                          ) : hasPackedPackets ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800">
-                              {t.runStatusCompleted}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1 font-malayalam">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                              <span>{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-0.5">
+                        <h4 className="text-sm sm:text-base font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam">
+                          {run.productName}
+                        </h4>
+                        <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-1">
                           #{run.runNumber} • {run.productionDate} • {run.operatorName}
                         </p>
                       </div>
@@ -749,17 +692,28 @@ export const ProductionPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Actions: 3 Square Icon Buttons (Cancel Run, Add Packet, Delete) */}
+                  {/* Actions Bar: Status Badge (Add / Completed / Cancelled) & 3 Square Action Buttons */}
                   <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 gap-2">
-                    <div className="text-[11px] font-semibold text-stone-400 dark:text-stone-500">
+                    <div className="flex items-center">
                       {run.status === 'cancelled' ? (
-                        <span className="text-red-500 dark:text-red-400">
-                          {language === 'ml' ? 'റദ്ദാക്കിയ ബാച്ച്' : 'Cancelled'}
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-stone-100 dark:bg-[#282323] text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-800 line-through">
+                          {language === 'ml' ? 'റദ്ദാക്കി' : 'Cancelled'}
+                        </span>
+                      ) : hasPackedPackets ? (
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span>{language === 'ml' ? 'പൂർത്തിയായി' : 'Completed'}</span>
                         </span>
                       ) : (
-                        <span>
-                          {language === 'ml' ? 'ബാച്ച് നടപടികൾ' : 'Actions'}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setBatchForPacking(run)}
+                          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs"
+                          title={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                          <span>{language === 'ml' ? 'ചേർക്കുക' : 'Add'}</span>
+                        </button>
                       )}
                     </div>
 
@@ -790,14 +744,14 @@ export const ProductionPage: React.FC = () => {
                           type="button"
                           onClick={() => setBatchForPacking(run)}
                           className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
-                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
-                          aria-label="Add Packets"
+                          title={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
+                          aria-label={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
                         >
                           <TbPackage className="w-5 h-5 stroke-[2.2]" />
                           {batchPackings.length === 0 && (
                             <span
                               className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-epso-red text-white text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
-                              title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തിട്ടില്ല' : 'No packets added yet'}
+                              title={language === 'ml' ? 'ചേർത്തിട്ടില്ല' : 'Not added yet'}
                             >
                               !
                             </span>
@@ -838,9 +792,17 @@ export const ProductionPage: React.FC = () => {
         recipes={recipes}
         ingredients={ingredients}
         isLoadingProducts={loading}
-        onSuccess={(savedRun) => {
+        onSuccess={async (savedRun) => {
           if (savedRun) {
             setRuns((prev) => [savedRun, ...prev.filter((r) => r.id !== savedRun.id)]);
+          }
+          try {
+            const freshIngredients = await repo.listIngredients(false);
+            if (freshIngredients && freshIngredients.length > 0) {
+              setIngredients(freshIngredients);
+            }
+          } catch (e) {
+            console.error('Error refreshing live ingredient stock', e);
           }
           triggerRefresh();
         }}

@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import {
   TbDroplet,
   TbCheck,
+  TbAlertCircle,
 } from 'react-icons/tb';
 import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
 
@@ -46,6 +47,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
+  const [oilStock, setOilStock] = useState<number | null>(null);
+  const [oilUnit, setOilUnit] = useState<string>('kg');
 
   // Ruler track ref for used oil
   const usedRulerRef = useRef<HTMLDivElement>(null);
@@ -89,6 +92,19 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
       }).catch(() => {
         if (isMounted) setIsLoadingExisting(false);
       });
+
+      // Fetch live oil ingredient stock
+      repo.listIngredients(false).then((ings) => {
+        if (!isMounted) return;
+        const oil = ings.find((i) =>
+          i.name.toLowerCase().includes('oil') ||
+          i.name.includes('ഓയിൽ')
+        );
+        if (oil) {
+          setOilStock(oil.currentStock);
+          setOilUnit(oil.unit || 'kg');
+        }
+      }).catch(() => {});
 
       return () => {
         isMounted = false;
@@ -246,6 +262,16 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         language === 'ml'
           ? 'ഉപയോഗിച്ച ഓയിലിന്റെ അളവ് നൽകുക'
           : 'Please enter a valid quantity for used oil',
+        'warning'
+      );
+      return;
+    }
+
+    if (oilStock !== null && usedOil > oilStock) {
+      addToast(
+        language === 'ml'
+          ? `ബാക്കി ${oilStock} ${oilUnit} മാത്രമേ ഉള്ളൂ..`
+          : `Only ${oilStock} ${oilUnit} remaining..`,
         'warning'
       );
       return;
@@ -427,6 +453,18 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               <span className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold">
                 {language === 'ml' ? 'ടൈപ്പ് ചെയ്യാം അല്ലെങ്കിൽ +/- ഉപയോഗിക്കാം (Max 250)' : 'Type directly or use +/- steps (Max 250)'}
               </span>
+
+              {/* Alert when selected oil exceeds available stock */}
+              {oilStock !== null && usedOil > oilStock && (
+                <div className="w-full my-1.5 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-amber-800 dark:text-amber-200 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in">
+                  <TbAlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="font-malayalam">
+                    {language === 'ml'
+                      ? `ബാക്കി ${oilStock} ${oilUnit} മാത്രമേ ഉള്ളൂ..`
+                      : `Only ${oilStock} ${oilUnit} remaining..`}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Interactive Horizontal Ruler Track with reduced line opacity */}
@@ -643,9 +681,15 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
             size="md"
             isLoading={isSubmitting}
             icon={<TbCheck className="w-5 h-5 stroke-[2.5]" />}
-            className="font-black px-6 shadow-md"
+            className={`font-black px-6 shadow-md ${
+              oilStock !== null && usedOil > oilStock ? 'bg-amber-600 hover:bg-amber-700' : ''
+            }`}
           >
-            {language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Daily Oil'}
+            {oilStock !== null && usedOil > oilStock
+              ? language === 'ml'
+                ? `ബാക്കി ${oilStock} ${oilUnit} മാത്രമേ ഉള്ളൂ..`
+                : `Only ${oilStock} ${oilUnit} remaining..`
+              : language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Daily Oil'}
           </Button>
         </div>
       </form>

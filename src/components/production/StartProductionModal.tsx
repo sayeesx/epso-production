@@ -16,8 +16,8 @@ import {
   TbCircleCheck,
   TbPlus,
   TbTrash,
-  TbRuler2,
   TbCheck,
+  TbScale,
 } from 'react-icons/tb';
 
 export const isDailySharedBasic = (name: string) => {
@@ -105,6 +105,27 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     unit: string;
   } | null>(null);
 
+  // Local live ingredients state to ensure live quantities are always refreshed
+  const [liveIngredients, setLiveIngredients] = useState<Ingredient[]>(ingredients);
+
+  useEffect(() => {
+    setLiveIngredients(ingredients);
+  }, [ingredients]);
+
+  useEffect(() => {
+    if (isOpen) {
+      let isMounted = true;
+      repo.listIngredients(false).then((fresh) => {
+        if (isMounted && fresh && fresh.length > 0) {
+          setLiveIngredients(fresh);
+        }
+      }).catch(console.error);
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [isOpen, repo]);
+
   // Active measurement tuning state using horizontal smooth ruler
   const [activeRulerItem, setActiveRulerItem] = useState<{
     type: 'ingredient' | 'output';
@@ -113,6 +134,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     unit: string;
     subtitle?: string;
     isZeroStock?: boolean;
+    availableStock?: number;
     value: number;
     min?: number;
     max?: number;
@@ -183,7 +205,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const displayedRecipeIngredients = useMemo(() => {
     if (activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0) {
       return activeRecipe.ingredients.map((ri) => {
-        const found = ingredients.find((ing) => ing.id === ri.ingredientId);
+        const found = liveIngredients.find((ing) => ing.id === ri.ingredientId);
         if (found) {
           return found;
         }
@@ -203,7 +225,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       });
     }
     return [];
-  }, [ingredients, activeRecipe]);
+  }, [liveIngredients, activeRecipe]);
 
   // Check if any recipe ingredient is out of stock (stock <= 0)
   const isAnyIngredientOutOfStock = useMemo(() => {
@@ -317,6 +339,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         unit: ing.unit,
         subtitle: `സ്റ്റോക്ക്: ${ing.currentStock} ${ing.unit}`,
         isZeroStock: false,
+        availableStock: ing.currentStock,
         value: initialQty,
         min: uConfig.min,
         max: 20,
@@ -336,6 +359,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       unit: ing.unit,
       subtitle: `സ്റ്റോക്ക്: ${ing.currentStock} ${ing.unit}`,
       isZeroStock: false,
+      availableStock: ing.currentStock,
       value: currentVal,
       min: uConfig.min,
       max: 20,
@@ -347,7 +371,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const outOfStockIngredients = useMemo(() => {
     return consumptionItems
       .map((item) => {
-        const ing = ingredients.find((i) => i.id === item.ingredientId);
+        const ing = liveIngredients.find((i) => i.id === item.ingredientId);
         const inStock = ing ? ing.currentStock : 0;
         return {
           ...item,
@@ -357,18 +381,18 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         };
       })
       .filter((item) => item.isOutOfStock);
-  }, [consumptionItems, ingredients]);
+  }, [consumptionItems, liveIngredients]);
 
   const hasOutOfStockIngredient = outOfStockIngredients.length > 0;
 
   // Calculate total batch ingredient cost for Step 4 review
   const totalBatchIngredientCost = useMemo(() => {
     return consumptionItems.reduce((sum, item) => {
-      const ing = ingredients.find((i) => i.id === item.ingredientId);
+      const ing = liveIngredients.find((i) => i.id === item.ingredientId);
       const unitCost = ing ? Number(ing.avgCostPerUnit) || 0 : 0;
       return sum + item.actualQuantity * unitCost;
     }, 0);
-  }, [consumptionItems, ingredients]);
+  }, [consumptionItems, liveIngredients]);
 
   const handleFinalSubmit = async () => {
     if (!selectedProduct) return;
@@ -389,10 +413,30 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       return;
     }
 
+    // Check if cook selected measurement above available stock
+    const exceedingItems = consumptionItems.filter((item) => {
+      const ing = liveIngredients.find((i) => i.id === item.ingredientId);
+      const stock = ing ? ing.currentStock : 0;
+      return item.actualQuantity > stock;
+    });
+
+    if (exceedingItems.length > 0) {
+      const firstExceeding = exceedingItems[0];
+      const ing = liveIngredients.find((i) => i.id === firstExceeding.ingredientId);
+      const stock = ing ? ing.currentStock : 0;
+      addToast(
+        language === 'ml'
+          ? `${ing?.name || 'ചേരുവ'}: ബാക്കി ${stock} ${firstExceeding.unit} മാത്രമേ ഉള്ളൂ..`
+          : `${ing?.name || 'Ingredient'}: Only ${stock} ${firstExceeding.unit} remaining..`,
+        'warning'
+      );
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       const itemsWithCost = consumptionItems.map((item) => {
-        const ing = ingredients.find((i) => i.id === item.ingredientId);
+        const ing = liveIngredients.find((i) => i.id === item.ingredientId);
         const unitCost = ing ? Number(ing.avgCostPerUnit) || 0 : 0;
         const totalCost = Math.round((item.actualQuantity * unitCost + Number.EPSILON) * 100) / 100;
         return {
@@ -415,6 +459,16 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         notes: notes.trim() || undefined,
         ingredientsConsumed: itemsWithCost,
       });
+
+      // Immediately fetch fresh ingredients to update stock live without page reload
+      try {
+        const fresh = await repo.listIngredients(false);
+        if (fresh && fresh.length > 0) {
+          setLiveIngredients(fresh);
+        }
+      } catch (e) {
+        console.error('Failed to refresh ingredient stock after run', e);
+      }
 
       setSavedRunData(saved);
       setIsSubmitting(false);
@@ -462,16 +516,26 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       }
       size="lg"
       overlay={
-        <BatchSuccessAnimation
-          isVisible={showSuccessAnim}
-          onComplete={handleSuccessAnimComplete}
-          message={language === 'ml' ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!' : 'Production Batch Saved!'}
-          subMessage={
-            language === 'ml'
-              ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
-              : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} added to stock`
-          }
-        />
+        <>
+          {isSubmitting && (
+            <div className="absolute inset-0 z-50 bg-stone-900/20 dark:bg-black/40 backdrop-blur-xs rounded-t-3xl sm:rounded-2xl flex flex-col items-center justify-center gap-3 animate-in fade-in duration-150">
+              <LoadingSpinner size="lg" color="orange" />
+              <p className="text-xs font-bold text-stone-800 dark:text-stone-200 tracking-tight font-malayalam bg-white/90 dark:bg-[#1E1B1B]/90 px-3 py-1 rounded-full shadow-xs">
+                {language === 'ml' ? 'ബാച്ച് സേവ് ചെയ്യുന്നു...' : 'Saving batch...'}
+              </p>
+            </div>
+          )}
+          <BatchSuccessAnimation
+            isVisible={showSuccessAnim}
+            onComplete={handleSuccessAnimComplete}
+            message={language === 'ml' ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!' : 'Production Batch Saved!'}
+            subMessage={
+              language === 'ml'
+                ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
+                : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} added to stock`
+            }
+          />
+        </>
       }
     >
       <div className="space-y-4">
@@ -743,8 +807,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   title={activeRulerItem.name}
                   subtitle={activeRulerItem.subtitle}
                   isZeroStock={activeRulerItem.isZeroStock}
+                  availableStock={activeRulerItem.availableStock}
                   unit={activeRulerItem.unit}
-                  value={activeRulerItem.value || 1}
+                  value={activeRulerItem.value ?? 0}
                   min={activeRulerItem.min}
                   max={activeRulerItem.max ?? 20}
                   step={activeRulerItem.step}
@@ -755,6 +820,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                     }
                   }}
                   confirmLabel={language === 'ml' ? 'സ്ഥിരീകരിക്കുക' : 'Done / Set Quantity'}
+                  backLabel={language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
                   onConfirm={() => setActiveRulerItem(null)}
                   onClose={() => setActiveRulerItem(null)}
                 />
@@ -842,16 +908,33 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Measured Quantity Pill & Ruler Button */}
+                      {/* Measured Quantity Pill & Scale Button (Bigger with old weighing machine icon) */}
                       {isSelected && consumedItem && !isZeroStock && (
-                        <div
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#141212] border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-black text-xs hover:border-emerald-500 transition-all shrink-0 ml-2"
-                          title={language === 'ml' ? 'അളവ് മാറ്റുക' : 'Tune Quantity'}
-                        >
-                          <span>
-                            {consumedItem.actualQuantity} {consumedItem.unit}
-                          </span>
-                          <TbRuler2 className="w-3.5 h-3.5 opacity-70" />
+                        <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                          <div
+                            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#141212] border-2 transition-all shadow-2xs cursor-pointer active:scale-95 ${
+                              consumedItem.actualQuantity > inStock
+                                ? 'border-amber-500 text-amber-700 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/30'
+                                : 'border-emerald-400 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                            }`}
+                            title={language === 'ml' ? 'അളവ് മാറ്റുക' : 'Tune Quantity'}
+                          >
+                            <span className="font-sans font-extrabold text-sm">
+                              {consumedItem.actualQuantity} {consumedItem.unit}
+                            </span>
+                            <TbScale className={`w-5 h-5 shrink-0 stroke-[2.2] ${
+                              consumedItem.actualQuantity > inStock
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-emerald-600 dark:text-emerald-400'
+                            }`} />
+                          </div>
+                          {consumedItem.actualQuantity > inStock && (
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 px-1.5 py-0.5 rounded-md font-malayalam">
+                              {language === 'ml'
+                                ? `ബാക്കി ${inStock} ${ing.unit} മാത്രമേ ഉള്ളൂ..`
+                                : `Only ${inStock} ${ing.unit} remaining..`}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -919,7 +1002,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-2xl font-black text-epso-red dark:text-amber-400 font-mono">
+                  <span className="text-2xl font-black text-epso-red dark:text-amber-400 font-sans">
                     {actualOutputQty} {selectedProduct.unit}
                   </span>
                   <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">
@@ -947,25 +1030,36 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               {/* Scrollable list within fixed container - does not increase modal length */}
               <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
                 {consumptionItems.map((item) => {
-                  const ing = ingredients.find((i) => i.id === item.ingredientId);
+                  const ing = liveIngredients.find((i) => i.id === item.ingredientId);
                   const inStock = ing ? ing.currentStock : 0;
+                  const isExceeding = item.actualQuantity > inStock;
 
                   return (
                     <div
                       key={item.ingredientId}
-                      className="p-2.5 rounded-xl border border-stone-200/80 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] flex items-center justify-between text-xs"
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
+                        isExceeding
+                          ? 'border-amber-300 dark:border-amber-700/60 bg-amber-50/40 dark:bg-amber-950/20'
+                          : 'border-stone-200/80 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B]'
+                      }`}
                     >
                       <div>
                         <span className="font-bold text-stone-900 dark:text-white font-malayalam block">
                           {ing?.name || 'Ingredient'}
                         </span>
-                        <span className="text-[10px] text-stone-400 font-sans">
-                          സ്റ്റോക്ക്: {inStock} {item.unit}
-                        </span>
+                        {isExceeding && (
+                          <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 font-malayalam block mt-0.5">
+                            {language === 'ml'
+                              ? `ബാക്കി ${inStock} ${item.unit} മാത്രമേ ഉള്ളൂ..`
+                              : `Only ${inStock} ${item.unit} remaining..`}
+                          </span>
+                        )}
                       </div>
 
                       <div className="text-right">
-                        <span className="font-mono font-black text-stone-900 dark:text-white block">
+                        <span className={`font-sans font-black text-sm block ${
+                          isExceeding ? 'text-amber-700 dark:text-amber-300' : 'text-stone-900 dark:text-white'
+                        }`}>
                           {item.actualQuantity} {item.unit}
                         </span>
                       </div>
@@ -1000,12 +1094,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           </div>
         )}
 
-        {/* Loading Spinner Animation during submission */}
-        {isSubmitting && (
-          <div className="absolute inset-0 bg-white/85 dark:bg-[#1E1B1B]/85 backdrop-blur-xs rounded-3xl flex flex-col items-center justify-center z-50 animate-in fade-in">
-            <LoadingSpinner size="lg" />
-          </div>
-        )}
       </div>
 
       {/* Ingredient Removal Confirmation Dialog */}

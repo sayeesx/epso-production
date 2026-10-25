@@ -106,8 +106,8 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     if (!packetCount || packetCount <= 0) {
       addToast(
         language === 'ml'
-          ? 'പാക്കറ്റുകൾ ചേർക്കുക'
-          : 'Add packets',
+          ? 'ചേർക്കുക'
+          : 'Add',
         'warning'
       );
       return;
@@ -128,7 +128,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
       setShowSuccessAnim(true);
     } catch (err: any) {
       console.error('Failed to record batch packaging', err);
-      addToast(err?.message || 'Failed to add packets', 'error');
+      addToast(err?.message || 'Failed to add', 'error');
       setIsSubmitting(false);
     }
   };
@@ -159,7 +159,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           </span>
           <div>
             <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white leading-tight font-malayalam">
-              {language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+              {language === 'ml' ? 'ചേർക്കുക' : 'Add'}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
               #{batch.runNumber} • {batch.productName} ({batch.actualQuantity} {batch.unit})
@@ -534,8 +534,8 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                   <TbCheck className="w-5 h-5 stroke-[3]" />
                   <span>
                     {language === 'ml'
-                      ? 'പാക്കറ്റുകൾ ചേർക്കുക'
-                      : 'Add Packets'}
+                      ? 'ചേർക്കുക'
+                      : 'Add'}
                   </span>
                 </>
               )}
