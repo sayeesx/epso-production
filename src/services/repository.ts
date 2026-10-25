@@ -74,7 +74,16 @@ export interface IEpsoRepository {
     reason: string;
     operatorName: string;
   }): Promise<boolean>;
-  deleteProductionRun(runId: string): Promise<boolean>;
+  deleteProductionRun(
+    params:
+      | {
+          runId: string;
+          restock: boolean;
+          operatorName: string;
+          reason?: string;
+        }
+      | string
+  ): Promise<boolean>;
 
   // Stock Ledger
   getStockMovements(filter?: {

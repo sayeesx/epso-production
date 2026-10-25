@@ -688,28 +688,87 @@ export class SupabaseRepository implements IEpsoRepository {
     return Boolean(data);
   }
 
-  async deleteProductionRun(runId: string): Promise<boolean> {
+  async deleteProductionRun(
+    params:
+      | {
+          runId: string;
+          restock: boolean;
+          operatorName: string;
+          reason?: string;
+        }
+      | string
+  ): Promise<boolean> {
     const client = this.checkClient();
+    const runId = typeof params === 'string' ? params : params.runId;
+    const restock = typeof params === 'string' ? true : params.restock;
+    const operatorName = typeof params === 'string' ? 'Kitchen Staff' : params.operatorName || 'Kitchen Staff';
+    const now = new Date().toISOString();
+
     const { data: run } = await client
       .from('production_runs')
-      .select('id, run_number')
+      .select('id, run_number, product_id, actual_quantity, unit, status')
       .eq('id', runId)
       .maybeSingle();
 
-    if (run?.run_number) {
-      await client.from('stock_movements').delete().ilike('reference', `%${run.run_number}%`);
+    if (!run) return true;
+
+    if (restock) {
+      // 1. If restock: call atomic procedure which adds ingredients back and removes product produced
+      const { error: cancelErr } = await client.rpc('cancel_production_run_atomic', {
+        p_run_id: runId,
+        p_reason: 'restocked',
+        p_operator: operatorName,
+      });
+      if (cancelErr) throw new Error(cancelErr.message);
+      return true;
+    } else {
+      // 2. If wastage: do NOT add ingredients back to stock!
+      // Deduct product produced from inventory as wastage and mark run status cancelled with reason 'wastage'
+      const { error: updateErr } = await client
+        .from('production_runs')
+        .update({
+          status: 'cancelled',
+          cancellation_reason: 'wastage',
+          cancelled_at: now,
+          cancelled_by: operatorName,
+          updated_at: now,
+        })
+        .eq('id', runId);
+
+      if (updateErr) throw new Error(updateErr.message);
+
+      // Deduct product output
+      const { data: prod } = await client
+        .from('products')
+        .select('current_stock, name')
+        .eq('id', run.product_id)
+        .maybeSingle();
+
+      if (prod) {
+        const prev = Number(prod.current_stock) || 0;
+        const newBal = Math.max(0, prev - Number(run.actual_quantity));
+        await client
+          .from('products')
+          .update({ current_stock: newBal, updated_at: now })
+          .eq('id', run.product_id);
+
+        await client.from('stock_movements').insert({
+          item_id: run.product_id,
+          item_type: 'product',
+          item_name: prod.name,
+          movement_type: 'wastage',
+          quantity: -Number(run.actual_quantity),
+          unit: run.unit,
+          previous_balance: prev,
+          new_balance: newBal,
+          reference: `Wastage of batch`,
+          operator_name: operatorName,
+          reason: 'Batch marked as wastage on delete',
+        });
+      }
+
+      return true;
     }
-
-    await client.from('production_consumption').delete().eq('run_id', runId);
-
-    const { data, error } = await client
-      .from('production_runs')
-      .delete()
-      .eq('id', runId)
-      .select('id');
-
-    if (error) throw new Error(error.message);
-    return Boolean(data && data.length > 0);
   }
 
   // ============================================================================

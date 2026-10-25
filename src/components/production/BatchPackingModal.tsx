@@ -137,8 +137,8 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     setShowSuccessAnim(false);
     addToast(
       language === 'ml'
-        ? `ബാച്ച് #${batch.runNumber} ലേക്ക് ${packetCount} പാക്കറ്റ് (${selectedSize}) ചേർത്തു`
-        : `Added ${packetCount} packets of ${selectedSize} for Batch #${batch.runNumber}`,
+        ? `${batch.productName} ലേക്ക് ${packetCount} പാക്കറ്റ് (${selectedSize}) ചേർത്തു`
+        : `Added ${packetCount} packets of ${selectedSize} for ${batch.productName}`,
       'success'
     );
     triggerRefresh();
@@ -162,7 +162,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               {language === 'ml' ? 'ചേർക്കുക' : 'Add'}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
-              #{batch.runNumber} • {batch.productName} ({batch.actualQuantity} {batch.unit})
+              {batch.productName} ({batch.actualQuantity} {batch.unit})
             </p>
           </div>
         </div>
@@ -254,7 +254,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                     {batch.productName}
                   </h4>
                   <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
-                    #{batch.runNumber} • {batch.actualQuantity} {batch.unit} output
+                    {batch.actualQuantity} {batch.unit} output
                   </p>
                 </div>
               </div>
@@ -336,7 +336,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                     <span className="text-epso-red dark:text-amber-400">{selectedSize}</span>
                   </h4>
                   <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
-                    #{batch.runNumber} • {batch.productName}
+                    {batch.productName} • {batch.actualQuantity} {batch.unit}
                   </p>
                 </div>
               </div>

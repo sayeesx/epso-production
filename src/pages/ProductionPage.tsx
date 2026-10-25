@@ -10,17 +10,18 @@ import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { StartProductionModal } from '../components/production/StartProductionModal';
 import { DailyOilModal } from '../components/production/DailyOilModal';
 import { BatchPackingModal } from '../components/production/BatchPackingModal';
-import { ConfirmationDialog } from '../components/ui/ConfirmationDialog';
+import { Modal } from '../components/ui/Modal';
 import { Product, Recipe, Ingredient, ProductionRun, PackingRecord, DailyClosing } from '../types';
 import {
   TbSearch,
   TbPlus,
-  TbRotateClockwise2,
   TbHistory,
   TbTrash,
   TbDroplet,
   TbPackage,
   TbAlertTriangle,
+  TbCheck,
+  TbAlertCircle,
 } from 'react-icons/tb';
 
 export const ProductionPage: React.FC = () => {
@@ -71,10 +72,8 @@ export const ProductionPage: React.FC = () => {
 
   // Modals
   const [oilModalDate, setOilModalDate] = useState<string>(todayStr);
-  const [runToCancel, setRunToCancel] = useState<ProductionRun | null>(null);
-  const [cancelReason, setCancelReason] = useState<string>('');
-  const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [runToDelete, setRunToDelete] = useState<ProductionRun | null>(null);
+  const [restockChoice, setRestockChoice] = useState<'yes' | 'no'>('yes');
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isOpeningNewBatch, setIsOpeningNewBatch] = useState<boolean>(false);
   const [isDailyOilModalOpen, setIsDailyOilModalOpen] = useState<boolean>(false);
@@ -259,54 +258,55 @@ export const ProductionPage: React.FC = () => {
     });
   }, [filteredRuns, getBatchPacketsCount, batchNumberMap]);
 
-  const handleCancelRun = async () => {
-    if (!runToCancel) return;
-    if (!cancelReason.trim()) {
-      addToast(
-        language === 'ml' ? 'റദ്ദാക്കാനുള്ള കാരണം നൽകുക' : 'Please provide a reason for cancellation',
-        'warning'
-      );
-      return;
-    }
-
-    try {
-      setIsCancelling(true);
-      await repo.cancelProductionRun({
-        runId: runToCancel.id,
-        reason: cancelReason.trim(),
-        operatorName: staffName,
-      });
-
-      addToast(
-        language === 'ml'
-          ? 'പ്രൊഡക്ഷൻ ബാച്ച് റദ്ദാക്കുകയും സ്റ്റോക്ക് പുനഃസ്ഥാപിക്കുകയും ചെയ്തു'
-          : 'Production run cancelled and ingredient inventory restored',
-        'success'
-      );
-      setRunToCancel(null);
-      setCancelReason('');
-      triggerRefresh();
-    } catch (err: any) {
-      console.error('Error cancelling run', err);
-      addToast(err?.message || 'Failed to cancel production run', 'error');
-    } finally {
-      setIsCancelling(false);
-    }
-  };
-
-  const handleDeleteRun = async () => {
+  const handleDeleteRun = async (restock: boolean) => {
     if (!runToDelete) return;
     try {
       setIsDeleting(true);
-      await repo.deleteProductionRun(runToDelete.id);
-      setRuns((prev) => prev.filter((r) => r.id !== runToDelete.id));
+      await repo.deleteProductionRun({
+        runId: runToDelete.id,
+        restock,
+        operatorName: staffName,
+        reason: restock ? 'restocked' : 'wastage',
+      });
+
+      // Update local state to show run as deleted/cancelled in grey with restock or wastage
+      setRuns((prev) =>
+        prev.map((r) =>
+          r.id === runToDelete.id
+            ? {
+                ...r,
+                status: 'cancelled' as const,
+                cancellationReason: restock ? 'restocked' : 'wastage',
+                cancelledAt: new Date().toISOString(),
+                cancelledBy: staffName,
+              }
+            : r
+        )
+      );
+
+      // Refresh live ingredients stock immediately
+      try {
+        const freshIngredients = await repo.listIngredients(false);
+        if (freshIngredients && freshIngredients.length > 0) {
+          setIngredients(freshIngredients);
+        }
+      } catch (e) {
+        console.error('Error refreshing live ingredient stock', e);
+      }
+
       addToast(
-        language === 'ml'
-          ? `പ്രൊഡക്ഷൻ ബാച്ച് #${runToDelete.runNumber} പൂർണ്ണമായി നീക്കം ചെയ്തു`
-          : `Production batch #${runToDelete.runNumber} deleted permanently`,
+        restock
+          ? language === 'ml'
+            ? `${runToDelete.productName} ബാച്ച് ഒഴിവാക്കി, ചേരുവകൾ സ്റ്റോക്കിലേക്ക് മാറ്റി`
+            : `Batch deleted & ingredients restocked (${runToDelete.productName})`
+          : language === 'ml'
+            ? `${runToDelete.productName} ബാച്ച് വേസ്റ്റേജ് ആയി ഒഴിവാക്കി`
+            : `Batch deleted as wastage (${runToDelete.productName})`,
         'success'
       );
+
       setRunToDelete(null);
+      setRestockChoice('yes');
       triggerRefresh();
     } catch (err: any) {
       console.error('Error deleting run', err);
@@ -605,6 +605,8 @@ export const ProductionPage: React.FC = () => {
           <div className="space-y-2.5">
             {sortedRuns.map((run) => {
               const isCompleted = run.status === 'completed';
+              const isDeleted = run.status === 'cancelled';
+              const isRestocked = isDeleted && (run.cancellationReason?.toLowerCase().includes('restock') ?? false);
               const batchPackings = packingRecords.filter(
                 (p) =>
                   p.productionRunId === run.id ||
@@ -619,55 +621,76 @@ export const ProductionPage: React.FC = () => {
                 <Card
                   key={run.id}
                   padding="md"
-                  className="hover:border-epso-red/40 dark:hover:border-epso-red/50 transition-all select-none space-y-3 press-apple"
+                  className={`transition-all select-none space-y-3 press-apple ${
+                    isDeleted
+                      ? 'bg-stone-100/70 dark:bg-[#181515] border-stone-200 dark:border-[#282323] opacity-75'
+                      : 'hover:border-epso-red/40 dark:hover:border-epso-red/50'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
                       <div
                         className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 tabular-nums shadow-xs ${
-                          isCompleted
-                            ? hasPackedPackets
-                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                              : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
-                            : 'bg-stone-100 dark:bg-[#282323] text-stone-500 line-through'
+                          isDeleted
+                            ? 'bg-stone-200/80 dark:bg-[#282323] text-stone-400 dark:text-stone-500 line-through'
+                            : hasPackedPackets
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
                         }`}
                         title={`Batch #${batchOrderNumber}`}
                       >
                         {batchOrderNumber}
                       </div>
                       <div>
-                        <h4 className="text-sm sm:text-base font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam">
+                        <h4
+                          className={`text-sm sm:text-base font-extrabold leading-tight font-malayalam ${
+                            isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
+                          }`}
+                        >
                           {run.productName}
                         </h4>
                         <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-1">
-                          #{run.runNumber} • {run.productionDate} • {run.operatorName}
+                          {run.productionDate} • {run.operatorName}
                         </p>
                       </div>
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span className="text-base font-black text-stone-900 dark:text-white">
+                      <span
+                        className={`text-base font-black ${
+                          isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
+                        }`}
+                      >
                         {run.actualQuantity} {run.unit}
                       </span>
                       <p className="text-[10px] font-semibold text-stone-400">output</p>
                     </div>
                   </div>
 
-
-                  {/* Cancellation Reason if cancelled */}
-                  {run.status === 'cancelled' && run.cancellationReason && (
-                    <div className="text-xs text-stone-500 dark:text-stone-400 italic bg-stone-100 dark:bg-[#141212] p-2 rounded-lg border border-charcoal-border/50 dark:border-[#2E2828]">
-                      Cancellation reason: {run.cancellationReason}
+                  {/* Deletion Info if deleted */}
+                  {isDeleted && (
+                    <div className="text-xs text-stone-500 dark:text-stone-400 bg-stone-200/50 dark:bg-[#141212] p-2.5 rounded-lg border border-charcoal-border/50 dark:border-[#2E2828] flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-malayalam">
+                        <TbAlertCircle className={`w-4 h-4 shrink-0 ${isRestocked ? 'text-emerald-500' : 'text-amber-500'}`} />
+                        <span>
+                          {language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി:' : 'Batch Deleted:'}{' '}
+                          <strong className="font-semibold text-stone-700 dark:text-stone-300">
+                            {isRestocked
+                              ? (language === 'ml' ? 'സ്റ്റോക്ക് തിരികെ ചേർത്തു (Restocked)' : 'Ingredients Restocked')
+                              : (language === 'ml' ? 'വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തി (Wastage)' : 'Marked as Wastage')}
+                          </strong>
+                        </span>
+                      </span>
                     </div>
                   )}
 
-                  {/* Notes if recorded */}
-                  {run.notes && (
+                  {/* Notes if recorded and not deleted */}
+                  {!isDeleted && run.notes && (
                     <p className="text-xs text-stone-500 dark:text-stone-400 italic">"{run.notes}"</p>
                   )}
 
                   {/* Packed packets summary for this batch */}
-                  {batchPackings.length > 0 && (
+                  {!isDeleted && batchPackings.length > 0 && (
                     <div className="bg-stone-50 dark:bg-[#141212] rounded-xl p-2.5 text-xs border border-charcoal-border/70 dark:border-[#2E2828] space-y-1.5">
                       <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-stone-300">
                         <span className="flex items-center gap-1.5">
@@ -692,13 +715,21 @@ export const ProductionPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Actions Bar: Status Badge (Add / Completed / Cancelled) & 3 Square Action Buttons */}
+                  {/* Actions Bar: Status Badge (Add / Completed / Restocked / Wastage) & Action Buttons */}
                   <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 gap-2">
                     <div className="flex items-center">
-                      {run.status === 'cancelled' ? (
-                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-stone-100 dark:bg-[#282323] text-stone-500 dark:text-stone-400 border-stone-200 dark:border-stone-800 line-through">
-                          {language === 'ml' ? 'റദ്ദാക്കി' : 'Cancelled'}
-                        </span>
+                      {isDeleted ? (
+                        isRestocked ? (
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            <span>{language === 'ml' ? 'ഒഴിവാക്കി (Restocked)' : 'Deleted (Restocked)'}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                            <span>{language === 'ml' ? 'ഒഴിവാക്കി (Wastage)' : 'Deleted (Wastage)'}</span>
+                          </span>
+                        )
                       ) : hasPackedPackets ? (
                         <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
@@ -717,29 +748,9 @@ export const ProductionPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-3 sm:gap-3.5">
-                      {/* 1. Cancel Run Icon Box */}
-                      {isCompleted ? (
-                        <button
-                          type="button"
-                          onClick={() => setRunToCancel(run)}
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
-                          title={language === 'ml' ? 'ബാച്ച് റദ്ദാക്കുക' : 'Cancel Run'}
-                          aria-label="Cancel Run"
-                        >
-                          <TbRotateClockwise2 className="w-5 h-5 stroke-[2.2]" />
-                        </button>
-                      ) : (
-                        <div
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
-                          title={language === 'ml' ? 'ഇതിനകം റദ്ദാക്കി' : 'Already Cancelled'}
-                        >
-                          <TbRotateClockwise2 className="w-5 h-5" />
-                        </div>
-                      )}
-
-                      {/* 2. Add Packet Icon Box */}
-                      {isCompleted ? (
+                    {!isDeleted && (
+                      <div className="flex items-center gap-3 sm:gap-3.5">
+                        {/* 1. Add Packet Icon Box */}
                         <button
                           type="button"
                           onClick={() => setBatchForPacking(run)}
@@ -757,25 +768,22 @@ export const ProductionPage: React.FC = () => {
                             </span>
                           )}
                         </button>
-                      ) : (
-                        <div
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-700 border border-stone-200 dark:border-[#282323] flex items-center justify-center cursor-not-allowed opacity-40"
-                        >
-                          <TbPackage className="w-5 h-5" />
-                        </div>
-                      )}
 
-                      {/* 3. Delete Batch Icon Box */}
-                      <button
-                        type="button"
-                        onClick={() => setRunToDelete(run)}
-                        className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
-                        title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
-                        aria-label="Delete Batch"
-                      >
-                        <TbTrash className="w-5 h-5 stroke-[2.2]" />
-                      </button>
-                    </div>
+                        {/* 2. Delete Batch Icon Box (With Restock vs Wastage Prompt) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRestockChoice('yes');
+                            setRunToDelete(run);
+                          }}
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
+                          aria-label="Delete Batch"
+                        >
+                          <TbTrash className="w-5 h-5 stroke-[2.2]" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </Card>
               );
@@ -808,63 +816,172 @@ export const ProductionPage: React.FC = () => {
         }}
       />
 
-      {/* Cancel Run Dialog */}
-      <ConfirmationDialog
-        isOpen={!!runToCancel}
-        onClose={() => {
-          setRunToCancel(null);
-          setCancelReason('');
-        }}
-        onConfirm={handleCancelRun}
-        title={language === 'ml' ? 'പ്രൊഡക്ഷൻ റദ്ദാക്കുക' : 'Cancel Production Run'}
-        confirmLabel={t.cancelRun}
-        variant="danger"
-        isLoading={isCancelling}
-        message={
-          <div className="space-y-3">
-            <p className="text-xs text-stone-600 dark:text-stone-300">
-              {t.cancelRunConfirm}
-            </p>
-            {runToCancel && (
-              <div className="p-2.5 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl text-xs font-semibold text-stone-800 dark:text-stone-200">
-                Run #{runToCancel.runNumber} • {runToCancel.productName} ({runToCancel.actualQuantity} {runToCancel.unit})
-              </div>
-            )}
-            <Input
-              label={t.cancellationReason}
-              placeholder={language === 'ml' ? 'ഉദാ: അളവ് തെറ്റായി രേഖപ്പെടുത്തി...' : 'e.g., Wrong quantity entered, batch spoiled...'}
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              autoFocus
-            />
-          </div>
-        }
-      />
-
-      {/* Delete Run Dialog */}
-      <ConfirmationDialog
+      {/* Delete Batch Modal with Restock vs Wastage Option */}
+      <Modal
         isOpen={!!runToDelete}
-        onClose={() => setRunToDelete(null)}
-        onConfirm={handleDeleteRun}
-        title={language === 'ml' ? 'പ്രൊഡക്ഷൻ ബാച്ച് പൂർണ്ണമായി ഒഴിവാക്കണോ?' : 'Delete Production Run Permanently?'}
-        confirmLabel={language === 'ml' ? 'പൂർണ്ണമായി ഒഴിവാക്കുക' : 'Delete Permanently'}
-        variant="danger"
-        isLoading={isDeleting}
-        message={
-          <div className="space-y-3">
-            <p className="text-xs text-stone-600 dark:text-stone-300 font-malayalam">
-              {language === 'ml'
-                ? 'ഈ പ്രൊഡക്ഷൻ ബാച്ച് ഡാറ്റാബേസിൽ നിന്നും റെക്കോർഡുകളിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കപ്പെടും. ഈ പ്രവർത്തനം പഴയപടിയാക്കാൻ കഴിയില്ല.'
-                : 'This production run and its consumption records will be completely removed from the database. This action cannot be undone.'}
-            </p>
-            {runToDelete && (
-              <div className="p-2.5 bg-red-50 dark:bg-red-950/40 rounded-xl text-xs font-bold text-red-900 dark:text-red-300 border border-red-200 dark:border-red-900">
-                Run #{runToDelete.runNumber} • {runToDelete.productName} ({runToDelete.actualQuantity} {runToDelete.unit})
-              </div>
-            )}
+        onClose={() => {
+          if (!isDeleting) {
+            setRunToDelete(null);
+            setRestockChoice('yes');
+          }
+        }}
+        title={
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 rounded-xl bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400">
+              <TbTrash className="w-5 h-5 stroke-[2.2]" />
+            </span>
+            <div>
+              <h3 className="text-base font-extrabold text-stone-900 dark:text-white leading-tight font-malayalam">
+                {language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Production Batch'}
+              </h3>
+              {runToDelete && (
+                <p className="text-xs text-stone-500 dark:text-stone-400 font-medium font-malayalam">
+                  {runToDelete.productName} ({runToDelete.actualQuantity} {runToDelete.unit})
+                </p>
+              )}
+            </div>
           </div>
         }
-      />
+        size="md"
+      >
+        {runToDelete && (
+          <div className="space-y-4 py-1">
+            {/* Batch Info Card - NO #PRD- NUMBER */}
+            <div className="p-3 bg-stone-100/80 dark:bg-[#252020] rounded-xl flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
+                  {runToDelete.productName}
+                </h4>
+                <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-0.5">
+                  {runToDelete.productionDate} • {runToDelete.operatorName}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-base font-black text-stone-900 dark:text-white font-sans">
+                  {runToDelete.actualQuantity} {runToDelete.unit}
+                </span>
+                <p className="text-[10px] font-bold text-stone-400">output</p>
+              </div>
+            </div>
+
+            {/* Restock Question */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-stone-900 dark:text-white font-malayalam uppercase tracking-wider block">
+                {language === 'ml'
+                  ? 'ചേരുവകൾ (Ingredients) വീണ്ടും സ്റ്റോക്കിലേക്ക് ചേർക്കണോ?'
+                  : 'Do you wish to restock the ingredients?'}
+              </label>
+
+              {/* Option 1: Yes, Restock Ingredients */}
+              <div
+                onClick={() => setRestockChoice('yes')}
+                className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 select-none ${
+                  restockChoice === 'yes'
+                    ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30'
+                    : 'border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:border-emerald-400/50'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                    restockChoice === 'yes'
+                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                      : 'border-stone-300 dark:border-stone-600 bg-transparent'
+                  }`}
+                >
+                  {restockChoice === 'yes' && <TbCheck className="w-3.5 h-3.5 stroke-[3]" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-extrabold text-stone-900 dark:text-white font-malayalam block">
+                    {language === 'ml' ? 'അതെ, ചേരുവകൾ സ്റ്റോക്കിലേക്ക് ചേർക്കുക' : 'Yes, Restock Ingredients'}
+                  </span>
+                  <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam block mt-0.5">
+                    {language === 'ml'
+                      ? 'ചേരുവകൾ തിരികെ സ്റ്റോക്കിലേക്ക് ചേർക്കും, എന്നാൽ നിർമ്മിച്ച ഉൽപ്പന്നം സ്റ്റോക്കിൽ നിന്നും കുറയ്ക്കും.'
+                      : 'Ingredient stock will be restored, and produced product will be deducted.'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Option 2: No, Mark as Wastage */}
+              <div
+                onClick={() => setRestockChoice('no')}
+                className={`p-3 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 select-none ${
+                  restockChoice === 'no'
+                    ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-950/30'
+                    : 'border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:border-amber-400/50'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                    restockChoice === 'no'
+                      ? 'border-amber-500 bg-amber-500 text-white'
+                      : 'border-stone-300 dark:border-stone-600 bg-transparent'
+                  }`}
+                >
+                  {restockChoice === 'no' && <TbCheck className="w-3.5 h-3.5 stroke-[3]" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-extrabold text-stone-900 dark:text-white font-malayalam block">
+                    {language === 'ml' ? 'അല്ല, വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തുക' : 'No, Mark as Wastage'}
+                  </span>
+                  <span className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam block mt-0.5">
+                    {language === 'ml'
+                      ? 'ചേരുവകൾ വേസ്റ്റേജ് ആയി പോകും, സ്റ്റോക്കിലേക്ക് ചേർക്കില്ല.'
+                      : 'Items will go to wastage, not added back to stock.'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Prominent Warning Banner if 'No' (Wastage) is selected */}
+            {restockChoice === 'no' && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/60 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5 animate-in fade-in duration-150">
+                <TbAlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-black block font-malayalam">
+                    {language === 'ml' ? 'മുന്നറിയിപ്പ്: സാധനങ്ങൾ വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തും!' : 'Warning: Items will go to wastage!'}
+                  </span>
+                  <span className="font-semibold text-[11px] opacity-90 font-malayalam block mt-0.5">
+                    {language === 'ml'
+                      ? 'ഉപയോഗിച്ച ചേരുവകളോ നിർമ്മിച്ച ഉൽപ്പന്നമോ സ്റ്റോക്കിലേക്ക് തിരികെ ലഭിക്കില്ല.'
+                      : 'Neither ingredients nor produced product will be added back to stock.'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setRunToDelete(null);
+                  setRestockChoice('yes');
+                }}
+                disabled={isDeleting}
+                className="font-bold px-4"
+              >
+                {language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}
+              </Button>
+
+              <Button
+                variant={restockChoice === 'yes' ? 'primary' : 'danger'}
+                onClick={() => handleDeleteRun(restockChoice === 'yes')}
+                isLoading={isDeleting}
+                className="font-bold px-6 shadow-sm"
+              >
+                {restockChoice === 'yes'
+                  ? language === 'ml'
+                    ? 'റീസ്റ്റോക്ക് ചെയ്ത് ഒഴിവാക്കുക'
+                    : 'Delete & Restock'
+                  : language === 'ml'
+                  ? 'വേസ്റ്റേജായി ഒഴിവാക്കുക'
+                  : 'Delete as Wastage'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
       {/* Daily Oil Modal */}
       <DailyOilModal
         isOpen={isDailyOilModalOpen}

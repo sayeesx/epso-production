@@ -643,26 +643,79 @@ export class DemoRepository implements IEpsoRepository {
     return true;
   }
 
-  async deleteProductionRun(runId: string): Promise<boolean> {
+  async deleteProductionRun(
+    params:
+      | {
+          runId: string;
+          restock: boolean;
+          operatorName: string;
+          reason?: string;
+        }
+      | string
+  ): Promise<boolean> {
+    const runId = typeof params === 'string' ? params : params.runId;
+    const restock = typeof params === 'string' ? true : params.restock;
+    const operatorName = typeof params === 'string' ? 'Kitchen Staff' : params.operatorName || 'Kitchen Staff';
+
     const runs = this.getItem<ProductionRun[]>(STORAGE_KEYS.RUNS, []);
-    const run = runs.find((r) => r.id === runId);
-    if (!run) return true;
+    const idx = runs.findIndex((r) => r.id === runId);
+    if (idx === -1) return true;
 
-    // Filter out run from storage
-    const updatedRuns = runs.filter((r) => r.id !== runId);
-    this.setItem(STORAGE_KEYS.RUNS, updatedRuns);
+    const run = runs[idx];
+    const now = new Date().toISOString();
 
-    // Clean up associated movements if any
-    const movements = this.getItem<StockMovement[]>(STORAGE_KEYS.MOVEMENTS, []);
-    const updatedMovements = movements.filter((m) => !m.reference.includes(run.runNumber));
-    this.setItem(STORAGE_KEYS.MOVEMENTS, updatedMovements);
+    if (restock) {
+      // Revert ingredient consumption (add back to stock) and deduct product output
+      return this.cancelProductionRun({
+        runId,
+        reason: 'restocked',
+        operatorName,
+      });
+    } else {
+      // Wastage: Do NOT restore ingredients! Only deduct product output as wastage
+      const product = await this.getProductById(run.productId);
+      const movements = this.getItem<StockMovement[]>(STORAGE_KEYS.MOVEMENTS, []);
 
-    this.recordAudit('System', 'DELETE_PRODUCTION_RUN', 'PRODUCTION', runId, {
-      runNumber: run.runNumber,
-      product: run.productName,
-    });
+      if (product) {
+        const prev = product.currentStock;
+        product.currentStock = Math.max(0, product.currentStock - run.actualQuantity);
+        product.updatedAt = now;
 
-    return true;
+        movements.unshift({
+          id: `mov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          itemId: product.id,
+          itemType: 'product',
+          itemName: product.name,
+          movementType: 'wastage',
+          quantity: -run.actualQuantity,
+          unit: run.unit,
+          previousBalance: prev,
+          newBalance: product.currentStock,
+          reference: `Wastage of batch`,
+          operatorName,
+          reason: 'Batch marked as wastage on delete',
+          createdAt: now,
+        });
+
+        await this.updateProduct(product.id, { currentStock: product.currentStock });
+        this.setItem(STORAGE_KEYS.MOVEMENTS, movements);
+      }
+
+      run.status = 'cancelled';
+      run.cancellationReason = 'wastage';
+      run.cancelledAt = now;
+      run.cancelledBy = operatorName;
+      run.updatedAt = now;
+      runs[idx] = run;
+      this.setItem(STORAGE_KEYS.RUNS, runs);
+
+      this.recordAudit(operatorName, 'DELETE_BATCH_WASTAGE', 'PRODUCTION', run.id, {
+        product: run.productName,
+        quantity: run.actualQuantity,
+      });
+
+      return true;
+    }
   }
 
   // ============================================================================
