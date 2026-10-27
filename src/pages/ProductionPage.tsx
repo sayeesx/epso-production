@@ -29,7 +29,7 @@ import {
   TbChevronRight,
 } from 'react-icons/tb';
 
-// 3D Rotating Warning Message Cube (transforms across X-axis every 2.8s in a loop)
+// Smooth Rolling Warning Message (transitions vertically every 2.8s without horizontal projection distortion)
 const Rotating3DWarning: React.FC<{ items: string[] }> = ({ items }) => {
   const [index, setIndex] = useState<number>(0);
   const [animating, setAnimating] = useState<boolean>(false);
@@ -41,7 +41,7 @@ const Rotating3DWarning: React.FC<{ items: string[] }> = ({ items }) => {
       setTimeout(() => {
         setIndex((prev) => (prev + 1) % items.length);
         setAnimating(false);
-      }, 700);
+      }, 500);
     }, 2800);
     return () => clearInterval(interval);
   }, [items.length]);
@@ -52,35 +52,20 @@ const Rotating3DWarning: React.FC<{ items: string[] }> = ({ items }) => {
   const nextItem = items[(index + 1) % items.length];
 
   return (
-    <div className="relative h-6 w-full overflow-hidden [perspective:400px] select-none">
+    <div className="relative h-6 w-full overflow-hidden select-none">
       <div
         className="relative w-full h-full"
         style={{
-          transformStyle: 'preserve-3d',
-          transition: animating ? 'transform 700ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
-          transform: animating ? 'rotateX(90deg)' : 'rotateX(0deg)',
+          transition: animating ? 'transform 500ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+          transform: animating ? 'translateY(-100%)' : 'translateY(0%)',
         }}
       >
-        <div
-          className="absolute inset-0 flex items-center"
-          style={{
-            backfaceVisibility: 'hidden',
-            WebkitBackfaceVisibility: 'hidden',
-            transform: 'translateZ(12px)',
-          }}
-        >
+        <div className="h-6 flex items-center pl-1">
           <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam leading-tight">
             {currentItem}
           </p>
         </div>
-        <div
-          className="absolute inset-0 flex items-center"
-          style={{
-            backfaceVisibility: 'hidden',
-            WebkitBackfaceVisibility: 'hidden',
-            transform: 'rotateX(-90deg) translateZ(12px)',
-          }}
-        >
+        <div className="h-6 flex items-center pl-1">
           <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam leading-tight">
             {nextItem}
           </p>
@@ -732,9 +717,11 @@ export const ProductionPage: React.FC = () => {
             className="w-full text-left bg-amber-50/90 hover:bg-amber-100/90 dark:bg-amber-950/50 dark:hover:bg-amber-950/70 border border-amber-300 dark:border-amber-800/60 hover:border-amber-400 dark:hover:border-amber-700 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] shadow-2xs cursor-pointer group select-none"
             title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക' : 'Add Basic Ingredients'}
           >
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-sm">⚠️</span>
-              <Rotating3DWarning items={missingBasicItems} />
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <span className="shrink-0 text-sm select-none inline-flex items-center justify-center">⚠️</span>
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <Rotating3DWarning items={missingBasicItems} />
+              </div>
             </div>
 
             <div className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold text-xs shrink-0 pl-1">
