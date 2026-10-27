@@ -164,7 +164,8 @@ export function allocateDailySharedExpenses(
     ingredientCost: number;
   }>,
   dailyOilExpense: number,
-  dailyProductionWages: number
+  dailyProductionWages: number,
+  dailyBasicIngredientsExpense: number = 0
 ): Array<{
   productId: string;
   productName: string;
@@ -173,6 +174,7 @@ export function allocateDailySharedExpenses(
   ingredientCost: number;
   allocatedOilCost: number;
   allocatedProductionWages: number;
+  allocatedBasicIngredientsCost: number;
   totalProductionCost: number;
   productionCostPerKg: number;
 }> {
@@ -182,6 +184,7 @@ export function allocateDailySharedExpenses(
       ...p,
       allocatedOilCost: 0,
       allocatedProductionWages: 0,
+      allocatedBasicIngredientsCost: 0,
       totalProductionCost: p.ingredientCost,
       productionCostPerKg: 0,
     }));
@@ -189,25 +192,30 @@ export function allocateDailySharedExpenses(
 
   let runningOil = 0;
   let runningWages = 0;
+  let runningBasic = 0;
   const count = productsSummary.length;
 
   return productsSummary.map((p, idx) => {
     const isLast = idx === count - 1;
     let oilAlloc: number;
     let wagesAlloc: number;
+    let basicAlloc: number;
 
     if (isLast) {
       oilAlloc = roundCurrency(dailyOilExpense - runningOil);
       wagesAlloc = roundCurrency(dailyProductionWages - runningWages);
+      basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
     } else {
       const ratio = p.totalProductionKg / totalKg;
       oilAlloc = roundCurrency(ratio * dailyOilExpense);
       wagesAlloc = roundCurrency(ratio * dailyProductionWages);
+      basicAlloc = roundCurrency(ratio * dailyBasicIngredientsExpense);
       runningOil += oilAlloc;
       runningWages += wagesAlloc;
+      runningBasic += basicAlloc;
     }
 
-    const totalProdCost = roundCurrency(p.ingredientCost + oilAlloc + wagesAlloc);
+    const totalProdCost = roundCurrency(p.ingredientCost + oilAlloc + wagesAlloc + basicAlloc);
     const costPerKg = p.totalProductionKg > 0 ? roundCurrency(totalProdCost / p.totalProductionKg) : 0;
 
     return {
@@ -218,6 +226,7 @@ export function allocateDailySharedExpenses(
       ingredientCost: p.ingredientCost,
       allocatedOilCost: oilAlloc,
       allocatedProductionWages: wagesAlloc,
+      allocatedBasicIngredientsCost: basicAlloc,
       totalProductionCost: totalProdCost,
       productionCostPerKg: costPerKg,
     };

@@ -363,25 +363,6 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           </div>
         </div>
 
-        {/* Warning Banner if not all packets are added */}
-        {hasIncompletePackets && (
-          <div className="p-3 rounded-2xl bg-yellow-50 dark:bg-yellow-950/40 border border-yellow-300 dark:border-yellow-700/60 text-xs text-yellow-900 dark:text-yellow-200 flex items-center gap-2.5 font-malayalam shadow-2xs">
-            <TbAlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400 shrink-0" />
-            <div className="flex-1">
-              <span className="font-bold block">
-                {language === 'ml'
-                  ? 'മുന്നറിയിപ്പ്: എല്ലാ പാക്കറ്റുകളും ചേർത്തിട്ടില്ല!'
-                  : 'Warning: Not all packets are added!'}
-              </span>
-              <span className="text-[11px] opacity-85 block mt-0.5">
-                {language === 'ml'
-                  ? `${totalAssignedCount} പാക്കറ്റുകളിൽ ${addedPacketsCount} എണ്ണം മാത്രം നൽകി. അളവ് നൽകാൻ പാക്കറ്റുകളിൽ ടാപ്പ് ചെയ്യുക.`
-                  : `${addedPacketsCount} of ${totalAssignedCount} packet types added. Tap packet buttons to measure.`}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Available Packets Multi-Select Grid */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-3">
           <div className="flex items-center justify-between">

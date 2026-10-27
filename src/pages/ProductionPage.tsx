@@ -10,7 +10,6 @@ import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { StartProductionModal } from '../components/production/StartProductionModal';
 import { DailyOilModal } from '../components/production/DailyOilModal';
 import { BatchPackingModal } from '../components/production/BatchPackingModal';
-import { EditBatchModal } from '../components/production/EditBatchModal';
 import { BasicIngredientsSelectorModal } from '../components/production/BasicIngredientsSelectorModal';
 import { BasicIngredientMeasurementModal } from '../components/production/BasicIngredientMeasurementModal';
 import { Modal } from '../components/ui/Modal';
@@ -28,6 +27,67 @@ import {
   TbPencil,
   TbToolsKitchen2,
 } from 'react-icons/tb';
+
+// 3D Rotating Warning Message Cube (transforms across X-axis every 2.8s in a loop)
+const Rotating3DWarning: React.FC<{ items: string[] }> = ({ items }) => {
+  const [index, setIndex] = useState<number>(0);
+  const [animating, setAnimating] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const interval = setInterval(() => {
+      setAnimating(true);
+      setTimeout(() => {
+        setIndex((prev) => (prev + 1) % items.length);
+        setAnimating(false);
+      }, 700);
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [items.length]);
+
+  if (items.length === 0) return null;
+
+  const currentItem = items[index % items.length];
+  const nextItem = items[(index + 1) % items.length];
+
+  return (
+    <div className="relative h-6 w-full overflow-hidden [perspective:400px] select-none">
+      <div
+        className="relative w-full h-full"
+        style={{
+          transformStyle: 'preserve-3d',
+          transition: animating ? 'transform 700ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+          transform: animating ? 'rotateX(90deg)' : 'rotateX(0deg)',
+        }}
+      >
+        <div
+          className="absolute inset-0 flex items-center"
+          style={{
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            transform: 'translateZ(12px)',
+          }}
+        >
+          <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam leading-tight">
+            {currentItem}
+          </p>
+        </div>
+        <div
+          className="absolute inset-0 flex items-center"
+          style={{
+            backfaceVisibility: 'hidden',
+            WebkitBackfaceVisibility: 'hidden',
+            transform: 'rotateX(-90deg) translateZ(12px)',
+          }}
+        >
+          <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam leading-tight">
+            {nextItem}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const ProductionPage: React.FC = () => {
   const { repo, dataVersion, triggerRefresh, addToast, staffName, isStartProductionOpen, setIsStartProductionOpen } = useApp();
@@ -110,12 +170,51 @@ export const ProductionPage: React.FC = () => {
   const [isDailyOilModalOpen, setIsDailyOilModalOpen] = useState<boolean>(false);
   const [batchForPacking, setBatchForPacking] = useState<ProductionRun | null>(null);
 
+  // Basic ingredients tracking state (Salt, Cashew shell, Chippli, Curry leaves)
+  const [recordedBasics, setRecordedBasics] = useState<Record<string, string[]>>(() => {
+    try {
+      const todaySaved = JSON.parse(localStorage.getItem(`epso_basic_${todayStr}`) || '[]');
+      const yestSaved = JSON.parse(localStorage.getItem(`epso_basic_${yesterdayStr}`) || '[]');
+      return { [todayStr]: todaySaved, [yesterdayStr]: yestSaved };
+    } catch {
+      return {};
+    }
+  });
+
+  const markBasicAsRecorded = useCallback((date: string, ingredientOrKey: Ingredient | string) => {
+    let key = '';
+    if (typeof ingredientOrKey === 'string') {
+      key = ingredientOrKey;
+    } else {
+      const name = ingredientOrKey.name.toLowerCase();
+      if (name.includes('ഓയിൽ') || name.includes('oil')) key = 'oil';
+      else if (name.includes('ഉപ്പ്') || (name.includes('salt') && !name.includes('black'))) key = 'salt';
+      else if (name.includes('അണ്ടി തോട്') || name.includes('തോട്') || name.includes('shell') || name.includes('cashew')) key = 'cashew_shell';
+      else if (name.includes('ചിപ്പ്ളി') || name.includes('chippli')) key = 'chippli';
+      else if (name.includes('കറിവേപ്പില') || name.includes('curry')) key = 'curry_leaves';
+    }
+
+    if (key) {
+      setRecordedBasics((prev) => {
+        const cur = prev[date] || [];
+        if (!cur.includes(key)) {
+          const updated = [...cur, key];
+          try {
+            localStorage.setItem(`epso_basic_${date}`, JSON.stringify(updated));
+          } catch {}
+          return { ...prev, [date]: updated };
+        }
+        return prev;
+      });
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         setLoading(true);
-        const [rList, pList, recList, iList, oilCloseToday, oilCloseYesterday, packList] = await Promise.all([
+        const [rList, pList, recList, iList, oilCloseToday, oilCloseYesterday, packList, movements] = await Promise.all([
           repo.listProductionRuns({ limit: 60 }),
           repo.listProducts(false),
           repo.listRecipes(),
@@ -123,6 +222,7 @@ export const ProductionPage: React.FC = () => {
           repo.getDailyClosing(todayStr).catch(() => null),
           repo.getDailyClosing(yesterdayStr).catch(() => null),
           repo.listPackingRecords({ limit: 100 }).catch(() => []),
+          repo.getStockMovements({ limit: 100 }).catch(() => []),
         ]);
         if (mounted) {
           setRuns(rList);
@@ -132,6 +232,38 @@ export const ProductionPage: React.FC = () => {
           setTodayOilClosing(oilCloseToday);
           setYesterdayOilClosing(oilCloseYesterday);
           setPackingRecords(packList || []);
+
+          if (movements && movements.length > 0) {
+            const detectedToday: string[] = [];
+            const detectedYesterday: string[] = [];
+
+            for (const m of movements) {
+              const mDate = m.createdAt ? m.createdAt.split('T')[0] : '';
+              const r = (m.reason || '').toLowerCase();
+              const n = (m.itemName || '').toLowerCase();
+
+              let key = '';
+              if (n.includes('ഉപ്പ്') || (n.includes('salt') && !n.includes('black'))) key = 'salt';
+              else if (n.includes('അണ്ടി തോട്') || n.includes('തോട്') || n.includes('shell') || n.includes('cashew')) key = 'cashew_shell';
+              else if (n.includes('ചിപ്പ്ളി') || n.includes('chippli')) key = 'chippli';
+              else if (n.includes('കറിവേപ്പില') || n.includes('curry')) key = 'curry_leaves';
+
+              if (key) {
+                if (mDate === todayStr || r.includes(todayStr)) {
+                  if (!detectedToday.includes(key)) detectedToday.push(key);
+                }
+                if (mDate === yesterdayStr || r.includes(yesterdayStr)) {
+                  if (!detectedYesterday.includes(key)) detectedYesterday.push(key);
+                }
+              }
+            }
+
+            setRecordedBasics((prev) => {
+              const mergedToday = Array.from(new Set([...(prev[todayStr] || []), ...detectedToday]));
+              const mergedYesterday = Array.from(new Set([...(prev[yesterdayStr] || []), ...detectedYesterday]));
+              return { ...prev, [todayStr]: mergedToday, [yesterdayStr]: mergedYesterday };
+            });
+          }
         }
       } catch (err: any) {
         console.error('Error loading production data', err);
@@ -157,7 +289,6 @@ export const ProductionPage: React.FC = () => {
     );
     return batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
   }, [packingRecords]);
-
 
   // Helper to verify if oil has been logged
   const hasRecordedOil = useCallback((closing: DailyClosing | null) => {
@@ -187,7 +318,6 @@ export const ProductionPage: React.FC = () => {
     () => todayActiveRuns.length > 0 && !hasRecordedOil(todayOilClosing),
     [todayActiveRuns, hasRecordedOil, todayOilClosing]
   );
-  const todayHasWarning = todayMissingPackets.length > 0 || todayMissingOil;
 
   // Yesterday runs and warning detection
   const yesterdayRuns = useMemo(
@@ -207,7 +337,73 @@ export const ProductionPage: React.FC = () => {
     () => yesterdayActiveRuns.length > 0 && !hasRecordedOil(yesterdayOilClosing),
     [yesterdayActiveRuns, hasRecordedOil, yesterdayOilClosing]
   );
-  const yesterdayHasWarning = yesterdayMissingPackets.length > 0 || yesterdayMissingOil;
+
+  // Missing basic ingredients for the active filter date
+  const isYesterday = activeFilter === 'yesterday';
+  const activeDate = isYesterday ? yesterdayStr : todayStr;
+  const activeClosing = isYesterday ? yesterdayOilClosing : todayOilClosing;
+  const recordedKeysForActiveDate = recordedBasics[activeDate] || [];
+
+  const missingBasicItems = useMemo(() => {
+    const activeDateRuns = runs.filter((r) =>
+      isYesterday ? isYesterdayDate(r.productionDate) : isTodayDate(r.productionDate)
+    ).filter((r) => r.status !== 'cancelled');
+
+    if (activeDateRuns.length === 0) return [];
+
+    const list: string[] = [];
+    const isOilRecorded = hasRecordedOil(activeClosing) || recordedKeysForActiveDate.includes('oil');
+
+    if (!isOilRecorded) {
+      list.push(
+        language === 'ml'
+          ? (isYesterday ? 'ഇന്നലത്തെ ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല' : 'ഇന്നത്തെ ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല')
+          : (isYesterday ? "Yesterday's oil has not been recorded" : "Today's oil has not been recorded")
+      );
+    }
+    if (!recordedKeysForActiveDate.includes('salt')) {
+      list.push(
+        language === 'ml'
+          ? (isYesterday ? 'ഇന്നലത്തെ ഉപ്പ് രേഖപ്പെടുത്തിയിട്ടില്ല' : 'ഇന്നത്തെ ഉപ്പ് രേഖപ്പെടുത്തിയിട്ടില്ല')
+          : (isYesterday ? "Yesterday's salt has not been recorded" : "Today's salt has not been recorded")
+      );
+    }
+    if (!recordedKeysForActiveDate.includes('cashew_shell')) {
+      list.push(
+        language === 'ml'
+          ? (isYesterday ? 'ഇന്നലത്തെ അണ്ടി തോട് രേഖപ്പെടുത്തിയിട്ടില്ല' : 'ഇന്നത്തെ അണ്ടി തോട് രേഖപ്പെടുത്തിയിട്ടില്ല')
+          : (isYesterday ? "Yesterday's cashew shell has not been recorded" : "Today's cashew shell has not been recorded")
+      );
+    }
+    if (!recordedKeysForActiveDate.includes('chippli')) {
+      list.push(
+        language === 'ml'
+          ? (isYesterday ? 'ഇന്നലത്തെ ചിപ്പ്ളി പൊടി രേഖപ്പെടുത്തിയിട്ടില്ല' : 'ഇന്നത്തെ ചിപ്പ്ളി പൊടി രേഖപ്പെടുത്തിയിട്ടില്ല')
+          : (isYesterday ? "Yesterday's chippli powder has not been recorded" : "Today's chippli powder has not been recorded")
+      );
+    }
+    if (!recordedKeysForActiveDate.includes('curry_leaves')) {
+      list.push(
+        language === 'ml'
+          ? (isYesterday ? 'ഇന്നലത്തെ കറിവേപ്പില രേഖപ്പെടുത്തിയിട്ടില്ല' : 'ഇന്നത്തെ കറിവേപ്പില രേഖപ്പെടുത്തിയിട്ടില്ല')
+          : (isYesterday ? "Yesterday's curry leaves have not been recorded" : "Today's curry leaves have not been recorded")
+      );
+    }
+
+    const missingPacketsCount = (isYesterday ? yesterdayMissingPackets : todayMissingPackets).length;
+    if (missingPacketsCount > 0) {
+      list.push(
+        language === 'ml'
+          ? `${missingPacketsCount} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല`
+          : `${missingPacketsCount} batch(es) pending packet counts`
+      );
+    }
+
+    return list;
+  }, [runs, activeClosing, isYesterday, isYesterdayDate, isTodayDate, recordedKeysForActiveDate, language, hasRecordedOil, yesterdayMissingPackets, todayMissingPackets]);
+
+  const todayHasWarning = todayMissingPackets.length > 0 || (activeFilter === 'today' ? missingBasicItems.length > 0 : todayMissingOil);
+  const yesterdayHasWarning = yesterdayMissingPackets.length > 0 || (activeFilter === 'yesterday' ? missingBasicItems.length > 0 : yesterdayMissingOil);
 
   const filteredRuns = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -379,6 +575,22 @@ export const ProductionPage: React.FC = () => {
     }
   };
 
+  const handleEditBatch = async (run: ProductionRun) => {
+    try {
+      const [freshRecipes, freshProducts, freshIngredients] = await Promise.all([
+        repo.listRecipes(),
+        repo.listProducts(false),
+        repo.listIngredients(false),
+      ]);
+      if (freshRecipes && freshRecipes.length > 0) setRecipes(freshRecipes);
+      if (freshProducts && freshProducts.length > 0) setProducts(freshProducts);
+      if (freshIngredients && freshIngredients.length > 0) setIngredients(freshIngredients);
+    } catch (err) {
+      console.error('Failed to pre-fetch recipes before editing batch', err);
+    }
+    setRunToEdit(run);
+  };
+
   return (
     <div className="space-y-4 max-w-4xl mx-auto">
       {/* Sleek header bar with prominent Epso logo */}
@@ -523,75 +735,25 @@ export const ProductionPage: React.FC = () => {
           leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
         />
 
-        {/* Yesterday Actionable Warning Banner (Single Line) */}
-        {activeFilter === 'yesterday' && yesterdayHasWarning && (
+        {/* Actionable 3D Rotating Warning Banner for Basic Ingredients & Missing Packets */}
+        {(activeFilter === 'today' || activeFilter === 'yesterday') && missingBasicItems.length > 0 && (
           <div className="bg-amber-50/90 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 animate-in fade-in shadow-2xs">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-sm">⚠️</span>
-              <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam">
-                {yesterdayMissingOil && yesterdayMissingPackets.length > 0
-                  ? language === 'ml'
-                    ? `ഇന്നലത്തെ ഓയിലും ${yesterdayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റും ചേർത്തിട്ടില്ല`
-                    : `Yesterday's oil & ${yesterdayMissingPackets.length} batch(es) missing packets`
-                  : yesterdayMissingOil
-                  ? language === 'ml'
-                    ? 'ഇന്നലത്തെ ദിവസേന ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല'
-                    : "Yesterday's daily oil consumption has not been recorded"
-                  : language === 'ml'
-                  ? `${yesterdayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല`
-                  : `${yesterdayMissingPackets.length} batch(es) missing packet counts`}
-              </p>
+              <Rotating3DWarning items={missingBasicItems} />
             </div>
 
-            {yesterdayMissingOil && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOilModalDate(yesterdayStr);
-                  setIsDailyOilModalOpen(true);
-                }}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-              >
-                <TbDroplet className="w-3.5 h-3.5" />
-                <span>{language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Record Oil'}</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Today Actionable Warning Banner (Single Line) */}
-        {activeFilter === 'today' && todayHasWarning && (
-          <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-800/50 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 animate-in fade-in shadow-2xs">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-sm">⚠️</span>
-              <p className="font-extrabold text-amber-950 dark:text-amber-200 text-[11px] sm:text-xs truncate font-malayalam">
-                {todayMissingOil && todayMissingPackets.length > 0
-                  ? language === 'ml'
-                    ? `ഇന്നത്തെ ഓയിലും ${todayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റും ചേർത്തിട്ടില്ല`
-                    : `Today's oil & ${todayMissingPackets.length} batch(es) missing packets`
-                  : todayMissingOil
-                  ? language === 'ml'
-                    ? 'ഇന്നത്തെ ഓയിൽ ഉപയോഗം രേഖപ്പെടുത്തിയിട്ടില്ല'
-                    : "Today's daily oil consumption has not been recorded"
-                  : language === 'ml'
-                  ? `${todayMissingPackets.length} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല`
-                  : `${todayMissingPackets.length} batch(es) pending packet counts`}
-              </p>
-            </div>
-
-            {todayMissingOil && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOilModalDate(todayStr);
-                  setIsDailyOilModalOpen(true);
-                }}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-              >
-                <TbDroplet className="w-3.5 h-3.5" />
-                <span>{language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Record Oil'}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
+                setIsBasicSelectorOpen(true);
+              }}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+            >
+              <TbToolsKitchen2 className="w-3.5 h-3.5" />
+              <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
+            </button>
           </div>
         )}
 
@@ -865,10 +1027,10 @@ export const ProductionPage: React.FC = () => {
                           )}
                         </button>
 
-                        {/* 2. Edit Batch Icon Box - just like delete option */}
+                        {/* 2. Edit Batch Icon Box - opens multi-step wizard from step 2 to 4 */}
                         <button
                           type="button"
-                          onClick={() => setRunToEdit(run)}
+                          onClick={() => handleEditBatch(run)}
                           className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
                           title={language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch'}
                           aria-label="Edit Batch"
@@ -903,16 +1065,28 @@ export const ProductionPage: React.FC = () => {
 
       {/* Production Wizard Modal */}
       <StartProductionModal
-        isOpen={isStartProductionOpen}
-        onClose={() => setIsStartProductionOpen(false)}
+        isOpen={isStartProductionOpen || Boolean(runToEdit)}
+        onClose={() => {
+          setIsStartProductionOpen(false);
+          setRunToEdit(null);
+        }}
+        runToEdit={runToEdit}
         products={products}
         recipes={recipes}
         ingredients={ingredients}
         isLoadingProducts={loading}
         onSuccess={async (savedRun) => {
           if (savedRun) {
-            setRuns((prev) => [savedRun, ...prev.filter((r) => r.id !== savedRun.id)]);
+            setRuns((prev) => {
+              const exists = prev.some((r) => r.id === savedRun.id);
+              if (exists) {
+                return prev.map((r) => (r.id === savedRun.id ? savedRun : r));
+              }
+              return [savedRun, ...prev];
+            });
           }
+          setIsStartProductionOpen(false);
+          setRunToEdit(null);
           try {
             const freshIngredients = await repo.listIngredients(false);
             if (freshIngredients && freshIngredients.length > 0) {
@@ -1098,6 +1272,7 @@ export const ProductionPage: React.FC = () => {
         initialDate={oilModalDate}
         onClose={() => setIsDailyOilModalOpen(false)}
         onSuccess={() => {
+          markBasicAsRecorded(oilModalDate, 'oil');
           triggerRefresh();
         }}
       />
@@ -1109,27 +1284,6 @@ export const ProductionPage: React.FC = () => {
         recipes={recipes}
         onClose={() => setBatchForPacking(null)}
         onSuccess={() => {
-          triggerRefresh();
-        }}
-      />
-
-      {/* Edit Batch Modal */}
-      <EditBatchModal
-        isOpen={Boolean(runToEdit)}
-        onClose={() => setRunToEdit(null)}
-        run={runToEdit}
-        onSuccess={async (updatedRun) => {
-          setRuns((prev) =>
-            prev.map((r) => (r.id === updatedRun.id ? updatedRun : r))
-          );
-          try {
-            const freshIngredients = await repo.listIngredients(false);
-            if (freshIngredients && freshIngredients.length > 0) {
-              setIngredients(freshIngredients);
-            }
-          } catch (e) {
-            console.error('Error refreshing ingredients after batch edit', e);
-          }
           triggerRefresh();
         }}
       />
@@ -1154,6 +1308,9 @@ export const ProductionPage: React.FC = () => {
         ingredient={measuringBasicIngredient}
         targetDate={oilModalDate}
         onSuccess={async () => {
+          if (measuringBasicIngredient) {
+            markBasicAsRecorded(oilModalDate, measuringBasicIngredient);
+          }
           try {
             const freshIngredients = await repo.listIngredients(false);
             if (freshIngredients && freshIngredients.length > 0) {

@@ -60,11 +60,11 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const leftoverTrackRef = useRef<HTMLDivElement>(null);
   const isDraggingLeftover = useRef<boolean>(false);
 
-  // Ruler constants for used oil (0 to max allowed oil, 0.5kg/L steps)
+  // Ruler constants for used oil (0 to max allowed oil, 0.1kg/L steps)
   const USED_MIN = 0;
   const USED_MAX = 250;
-  const USED_STEP = 0.5;
-  const TICK_WIDTH = 10; // px per step
+  const USED_STEP = 0.1;
+  const TICK_WIDTH = 32; // px per 0.1 step to fit 0, 0.1, 0.2 ... cleanly
 
   const maxAllowedOil = oilStock !== null ? Math.max(0, oilStock) : USED_MAX;
 
@@ -472,25 +472,17 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                 </button>
               </div>
 
-              {/* Show only L remaining without a box, and show warning if reached limit */}
+              {/* Oil remaining always active */}
               {oilStock !== null && (
-                <div className="flex flex-col items-center justify-center gap-0.5 text-center my-0.5 select-none">
-                  <span className="text-xs font-bold text-stone-600 dark:text-stone-400 font-malayalam">
-                    {language === 'ml'
-                      ? `ബാക്കി ${oilStock} ${oilUnit || 'L'} മാത്രം`
-                      : `Only ${oilStock} ${oilUnit || 'L'} remaining`}
+                <div className="flex flex-col items-center justify-center text-center my-0.5 select-none">
+                  <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam">
+                    {oilStock} {oilUnit || 'L'} {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
                   </span>
-                  {usedOil >= maxAllowedOil && (
-                    <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam animate-pulse">
-                      {oilStock} {oilUnit || 'L'} {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
-                    </span>
-                  )}
                 </div>
               )}
             </div>
 
-
-            {/* Interactive Horizontal Ruler Track with reduced line opacity */}
+            {/* Interactive Horizontal Ruler Track with 0, 0.1, 0.2 ... labels */}
             <div className="relative w-full py-2 overflow-hidden flex flex-col items-center select-none bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border/50 dark:border-[#2E2828]">
               {/* Center Orange Marker Needle */}
               <div className="absolute top-0 bottom-4 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full bg-epso-orange">
@@ -501,16 +493,15 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               <div
                 ref={usedRulerRef}
                 onScroll={handleUsedRulerScroll}
-                className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-14 relative select-none"
+                className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-16 relative select-none"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 <div className="shrink-0 w-1/2" />
-                <div className="flex items-end shrink-0" style={{ gap: `${TICK_WIDTH - 2}px` }}>
+                <div className="flex items-end shrink-0">
                   {Array.from({ length: totalUsedTicks + 1 }).map((_, idx) => {
                     const val = Number((USED_MIN + idx * USED_STEP).toFixed(1));
                     const isWhole = Math.abs(Math.round(val) - val) < 0.001;
                     const isMajor = isWhole && (Math.round(val) % 5 === 0);
-                    const isMedium = isWhole;
 
                     return (
                       <div
@@ -524,16 +515,19 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                             setLeftoverInputStr(String(val));
                           }
                         }}
-                        className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-10 pb-1"
-                        style={{ width: '2px' }}
+                        className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-16 pb-1 select-none"
+                        style={{ width: `${TICK_WIDTH}px` }}
                       >
+                        <span className="text-[9px] font-bold text-stone-500 dark:text-stone-400 font-mono mb-1 pointer-events-none select-none">
+                          {val === 0 ? '0' : val.toFixed(1)}
+                        </span>
                         <div
                           className={`rounded-full transition-colors ${
                             isMajor
-                              ? 'h-8 bg-stone-500/40 dark:bg-stone-400/35 w-[2px]'
-                              : isMedium
-                              ? 'h-5 bg-stone-400/30 dark:bg-stone-500/25 w-[1.5px]'
-                              : 'h-3 bg-stone-300/25 dark:bg-stone-600/20 w-[1px]'
+                              ? 'h-6 bg-amber-600 dark:bg-amber-400 w-[2px]'
+                              : isWhole
+                              ? 'h-5 bg-stone-600/70 dark:bg-stone-300/70 w-[2px]'
+                              : 'h-3.5 bg-stone-400/40 dark:bg-stone-500/30 w-[1.5px]'
                           }`}
                         />
                       </div>

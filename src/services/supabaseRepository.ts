@@ -1299,7 +1299,32 @@ export class SupabaseRepository implements IEpsoRepository {
       productMap[pId].ingredientCost += ingCost;
     }
 
-    const allocations = allocateDailySharedExpenses(Object.values(productMap), oilTotalExpense, productionWages);
+    // Query basic ingredients adjustments recorded on this date (e.g. Salt, Cashew shell, Chippli, Curry leaves)
+    let dailyBasicIngredientsExpense = 0;
+    try {
+      const { data: basicMovements } = await client
+        .from('stock_movements')
+        .select('quantity, cost_per_unit, item_name, reason')
+        .eq('item_type', 'ingredient')
+        .ilike('reason', `%${productionDate}%`);
+
+      if (basicMovements && basicMovements.length > 0) {
+        for (const m of basicMovements) {
+          const cost = Number(m.cost_per_unit) || 0;
+          const qty = Math.abs(Number(m.quantity) || 0);
+          dailyBasicIngredientsExpense += qty * cost;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not query basic ingredients expense for allocation', e);
+    }
+
+    const allocations = allocateDailySharedExpenses(
+      Object.values(productMap),
+      oilTotalExpense,
+      productionWages,
+      dailyBasicIngredientsExpense
+    );
 
     await client.from('daily_cost_allocations').delete().eq('closing_id', closingId);
 

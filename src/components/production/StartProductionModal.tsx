@@ -5,7 +5,7 @@ import { Input } from '../ui/Input';
 import { MeasurementRulerSelector, getUnitConfig } from '../ui/MeasurementRulerSelector';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
-import { Product, Recipe, Ingredient } from '../../types';
+import { Product, Recipe, Ingredient, ProductionRun } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
@@ -18,6 +18,7 @@ import {
   TbTrash,
   TbCheck,
   TbScale,
+  TbPencil,
 } from 'react-icons/tb';
 
 export const isDailySharedBasic = (name: string) => {
@@ -42,6 +43,7 @@ interface StartProductionModalProps {
   ingredients: Ingredient[];
   isLoadingProducts?: boolean;
   onSuccess: (savedRun?: any) => void;
+  runToEdit?: ProductionRun | null;
 }
 
 type WizardStep = 1 | 2 | 3 | 4;
@@ -54,6 +56,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   ingredients,
   isLoadingProducts = false,
   onSuccess,
+  runToEdit = null,
 }) => {
   const { repo, staffName, addToast } = useApp();
   const { t, language } = useLanguage();
@@ -154,22 +157,64 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     [recipes, selectedProductId]
   );
 
-  // Reset form when modal opens
+  // Reset / initialize form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setStep(1);
-      setSelectedProductId('');
-      setProductSearch('');
-      setIngredientSearch('');
-      setIsModalExpanded(false);
-      setActiveRulerItem(null);
-      setItemToDelete(null);
-      setPlannedQty(10);
-      setActualOutputQty(10);
-      setProductionDate(getTodayDateStr());
-      setOperator(staffName);
-      setNotes('');
-      setConsumptionItems([]);
+      if (runToEdit) {
+        setStep(2);
+        setSelectedProductId(runToEdit.productId);
+        setProductSearch('');
+        setIngredientSearch('');
+        setIsModalExpanded(false);
+        setActiveRulerItem(null);
+        setItemToDelete(null);
+        setPlannedQty(runToEdit.plannedQuantity || 10);
+        setActualOutputQty(runToEdit.actualQuantity || 10);
+        setProductionDate(runToEdit.productionDate || getTodayDateStr());
+        setOperator(runToEdit.operatorName || staffName);
+        setNotes(runToEdit.notes || '');
+
+        if (runToEdit.ingredientsConsumed && runToEdit.ingredientsConsumed.length > 0) {
+          setConsumptionItems(
+            runToEdit.ingredientsConsumed.map((item) => ({
+              ingredientId: item.ingredientId,
+              expectedQuantity: item.expectedQuantity,
+              actualQuantity: item.actualQuantity,
+              unit: item.unit,
+            }))
+          );
+        } else {
+          const prodRecipe = recipes.find(
+            (r) => String(r.productId) === String(runToEdit.productId) && (r.isActive ?? true)
+          );
+          if (prodRecipe && prodRecipe.ingredients) {
+            setConsumptionItems(
+              prodRecipe.ingredients.map((item) => ({
+                ingredientId: item.ingredientId,
+                expectedQuantity: item.quantity,
+                actualQuantity: item.quantity,
+                unit: item.unit,
+              }))
+            );
+          } else {
+            setConsumptionItems([]);
+          }
+        }
+      } else {
+        setStep(1);
+        setSelectedProductId('');
+        setProductSearch('');
+        setIngredientSearch('');
+        setIsModalExpanded(false);
+        setActiveRulerItem(null);
+        setItemToDelete(null);
+        setPlannedQty(10);
+        setActualOutputQty(10);
+        setProductionDate(getTodayDateStr());
+        setOperator(staffName);
+        setNotes('');
+        setConsumptionItems([]);
+      }
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
       document.body.classList.add('modal-open');
@@ -186,7 +231,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       document.body.classList.remove('modal-open');
       document.documentElement.classList.remove('modal-open');
     };
-  }, [isOpen, staffName]);
+  }, [isOpen, runToEdit, staffName, recipes]);
 
   // Filter products for Step 1
   const filteredProducts = useMemo(() => {
@@ -446,19 +491,32 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         };
       });
 
-      const saved = await repo.recordProductionRun({
-        runNumber: `PRD-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
-        productId: selectedProduct.id,
-        recipeId: activeRecipe?.id,
-        recipeVersion: activeRecipe?.version,
-        productionDate,
-        plannedQuantity: plannedQty,
-        actualQuantity: actualOutputQty,
-        unit: selectedProduct.unit,
-        operatorName: operator.trim() || 'Kitchen Staff',
-        notes: notes.trim() || undefined,
-        ingredientsConsumed: itemsWithCost,
-      });
+      let saved: any;
+      if (runToEdit) {
+        saved = await repo.updateProductionRun({
+          runId: runToEdit.id,
+          plannedQuantity: plannedQty,
+          actualQuantity: actualOutputQty,
+          productionDate,
+          operatorName: operator.trim() || 'Kitchen Staff',
+          notes: notes.trim() || undefined,
+          ingredientsConsumed: itemsWithCost,
+        });
+      } else {
+        saved = await repo.recordProductionRun({
+          runNumber: `PRD-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.floor(100 + Math.random() * 900)}`,
+          productId: selectedProduct.id,
+          recipeId: activeRecipe?.id,
+          recipeVersion: activeRecipe?.version,
+          productionDate,
+          plannedQuantity: plannedQty,
+          actualQuantity: actualOutputQty,
+          unit: selectedProduct.unit,
+          operatorName: operator.trim() || 'Kitchen Staff',
+          notes: notes.trim() || undefined,
+          ingredientsConsumed: itemsWithCost,
+        });
+      }
 
       // Immediately fetch fresh ingredients to update stock live without page reload
       try {
@@ -475,14 +533,21 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       setShowSuccessAnim(true);
     } catch (err: any) {
       console.error('Production save error', err);
-      addToast(err?.message || 'Failed to save production run', 'error');
+      addToast(err?.message || (runToEdit ? 'Failed to update batch' : 'Failed to save production run'), 'error');
       setIsSubmitting(false);
     }
   };
 
   const handleSuccessAnimComplete = () => {
     setShowSuccessAnim(false);
-    addToast(t.productionSavedSuccess, 'success');
+    addToast(
+      runToEdit
+        ? language === 'ml'
+          ? 'ബാച്ച് വിജയകരമായി തിരുത്തി!'
+          : 'Batch updated successfully!'
+        : t.productionSavedSuccess,
+      'success'
+    );
     if (savedRunData) {
       onSuccess(savedRunData);
     }
@@ -504,10 +569,12 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
       title={
         <div className="flex items-center gap-2 text-stone-900 dark:text-white">
           <div className="w-8 h-8 rounded-lg bg-epso-red text-white flex items-center justify-center font-bold">
-            <TbPlus className="w-5 h-5 stroke-[2.5]" />
+            {runToEdit ? <TbPencil className="w-5 h-5 stroke-[2.5]" /> : <TbPlus className="w-5 h-5 stroke-[2.5]" />}
           </div>
           <div>
-            <h3 className="text-base font-extrabold leading-tight">{t.startProduction}</h3>
+            <h3 className="text-base font-extrabold leading-tight">
+              {runToEdit ? (language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch') : t.startProduction}
+            </h3>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
               Step {step} of 4 • {stepTitles[step]}
             </p>
@@ -528,11 +595,19 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           <BatchSuccessAnimation
             isVisible={showSuccessAnim}
             onComplete={handleSuccessAnimComplete}
-            message={language === 'ml' ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!' : 'Production Batch Saved!'}
+            message={
+              runToEdit
+                ? language === 'ml'
+                  ? 'ബാച്ച് വിജയകരമായി തിരുത്തി!'
+                  : 'Production Batch Updated!'
+                : language === 'ml'
+                ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!'
+                : 'Production Batch Saved!'
+            }
             subMessage={
               language === 'ml'
                 ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
-                : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} added to stock`
+                : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} updated in stock`
             }
           />
         </>
@@ -551,33 +626,39 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           ].map((s, idx) => {
             const isCurrent = step === s.num;
             const isPassed = step > s.num;
+            const isStep1InEditMode = Boolean(runToEdit && s.num === 1);
 
             return (
               <React.Fragment key={s.num}>
                 <div
                   onClick={() => {
+                    if (runToEdit && s.num === 1) return;
                     if (isPassed) setStep(s.num as WizardStep);
                   }}
                   className={`flex items-center gap-1.5 ${
-                    isPassed ? 'cursor-pointer' : ''
+                    isPassed && !(runToEdit && s.num === 1) ? 'cursor-pointer' : ''
                   }`}
                 >
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black transition-all ${
                       isCurrent
                         ? 'bg-epso-red text-white shadow-xs ring-2 ring-epso-red/30'
-                        : isPassed
+                        : isPassed || isStep1InEditMode
                         ? 'bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs ring-1 ring-emerald-500/20'
                         : 'bg-stone-200 dark:bg-[#282323] text-stone-500 dark:text-stone-400'
                     }`}
                   >
-                    {isPassed ? <TbCheck className="w-3.5 h-3.5 stroke-[3] text-white" /> : s.num}
+                    {isPassed || isStep1InEditMode ? (
+                      <TbCheck className="w-3.5 h-3.5 stroke-[3] text-white" />
+                    ) : (
+                      s.num
+                    )}
                   </div>
                   <span
                     className={`text-xs font-bold font-malayalam hidden sm:inline ${
                       isCurrent
                         ? 'text-stone-900 dark:text-white font-extrabold'
-                        : isPassed
+                        : isPassed || isStep1InEditMode
                         ? 'text-emerald-700 dark:text-emerald-400 font-extrabold'
                         : 'text-stone-400 dark:text-stone-500'
                     }`}
@@ -588,7 +669,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 {idx < 3 && (
                   <div
                     className={`flex-1 h-0.5 mx-2 rounded-full transition-all ${
-                      step > idx + 1 ? 'bg-emerald-600 dark:bg-emerald-500' : 'bg-stone-200 dark:bg-[#282323]'
+                      step > idx + 1 || (runToEdit && idx === 0)
+                        ? 'bg-emerald-600 dark:bg-emerald-500'
+                        : 'bg-stone-200 dark:bg-[#282323]'
                     }`}
                   />
                 )}
@@ -736,9 +819,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 </div>
               </div>
 
-              <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
-                {language === 'ml' ? 'മാറ്റുക' : 'Change'}
-              </Button>
+              {!runToEdit && (
+                <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                  {language === 'ml' ? 'മാറ്റുക' : 'Change'}
+                </Button>
+              )}
             </div>
 
             {/* Dedicated Measurement Ruler for Output Quantity - Flat, borderless, shadowless */}
@@ -772,10 +857,16 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
               <Button
                 variant="ghost"
-                onClick={() => setStep(1)}
-                icon={<TbChevronLeft className="w-4 h-4" />}
+                onClick={() => {
+                  if (runToEdit) {
+                    onClose();
+                  } else {
+                    setStep(1);
+                  }
+                }}
+                icon={runToEdit ? undefined : <TbChevronLeft className="w-4 h-4" />}
               >
-                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
+                {runToEdit ? (language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel') : (language === 'ml' ? 'പിന്നോട്ട്' : 'Back')}
               </Button>
 
               <Button
@@ -1085,10 +1176,15 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 variant="primary"
                 onClick={handleFinalSubmit}
                 isLoading={isSubmitting}
-                icon={<TbCircleCheck className="w-4 h-4" />}
                 className="font-bold px-6"
               >
-                Confirm & Save
+                {runToEdit
+                  ? language === 'ml'
+                    ? 'മാറ്റങ്ങൾ സേവ് ചെയ്യുക'
+                    : 'Save Changes'
+                  : language === 'ml'
+                  ? 'സ്ഥിരീകരിക്കുക'
+                  : 'Confirm & Save'}
               </Button>
             </div>
           </div>

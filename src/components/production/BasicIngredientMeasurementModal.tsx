@@ -32,7 +32,7 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
   const RULER_MAX_KG = 25;
   const RULER_MIN_KG = 0;
   const RULER_STEP_KG = 0.1; // 100g ticks
-  const TICK_WIDTH = 12; // px per 100g
+  const TICK_WIDTH = 32; // px per 0.1 step to fit 0, 0.1, 0.2 ... cleanly
 
   const rulerRef = useRef<HTMLDivElement>(null);
   const isScrollingRuler = useRef<boolean>(false);
@@ -186,46 +186,19 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
             </span>
           </div>
 
-          {/* Large Dual Kg & Grams Display */}
-          <div className="flex flex-col items-center justify-center py-2 gap-1.5 select-none">
-            <div className="flex items-baseline justify-center gap-2 text-stone-900 dark:text-white">
-              <div className="flex items-baseline gap-1">
-                <input
-                  type="number"
-                  min="0"
-                  max="25"
-                  value={displayKg}
-                  onChange={(e) =>
-                    handleSetDirectKg(Math.max(0, parseInt(e.target.value) || 0), displayGrams)
-                  }
-                  className="w-16 text-4xl sm:text-5xl font-black text-amber-900 dark:text-amber-200 text-right bg-transparent outline-none focus:ring-1 focus:ring-amber-500 rounded-lg p-0.5"
-                />
-                <span className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400 uppercase">
-                  kg
-                </span>
-              </div>
-
-              <div className="flex items-baseline gap-1">
-                <input
-                  type="number"
-                  min="0"
-                  max="999"
-                  step="50"
-                  value={displayGrams}
-                  onChange={(e) =>
-                    handleSetDirectKg(displayKg, Math.max(0, parseInt(e.target.value) || 0))
-                  }
-                  className="w-20 text-4xl sm:text-5xl font-black text-amber-900 dark:text-amber-200 text-right bg-transparent outline-none focus:ring-1 focus:ring-amber-500 rounded-lg p-0.5 font-mono"
-                />
-                <span className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-400">
-                  g
-                </span>
-              </div>
+          {/* Prominent combined weight display (2,500 g) */}
+          <div className="flex flex-col items-center justify-center py-2.5 gap-1 select-none">
+            <div className="flex items-baseline justify-center gap-1.5 text-stone-900 dark:text-white">
+              <span className="text-4xl sm:text-5xl font-black font-mono text-amber-900 dark:text-amber-200 tracking-tight">
+                {totalGrams.toLocaleString('en-US')}
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400">
+                g
+              </span>
+              <span className="text-sm sm:text-base font-bold text-stone-500 dark:text-stone-400 font-mono ml-2">
+                ({weightKg.toFixed(1)} kg)
+              </span>
             </div>
-
-            <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-mono">
-              = {totalGrams} g total ({weightKg.toFixed(2)} kg)
-            </span>
           </div>
 
           {/* Quick Step Buttons for Grams and Kg */}
@@ -280,22 +253,15 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
             </button>
           </div>
 
-          {/* Stock remaining notice without a box */}
-          <div className="flex flex-col items-center justify-center gap-0.5 text-center pt-1 select-none">
-            <span className="text-xs font-bold text-stone-600 dark:text-stone-400 font-malayalam">
-              {language === 'ml'
-                ? `ബാക്കി ${ingredientStockKg.toFixed(1)} kg മാത്രം (Max 25 kg)`
-                : `Only ${ingredientStockKg.toFixed(1)} kg remaining (Max 25 kg)`}
+          {/* Stock remaining notice always active */}
+          <div className="flex flex-col items-center justify-center text-center pt-1 select-none">
+            <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam">
+              {ingredientStockKg.toFixed(1)} kg {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
             </span>
-            {weightKg >= effectiveMaxKg && (
-              <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam animate-pulse">
-                {effectiveMaxKg.toFixed(1)} kg {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
-              </span>
-            )}
           </div>
         </div>
 
-        {/* 25 KG HORIZONTAL RULER WITH 100G / 500G / 1KG TICKS */}
+        {/* 25 KG HORIZONTAL RULER WITH 0, 0.1, 0.2 ... LABELS */}
         <div className="relative w-full py-2 overflow-hidden flex flex-col items-center select-none bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border/50 dark:border-[#2E2828]">
           {/* Center Orange Marker Needle */}
           <div className="absolute top-0 bottom-4 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full bg-epso-orange">
@@ -310,11 +276,11 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             <div className="shrink-0 w-1/2" />
-            <div className="flex items-end shrink-0" style={{ gap: `${TICK_WIDTH - 2}px` }}>
+            <div className="flex items-end shrink-0">
               {Array.from({ length: totalTicks + 1 }).map((_, idx) => {
-                const val = Number((RULER_MIN_KG + idx * RULER_STEP_KG).toFixed(2));
-                const isWholeKg = Math.abs(Math.round(val) - val) < 0.01;
-                const isHalfKg = Math.abs(val % 0.5) < 0.01;
+                const val = Number((RULER_MIN_KG + idx * RULER_STEP_KG).toFixed(1));
+                const isWholeKg = Math.abs(Math.round(val) - val) < 0.001;
+                const isFiveKg = isWholeKg && Math.round(val) % 5 === 0;
 
                 return (
                   <div
@@ -323,21 +289,19 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
                       setWeightKg(val);
                       scrollRulerTo(val);
                     }}
-                    className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-12 pb-1"
-                    style={{ width: '2px' }}
+                    className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-16 pb-1 select-none"
+                    style={{ width: `${TICK_WIDTH}px` }}
                   >
-                    {isWholeKg && (
-                      <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-mono mb-1 select-none pointer-events-none">
-                        {Math.round(val)}
-                      </span>
-                    )}
+                    <span className="text-[9px] font-bold text-stone-500 dark:text-stone-400 font-mono mb-1 pointer-events-none select-none">
+                      {val === 0 ? '0' : val.toFixed(1)}
+                    </span>
                     <div
                       className={`rounded-full transition-colors ${
-                        isWholeKg
-                          ? 'h-7 bg-stone-600/50 dark:bg-stone-300/40 w-[2px]'
-                          : isHalfKg
-                          ? 'h-5 bg-stone-400/40 dark:bg-stone-500/30 w-[1.5px]'
-                          : 'h-3 bg-stone-300/30 dark:bg-stone-600/25 w-[1px]'
+                        isFiveKg
+                          ? 'h-6 bg-amber-600 dark:bg-amber-400 w-[2px]'
+                          : isWholeKg
+                          ? 'h-5 bg-stone-600/70 dark:bg-stone-300/70 w-[2px]'
+                          : 'h-3.5 bg-stone-400/40 dark:bg-stone-500/30 w-[1.5px]'
                       }`}
                     />
                   </div>
@@ -371,7 +335,7 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
           >
             <TbCheck className="w-4 h-4 stroke-[2.5]" />
             <span>
-              {language === 'ml' ? 'ഉപയോഗം ചേർക്കുക' : 'Record Usage'} ({displayKg > 0 ? `${displayKg}kg ` : ''}{displayGrams}g)
+              {language === 'ml' ? 'ഉപയോഗം ചേർക്കുക' : 'Record Usage'}
             </span>
           </Button>
         </div>
