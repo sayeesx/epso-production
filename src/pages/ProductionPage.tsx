@@ -10,6 +10,9 @@ import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { StartProductionModal } from '../components/production/StartProductionModal';
 import { DailyOilModal } from '../components/production/DailyOilModal';
 import { BatchPackingModal } from '../components/production/BatchPackingModal';
+import { EditBatchModal } from '../components/production/EditBatchModal';
+import { BasicIngredientsSelectorModal } from '../components/production/BasicIngredientsSelectorModal';
+import { BasicIngredientMeasurementModal } from '../components/production/BasicIngredientMeasurementModal';
 import { Modal } from '../components/ui/Modal';
 import { Product, Recipe, Ingredient, ProductionRun, PackingRecord, DailyClosing } from '../types';
 import {
@@ -22,6 +25,8 @@ import {
   TbAlertTriangle,
   TbCheck,
   TbAlertCircle,
+  TbPencil,
+  TbToolsKitchen2,
 } from 'react-icons/tb';
 
 export const ProductionPage: React.FC = () => {
@@ -96,6 +101,9 @@ export const ProductionPage: React.FC = () => {
   // Modals
   const [oilModalDate, setOilModalDate] = useState<string>(todayStr);
   const [runToDelete, setRunToDelete] = useState<ProductionRun | null>(null);
+  const [runToEdit, setRunToEdit] = useState<ProductionRun | null>(null);
+  const [isBasicSelectorOpen, setIsBasicSelectorOpen] = useState<boolean>(false);
+  const [measuringBasicIngredient, setMeasuringBasicIngredient] = useState<Ingredient | null>(null);
   const [restockChoice, setRestockChoice] = useState<'yes' | 'no'>('yes');
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isOpeningNewBatch, setIsOpeningNewBatch] = useState<boolean>(false);
@@ -143,12 +151,13 @@ export const ProductionPage: React.FC = () => {
   const getBatchPacketsCount = useCallback((run: ProductionRun) => {
     const batchPackings = packingRecords.filter(
       (p) =>
-        p.productionRunId === run.id ||
-        (p.notes && p.notes.includes(run.runNumber)) ||
-        (p.productId === run.productId && p.packingDate === run.productionDate)
+        p.productionRunId
+          ? p.productionRunId === run.id
+          : Boolean(p.notes && p.notes.includes(run.runNumber))
     );
     return batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
   }, [packingRecords]);
+
 
   // Helper to verify if oil has been logged
   const hasRecordedOil = useCallback((closing: DailyClosing | null) => {
@@ -260,7 +269,14 @@ export const ProductionPage: React.FC = () => {
   const sortedRuns = useMemo(() => {
     const isPacketsPending = (run: ProductionRun) => {
       if (run.status === 'cancelled') return false;
-      return getBatchPacketsCount(run) === 0;
+      const rec = recipes.find((r) => r.id === run.recipeId || r.productId === run.productId);
+      const assigned = rec?.packets && rec.packets.length > 0 ? rec.packets : [];
+      if (assigned.length === 0) return true;
+      const packings = packingRecords.filter((p) =>
+        p.productionRunId ? p.productionRunId === run.id : Boolean(p.notes && p.notes.includes(run.runNumber))
+      );
+      const packedSet = new Set(packings.filter((p) => (p.packetsPacked || 0) > 0).map((p) => p.packetSize));
+      return !assigned.every((p) => packedSet.has(p.packetName));
     };
 
     return [...filteredRuns].sort((a, b) => {
@@ -279,7 +295,8 @@ export const ProductionPage: React.FC = () => {
       const timeB = new Date(b.createdAt || b.productionDate).getTime();
       return timeA - timeB;
     });
-  }, [filteredRuns, getBatchPacketsCount, batchNumberMap]);
+  }, [filteredRuns, recipes, packingRecords, batchNumberMap]);
+
 
   const handleDeleteRun = async (restock: boolean) => {
     if (!runToDelete) return;
@@ -375,17 +392,17 @@ export const ProductionPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Daily Oil consumption & leftover button */}
+          {/* Add Basic ingredients button (replaces Add Oil) */}
           <button
             onClick={() => {
               setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
-              setIsDailyOilModalOpen(true);
+              setIsBasicSelectorOpen(true);
             }}
             className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
-            title={language === 'ml' ? 'ദിവസത്തെ ഓയിൽ ഉപഭോഗവും ബാക്കിയും ചേർക്കുക' : 'Record daily oil consumed & leftover'}
+            title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക (ഓയിൽ, ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില)' : 'Add basic ingredients (Oil, Salt, Cashew shell, Chippli, Curry leaves)'}
           >
-            <TbDroplet className="w-4 h-4 text-amber-600 dark:text-amber-400 fill-amber-500/20" />
-            <span>{language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Record Oil'}</span>
+            <TbToolsKitchen2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
           </button>
 
           <button
@@ -637,23 +654,38 @@ export const ProductionPage: React.FC = () => {
 
               const batchPackings = packingRecords.filter(
                 (p) =>
-                  p.productionRunId === run.id ||
-                  (p.notes && p.notes.includes(run.runNumber)) ||
-                  (p.productId === run.productId && p.packingDate === run.productionDate)
+                  p.productionRunId
+                    ? p.productionRunId === run.id
+                    : Boolean(p.notes && p.notes.includes(run.runNumber))
               );
+
+              // Group packets by packetSize to eliminate duplicate badges on cards
+              const packingsGroupMap = new Map<string, number>();
+              batchPackings.forEach((p) => {
+                packingsGroupMap.set(
+                  p.packetSize,
+                  (packingsGroupMap.get(p.packetSize) || 0) + (p.packetsPacked || 0)
+                );
+              });
+              const groupedBatchPackings = Array.from(packingsGroupMap.entries()).map(
+                ([packetSize, packetsPacked]) => ({ packetSize, packetsPacked })
+              );
+
               const totalPacketsPacked = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
               const hasPackedPackets = totalPacketsPacked > 0;
 
               // Unique packet sizes that have been packed for this batch:
-              const packedSizesSet = new Set(batchPackings.map((p) => p.packetSize));
+              const packedSizesSet = new Set(
+                groupedBatchPackings.filter((p) => p.packetsPacked > 0).map((p) => p.packetSize)
+              );
               const packedTypesCount = totalExpectedPackets > 0
                 ? assignedPackets.filter((p) => packedSizesSet.has(p.packetName)).length
                 : (hasPackedPackets ? 1 : 0);
 
-              // If not all packets are added, show warning yellow for the add packet button:
+              // ONLY set completed when all assigned packets are added:
               const isAllPacketsAdded = totalExpectedPackets > 0
                 ? packedTypesCount >= totalExpectedPackets
-                : hasPackedPackets;
+                : false;
 
               const isWarningYellow = !isAllPacketsAdded;
               const batchOrderNumber = batchNumberMap.get(run.id) ?? 1;
@@ -746,9 +778,9 @@ export const ProductionPage: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {batchPackings.map((pkg) => (
+                        {groupedBatchPackings.map((pkg) => (
                           <span
-                            key={pkg.id}
+                            key={pkg.packetSize}
                             className="inline-flex items-center gap-1 bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 border border-charcoal-border/60 dark:border-[#2E2828] px-2 py-0.5 rounded-md font-semibold text-[11px]"
                           >
                             <span className="font-bold text-epso-red">{pkg.packetSize}:</span>
@@ -784,22 +816,23 @@ export const ProductionPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setBatchForPacking(run)}
-                          className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/60 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600/80 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs"
-                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                          className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/60 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600/80 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs whitespace-nowrap"
+                          title={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
                         >
                           <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" />
                           <span>
                             {totalExpectedPackets > 0 && packedTypesCount > 0
                               ? language === 'ml'
-                                ? `പാക്കറ്റുകൾ ബാക്കി (${packedTypesCount}/${totalExpectedPackets})`
-                                : `Packets Pending (${packedTypesCount}/${totalExpectedPackets})`
+                                ? `ചേർക്കുക (${packedTypesCount}/${totalExpectedPackets})`
+                                : `Add (${packedTypesCount}/${totalExpectedPackets})`
                               : language === 'ml'
-                              ? 'പാക്കറ്റുകൾ ചേർക്കുക'
-                              : 'Add Packets'}
+                              ? 'ചേർക്കുക'
+                              : 'Add'}
                           </span>
                         </button>
                       )}
                     </div>
+
 
                     {!isDeleted && (
                       <div className="flex items-center gap-3 sm:gap-3.5">
@@ -832,7 +865,18 @@ export const ProductionPage: React.FC = () => {
                           )}
                         </button>
 
-                        {/* 2. Delete Batch Icon Box (With Restock vs Wastage Prompt) - Only shown if NOT completed */}
+                        {/* 2. Edit Batch Icon Box - just like delete option */}
+                        <button
+                          type="button"
+                          onClick={() => setRunToEdit(run)}
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          title={language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch'}
+                          aria-label="Edit Batch"
+                        >
+                          <TbPencil className="w-5 h-5 stroke-[2.2]" />
+                        </button>
+
+                        {/* 3. Delete Batch Icon Box (With Restock vs Wastage Prompt) - Only shown if NOT completed */}
                         {!hasPackedPackets && (
                           <button
                             type="button"
@@ -1065,6 +1109,59 @@ export const ProductionPage: React.FC = () => {
         recipes={recipes}
         onClose={() => setBatchForPacking(null)}
         onSuccess={() => {
+          triggerRefresh();
+        }}
+      />
+
+      {/* Edit Batch Modal */}
+      <EditBatchModal
+        isOpen={Boolean(runToEdit)}
+        onClose={() => setRunToEdit(null)}
+        run={runToEdit}
+        onSuccess={async (updatedRun) => {
+          setRuns((prev) =>
+            prev.map((r) => (r.id === updatedRun.id ? updatedRun : r))
+          );
+          try {
+            const freshIngredients = await repo.listIngredients(false);
+            if (freshIngredients && freshIngredients.length > 0) {
+              setIngredients(freshIngredients);
+            }
+          } catch (e) {
+            console.error('Error refreshing ingredients after batch edit', e);
+          }
+          triggerRefresh();
+        }}
+      />
+
+      {/* Basic Ingredients Selector Modal */}
+      <BasicIngredientsSelectorModal
+        isOpen={isBasicSelectorOpen}
+        onClose={() => setIsBasicSelectorOpen(false)}
+        ingredients={ingredients}
+        onSelectOil={() => {
+          setIsDailyOilModalOpen(true);
+        }}
+        onSelectBasicIngredient={(ing) => {
+          setMeasuringBasicIngredient(ing);
+        }}
+      />
+
+      {/* Basic Ingredient Measurement Modal (25kg ruler + grams) */}
+      <BasicIngredientMeasurementModal
+        isOpen={Boolean(measuringBasicIngredient)}
+        onClose={() => setMeasuringBasicIngredient(null)}
+        ingredient={measuringBasicIngredient}
+        targetDate={oilModalDate}
+        onSuccess={async () => {
+          try {
+            const freshIngredients = await repo.listIngredients(false);
+            if (freshIngredients && freshIngredients.length > 0) {
+              setIngredients(freshIngredients);
+            }
+          } catch (e) {
+            console.error('Error refreshing ingredients after measurement', e);
+          }
           triggerRefresh();
         }}
       />

@@ -3,10 +3,10 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import { Recipe, RecipeIngredient, Ingredient, Product, UnitType } from '../../types';
+import { Recipe, RecipeIngredient, Ingredient, Product, UnitType, PacketType, RecipePacket } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { TbPlus, TbTrash } from 'react-icons/tb';
+import { TbPlus, TbTrash, TbPackage } from 'react-icons/tb';
 
 interface RecipeFormModalProps {
   isOpen: boolean;
@@ -35,7 +35,17 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
   const [notes, setNotes] = useState('');
   const [instructions, setInstructions] = useState('');
   const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>([]);
+  const [recipePackets, setRecipePackets] = useState<RecipePacket[]>([]);
+  const [availablePacketTypes, setAvailablePacketTypes] = useState<PacketType[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    repo.listPacketTypes().then((types) => {
+      setAvailablePacketTypes(types || []);
+    }).catch(() => {
+      setAvailablePacketTypes([]);
+    });
+  }, [repo]);
 
   useEffect(() => {
     if (recipeToEdit) {
@@ -45,6 +55,15 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
       setNotes(recipeToEdit.notes || '');
       setInstructions(recipeToEdit.instructions || '');
       setRecipeIngredients([...recipeToEdit.ingredients]);
+      setRecipePackets(
+        (recipeToEdit.packets || []).map((p) => ({
+          packetTypeId: p.packetTypeId,
+          packetName: p.packetName,
+          costPerPacket: p.costPerPacket || 0,
+          bundleCost: p.bundleCost,
+          bundleQuantity: p.bundleQuantity,
+        }))
+      );
     } else {
       const initialProductId = preselectedProductId || products[0]?.id || '';
       const prod = products.find((p) => p.id === initialProductId);
@@ -53,6 +72,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
       setBaseOutputUnit(prod?.unit || 'kg');
       setNotes('');
       setInstructions('');
+      setRecipePackets([]);
       setRecipeIngredients(
         ingredients.length > 0
           ? [
@@ -109,6 +129,45 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
     setRecipeIngredients(copy);
   };
 
+  // Recipe Packet Rows Handlers
+  const handleAddRecipePacketRow = () => {
+    const firstPkt = availablePacketTypes[0];
+    setRecipePackets([
+      ...recipePackets,
+      {
+        packetTypeId: firstPkt?.id,
+        packetName: firstPkt?.name || 'Standard Packet',
+        costPerPacket: firstPkt?.costPerPacket || 0,
+        bundleCost: firstPkt?.bundleCost || 0,
+        bundleQuantity: firstPkt?.bundleQuantity || 100,
+      },
+    ]);
+  };
+
+  const handleRemoveRecipePacketRow = (index: number) => {
+    setRecipePackets(recipePackets.filter((_, i) => i !== index));
+  };
+
+  const handleRecipePacketSelect = (index: number, packetTypeId: string) => {
+    const found = availablePacketTypes.find((pt) => pt.id === packetTypeId);
+    const updated = [...recipePackets];
+    updated[index] = {
+      ...updated[index],
+      packetTypeId,
+      packetName: found?.name || updated[index].packetName,
+      costPerPacket: found?.costPerPacket ?? updated[index].costPerPacket,
+      bundleCost: found?.bundleCost ?? updated[index].bundleCost,
+      bundleQuantity: found?.bundleQuantity ?? updated[index].bundleQuantity,
+    };
+    setRecipePackets(updated);
+  };
+
+  const handleRecipePacketCostChange = (index: number, cost: number) => {
+    const updated = [...recipePackets];
+    updated[index] = { ...updated[index], costPerPacket: cost };
+    setRecipePackets(updated);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const product = products.find((p) => p.id === productId);
@@ -138,6 +197,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           baseOutputQuantity: Number(baseOutputQuantity) || 1,
           baseOutputUnit,
           ingredients: recipeIngredients,
+          packets: recipePackets,
           notes: notes.trim() || undefined,
           instructions: instructions.trim() || undefined,
           isActive: true,
@@ -156,6 +216,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           baseOutputQuantity: Number(baseOutputQuantity) || 1,
           baseOutputUnit,
           ingredients: recipeIngredients,
+          packets: recipePackets,
           notes: notes.trim() || undefined,
           instructions: instructions.trim() || undefined,
           isActive: true,
@@ -294,6 +355,91 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
                 {language === 'ml'
                   ? 'ചേരുവകൾ ഒന്നും ചേർത്തിട്ടില്ല. മുകളിലെ ബട്ടൺ ഉപയോഗിച്ച് ചേർക്കുക.'
                   : 'No ingredients added. Click Add Ingredient above.'}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recipe Packets Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-xs font-extrabold text-stone-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5 font-malayalam">
+                <TbPackage className="w-4 h-4 text-epso-orange" />
+                <span>
+                  {language === 'ml'
+                    ? `പാക്കറ്റുകൾ (${recipePackets.length} എണ്ണം)`
+                    : `Recipe Packets (${recipePackets.length})`}
+                </span>
+              </label>
+              <p className="text-[10px] text-stone-400 font-malayalam">
+                {language === 'ml'
+                  ? 'പ്രൊഡക്ഷൻ പാക്കിംഗിൽ ഈ ഉൽപ്പന്നത്തിന് ഇവ മാത്രമേ കാണിക്കൂ'
+                  : 'Only these packets will be shown in batch packing for this product'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddRecipePacketRow}
+              className="flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer shadow-xs"
+            >
+              <TbPlus className="w-3.5 h-3.5" />
+              <span>{language === 'ml' ? '+ പാക്കറ്റ് ചേർക്കുക' : '+ Add Packet'}</span>
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {recipePackets.map((pkt, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-2 p-2 bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border dark:border-[#2E2828] transition-colors"
+              >
+                <div className="flex-1">
+                  <Select
+                    value={pkt.packetTypeId || ''}
+                    onChange={(e) => handleRecipePacketSelect(idx, e.target.value)}
+                    options={
+                      availablePacketTypes.length > 0
+                        ? availablePacketTypes.map((pt) => ({
+                            value: pt.id,
+                            label: `${pt.name} (₹${(pt.costPerPacket || 0).toFixed(2)}/pkt)`,
+                          }))
+                        : [{ value: '', label: pkt.packetName }]
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center gap-1 bg-white dark:bg-[#1E1B1B] px-2.5 py-1.5 rounded-xl border border-charcoal-border dark:border-[#2E2828]">
+                  <span className="text-[10px] text-stone-400 font-bold">₹/pkt:</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
+                    onChange={(e) =>
+                      handleRecipePacketCostChange(idx, parseFloat(e.target.value) || 0)
+                    }
+                    className="w-16 p-1 bg-transparent text-stone-900 dark:text-white text-xs font-mono font-bold text-right outline-none"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleRemoveRecipePacketRow(idx)}
+                  className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-[#282323] rounded-lg transition-colors press-apple cursor-pointer"
+                  title="Remove packet"
+                >
+                  <TbTrash className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+
+            {recipePackets.length === 0 && (
+              <div className="text-center py-4 border border-dashed border-charcoal-border dark:border-[#2E2828] rounded-xl text-stone-400 text-xs font-malayalam">
+                {language === 'ml'
+                  ? 'പാക്കറ്റുകൾ നൽകിയിട്ടില്ല. മുകളിലെ ബട്ടൺ ഉപയോഗിച്ച് ചേർക്കുക.'
+                  : 'No packets configured. Click + Add Packet above to assign packet types.'}
               </div>
             )}
           </div>

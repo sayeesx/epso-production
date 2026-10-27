@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Modal } from '../ui/Modal';
@@ -48,6 +48,11 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
 
+  // Extra packets state (packets not assigned to product that user adds manually)
+  const [extraPackets, setExtraPackets] = useState<Array<{ name: string; costPerPacket?: number }>>([]);
+  const [showExtraPicker, setShowExtraPicker] = useState<boolean>(false);
+  const [catalogPackets, setCatalogPackets] = useState<Array<{ name: string; costPerPacket?: number }>>([]);
+
   // Active Ruler Modal for a selected packet
   const [activeRulerPacket, setActiveRulerPacket] = useState<{
     size: string;
@@ -77,50 +82,88 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     }, 200);
   }, []);
 
-  // Determine allowed packets for this batch:
-  // "admin can assign each packets like recipie ingredients. show only the given packets in pantry adding pwa."
+  // Determine assigned packets for this batch:
+  // "show only the packets assigned to the product , dont show other packets , but we can add other packets manualy"
   const currentRecipe = batch
     ? recipes.find((r) => r.id === batch.recipeId || r.productId === batch.productId)
     : null;
 
   const assignedRecipePackets = currentRecipe?.packets && currentRecipe.packets.length > 0
     ? currentRecipe.packets
-    : null;
+    : [];
 
-  const allowedPackets: Array<{ name: string; costPerPacket?: number }> = assignedRecipePackets
-    ? assignedRecipePackets.map((p) => ({ name: p.packetName, costPerPacket: p.costPerPacket }))
-    : DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0 }));
+  const assignedPackets: Array<{ name: string; costPerPacket?: number }> = useMemo(() => {
+    return assignedRecipePackets.map((p) => ({
+      name: p.packetName,
+      costPerPacket: p.costPerPacket,
+    }));
+  }, [assignedRecipePackets]);
 
-  // Load existing records or reset on modal open
+  // Load packet types catalogue
+  useEffect(() => {
+    repo.listPacketTypes().then((types) => {
+      if (types && types.length > 0) {
+        setCatalogPackets(types.map((t) => ({ name: t.name, costPerPacket: t.costPerPacket })));
+      } else {
+        setCatalogPackets(DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0 })));
+      }
+    }).catch(() => {
+      setCatalogPackets(DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0 })));
+    });
+  }, [repo]);
+
+  // Load existing records for this batch
   useEffect(() => {
     if (isOpen && batch) {
       let isMounted = true;
       const initialMap: Record<string, number> = {};
+      const loadedExtras: Array<{ name: string; costPerPacket?: number }> = [];
 
-      repo.listPackingRecords({ productId: batch.productId, limit: 50 }).then((records) => {
+      repo.listPackingRecords({ productId: batch.productId, limit: 100 }).then((records) => {
         if (!isMounted) return;
         records.forEach((r) => {
-          if (
-            r.productionRunId === batch.id ||
-            (r.notes && r.notes.includes(batch.runNumber)) ||
-            (r.packingDate === batch.productionDate)
-          ) {
+          // Strictly match only this batch's records (no date fallback to avoid pulling in other batches)
+          const isThisBatch = r.productionRunId
+            ? r.productionRunId === batch.id
+            : Boolean(r.notes && r.notes.includes(batch.runNumber));
+
+          if (isThisBatch) {
             initialMap[r.packetSize] = (initialMap[r.packetSize] || 0) + (r.packetsPacked || 0);
+            // If this packet was previously recorded but is NOT in the assigned packets list, include in extraPackets
+            if (
+              !assignedPackets.some((ap) => ap.name === r.packetSize) &&
+              !loadedExtras.some((e) => e.name === r.packetSize)
+            ) {
+              loadedExtras.push({ name: r.packetSize, costPerPacket: 0 });
+            }
           }
         });
         setQuantities({ ...initialMap });
+        setExtraPackets(loadedExtras);
       }).catch(() => {
-        if (isMounted) setQuantities({});
+        if (isMounted) {
+          setQuantities({});
+          setExtraPackets([]);
+        }
       });
 
       setActiveRulerPacket(null);
+      setShowExtraPicker(false);
       return () => {
         isMounted = false;
       };
     }
-  }, [isOpen, batch, repo]);
+  }, [isOpen, batch, repo, assignedPackets]);
 
   if (!batch) return null;
+
+  // Packets displayed in the modal grid: assigned packets + any manually added extra packets
+  const displayedPackets = [...assignedPackets, ...extraPackets];
+
+  // Packets NOT set for the product that can be added extra
+  const unassignedCatalogPackets = catalogPackets.filter(
+    (cp) => !displayedPackets.some((dp) => dp.name.toLowerCase() === cp.name.toLowerCase())
+  );
 
   // Open measurement ruler modal instantly when selecting a packet
   const handleOpenRulerForPacket = (size: string) => {
@@ -171,13 +214,23 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     setActiveRulerPacket(null);
   };
 
+  const handleRemoveExtraPacket = (name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExtraPackets((prev) => prev.filter((p) => p.name !== name));
+    setQuantities((prev) => {
+      const copy = { ...prev };
+      delete copy[name];
+      return copy;
+    });
+  };
+
   // Calculations:
   const configuredPackets = Object.entries(quantities).filter(([_, qty]) => (qty || 0) > 0);
   const totalPacketsSum = configuredPackets.reduce((sum, [_, qty]) => sum + qty, 0);
 
   // Check if all assigned packets have been added:
-  const totalAssignedCount = allowedPackets.length;
-  const addedPacketsCount = allowedPackets.filter((p) => (quantities[p.name] || 0) > 0).length;
+  const totalAssignedCount = assignedPackets.length;
+  const addedPacketsCount = assignedPackets.filter((p) => (quantities[p.name] || 0) > 0).length;
   const isAllPacketsAdded = totalAssignedCount > 0 && addedPacketsCount === totalAssignedCount;
   const hasIncompletePackets = totalAssignedCount > 0 && addedPacketsCount < totalAssignedCount;
 
@@ -198,6 +251,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
       const packingDate = batch.productionDate || new Date().toISOString().split('T')[0];
       const operatorName = staffName || batch.operatorName || 'Kitchen Staff';
 
+      // 1. Delete previous records for this run to keep calculations & DB strictly accurate (prevents duplicate rows)
+      await repo.deletePackingRecordsForRun(batch.id, batch.runNumber);
+
+      // 2. Insert new confirmed quantities
       for (const [packetSize, count] of configuredPackets) {
         await repo.recordPacking({
           packingDate,
@@ -233,6 +290,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   };
 
   const totalTicks = MAX_PACKETS - MIN_PACKETS;
+
 
   return (
     <>
@@ -285,9 +343,9 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             </div>
           </div>
 
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <span
-              className={`text-[11px] font-black px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+              className={`text-[11px] font-black px-2.5 py-1 rounded-full border flex items-center gap-1 whitespace-nowrap shrink-0 ${
                 isAllPacketsAdded
                   ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                   : 'bg-yellow-50 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700/60'
@@ -298,7 +356,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                   isAllPacketsAdded ? 'bg-emerald-500' : 'bg-yellow-500 animate-pulse'
                 }`}
               />
-              <span>
+              <span className="whitespace-nowrap shrink-0">
                 {addedPacketsCount}/{totalAssignedCount} {language === 'ml' ? 'ചേർത്തു' : 'Added'}
               </span>
             </span>
@@ -326,80 +384,170 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
         {/* Available Packets Multi-Select Grid */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-3">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-stone-600 dark:text-stone-300 font-malayalam">
+              {language === 'ml' ? 'ഉൽപ്പന്നത്തിന്റെ പാക്കറ്റുകൾ' : 'Product Packets'}
+            </span>
             <span className="text-xs font-black text-stone-500 dark:text-stone-400 font-mono">
               {totalPacketsSum} pkts
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {allowedPackets.map((pkt) => {
-              const count = quantities[pkt.name] || 0;
-              const hasCount = count > 0;
+          {displayedPackets.length === 0 ? (
+            <div className="py-6 text-center text-stone-400 text-xs font-malayalam">
+              {language === 'ml'
+                ? 'ഈ ഉൽപ്പന്നത്തിന് പാക്കറ്റുകൾ നിശ്ചയിച്ചിട്ടില്ല. താഴെ നൽകിയിരിക്കുന്ന ബട്ടൺ ഉപയോഗിച്ച് മറ്റ് പാക്കറ്റുകൾ ചേർക്കാവുന്നതാണ്.'
+                : 'No packets assigned to this product. You can add extra packets below.'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {displayedPackets.map((pkt) => {
+                const count = quantities[pkt.name] || 0;
+                const hasCount = count > 0;
+                const isExtra = !assignedPackets.some(
+                  (ap) => ap.name.toLowerCase() === pkt.name.toLowerCase()
+                );
 
-              return (
-                <div
-                  key={pkt.name}
-                  onClick={() => handleOpenRulerForPacket(pkt.name)}
-                  className={`relative p-3.5 rounded-2xl border-2 transition-all press-apple cursor-pointer flex flex-col justify-between gap-2.5 select-none ${
-                    hasCount
-                      ? 'bg-orange-50/70 dark:bg-orange-950/20 border-epso-red dark:border-amber-500 shadow-sm'
-                      : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#282323] hover:border-epso-red/50 dark:hover:border-amber-500/50'
-                  }`}
-                >
-                  {/* TOP BADGE / COUNTER ON TOP OF THE BUTTON */}
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-[10px] uppercase font-black tracking-wider text-stone-400">
-                      Packet
-                    </span>
+                return (
+                  <div
+                    key={pkt.name}
+                    onClick={() => handleOpenRulerForPacket(pkt.name)}
+                    className={`relative p-3.5 rounded-2xl border-2 transition-all press-apple cursor-pointer flex flex-col justify-between gap-2.5 select-none ${
+                      hasCount
+                        ? 'bg-orange-50/70 dark:bg-orange-950/20 border-epso-red dark:border-amber-500 shadow-sm'
+                        : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#282323] hover:border-epso-red/50 dark:hover:border-amber-500/50'
+                    }`}
+                  >
+                    {/* TOP BADGE / COUNTER ON TOP OF THE BUTTON */}
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase font-black tracking-wider text-stone-400">
+                          {isExtra ? (language === 'ml' ? 'മറ്റുള്ളവ' : 'Extra') : 'Packet'}
+                        </span>
+                        {isExtra && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleRemoveExtraPacket(pkt.name, e)}
+                            className="p-0.5 rounded-full hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-400 hover:text-red-500 transition-colors"
+                            title={language === 'ml' ? 'ഒഴിവാക്കുക' : 'Remove'}
+                          >
+                            <TbX className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
 
-                    {hasCount ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-epso-red dark:bg-amber-500 text-white dark:text-stone-950 font-black text-xs shadow-xs tracking-tight">
-                        <TbCheck className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>{count} pkts</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-200/70 dark:bg-[#282323] text-stone-500 dark:text-stone-400 font-bold text-[10px]">
-                        <TbPlus className="w-3 h-3" />
-                        <span>{language === 'ml' ? 'അളക്കുക' : 'Measure'}</span>
-                      </span>
-                    )}
+                      {hasCount ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-epso-red dark:bg-amber-500 text-white dark:text-stone-950 font-black text-xs shadow-xs tracking-tight">
+                          <TbCheck className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>{count} pkts</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-200/70 dark:bg-[#282323] text-stone-500 dark:text-stone-400 font-bold text-[10px]">
+                          <TbPlus className="w-3 h-3" />
+                          <span>{language === 'ml' ? 'അളക്കുക' : 'Measure'}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Packet Name & Quick Status */}
+                    <div className="flex items-end justify-between gap-2">
+                      <div>
+                        <h4
+                          className={`text-base font-black tracking-tight ${
+                            hasCount
+                              ? 'text-epso-red dark:text-amber-400'
+                              : 'text-stone-900 dark:text-white'
+                          }`}
+                        >
+                          {pkt.name}
+                        </h4>
+                        {pkt.costPerPacket ? (
+                          <span className="text-[10px] text-stone-400 font-mono">
+                            ₹{pkt.costPerPacket.toFixed(2)}/pkt
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="text-right">
+                        <span
+                          className={`text-xs font-black font-mono px-2 py-1 rounded-lg ${
+                            hasCount
+                              ? 'bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-epso-red/30 dark:border-amber-500/30'
+                              : 'text-stone-400'
+                          }`}
+                        >
+                          {hasCount ? `${count} pkts` : '0 pkts'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  {/* Packet Name & Quick Status */}
-                  <div className="flex items-end justify-between gap-2">
-                    <div>
-                      <h4
-                        className={`text-base font-black tracking-tight ${
-                          hasCount
-                            ? 'text-epso-red dark:text-amber-400'
-                            : 'text-stone-900 dark:text-white'
-                        }`}
-                      >
-                        {pkt.name}
-                      </h4>
-                      {pkt.costPerPacket ? (
+          {/* Button to add other packets extra */}
+          <div className="pt-2 border-t border-stone-200/60 dark:border-[#282323]">
+            {!showExtraPicker ? (
+              <button
+                type="button"
+                onClick={() => setShowExtraPicker(true)}
+                disabled={unassignedCatalogPackets.length === 0}
+                className="w-full py-2.5 px-3 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 bg-stone-50/50 dark:bg-[#181414] hover:bg-stone-100 dark:hover:bg-[#201c1c] text-stone-600 dark:text-stone-300 font-bold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-malayalam cursor-pointer"
+              >
+                <TbPlus className="w-4 h-4 text-epso-red dark:text-amber-400" />
+                <span>
+                  {unassignedCatalogPackets.length === 0
+                    ? language === 'ml'
+                      ? 'എല്ലാ പാക്കറ്റുകളും ലിസ്റ്റിൽ ഉണ്ട്'
+                      : 'All available packets listed'
+                    : language === 'ml'
+                    ? '+ മറ്റ് പാക്കറ്റുകൾ ചേർക്കുക'
+                    : '+ Add Other Packets Extra'}
+                </span>
+              </button>
+            ) : (
+              <div className="p-3 bg-stone-50 dark:bg-[#161313] rounded-2xl border border-stone-200 dark:border-[#2E2828] space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-stone-700 dark:text-stone-200 font-malayalam">
+                    {language === 'ml' ? 'മറ്റ് പാക്കറ്റ് തിരഞ്ഞെടുക്കുക:' : 'Select Other Packet:'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowExtraPicker(false)}
+                    className="p-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-lg cursor-pointer"
+                  >
+                    <TbX className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                  {unassignedCatalogPackets.map((cp) => (
+                    <button
+                      key={cp.name}
+                      type="button"
+                      onClick={() => {
+                        setExtraPackets((prev) => [
+                          ...prev,
+                          { name: cp.name, costPerPacket: cp.costPerPacket },
+                        ]);
+                        setShowExtraPicker(false);
+                        handleOpenRulerForPacket(cp.name);
+                      }}
+                      className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:border-epso-red dark:hover:border-amber-500 text-left transition-all text-xs flex flex-col justify-between cursor-pointer"
+                    >
+                      <span className="font-extrabold text-stone-900 dark:text-white">
+                        {cp.name}
+                      </span>
+                      {cp.costPerPacket ? (
                         <span className="text-[10px] text-stone-400 font-mono">
-                          ₹{pkt.costPerPacket.toFixed(2)}/pkt
+                          ₹{cp.costPerPacket.toFixed(2)}
                         </span>
                       ) : null}
-                    </div>
-
-                    <div className="text-right">
-                      <span
-                        className={`text-xs font-black font-mono px-2 py-1 rounded-lg ${
-                          hasCount
-                            ? 'bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-epso-red/30 dark:border-amber-500/30'
-                            : 'text-stone-400'
-                        }`}
-                      >
-                        {hasCount ? `${count} pkts` : '0 pkts'}
-                      </span>
-                    </div>
-                  </div>
+                    </button>
+                  ))}
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -451,11 +599,11 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               <span>
                 {language === 'ml'
                   ? !isAllPacketsAdded && addedPacketsCount > 0
-                    ? `പാക്കറ്റുകൾ ചേർക്കുക (${addedPacketsCount}/${totalAssignedCount})`
-                    : 'പാക്കറ്റുകൾ ചേർക്കുക'
+                    ? `ചേർക്കുക (${addedPacketsCount}/${totalAssignedCount})`
+                    : 'ചേർക്കുക'
                   : !isAllPacketsAdded && addedPacketsCount > 0
-                  ? `Add Packets (${addedPacketsCount}/${totalAssignedCount})`
-                  : 'Add Packets'}
+                  ? `Add (${addedPacketsCount}/${totalAssignedCount})`
+                  : 'Add'}
               </span>
             </>
           )}

@@ -553,6 +553,124 @@ export class DemoRepository implements IEpsoRepository {
     return run;
   }
 
+  async updateProductionRun(params: {
+    runId: string;
+    actualQuantity: number;
+    plannedQuantity?: number;
+    productionDate?: string;
+    operatorName?: string;
+    notes?: string;
+    ingredientsConsumed?: Array<{
+      ingredientId: string;
+      expectedQuantity: number;
+      actualQuantity: number;
+      unit: string;
+      unitCost?: number;
+      totalCost?: number;
+    }>;
+  }): Promise<ProductionRun> {
+    const runs = this.getItem<ProductionRun[]>(STORAGE_KEYS.RUNS, []);
+    const idx = runs.findIndex((r) => r.id === params.runId);
+    if (idx === -1) throw new Error('Run not found');
+
+    const oldRun = runs[idx];
+    const now = new Date().toISOString();
+    const operator = params.operatorName || oldRun.operatorName || 'Kitchen Staff';
+    const movements = this.getItem<StockMovement[]>(STORAGE_KEYS.MOVEMENTS, []);
+    const ingredients = await this.listIngredients(true);
+    const product = await this.getProductById(oldRun.productId);
+
+    // 1. Adjust product stock delta
+    const deltaProduct = Number((params.actualQuantity - oldRun.actualQuantity).toFixed(3));
+    if (deltaProduct !== 0 && product) {
+      const prevProdStock = product.currentStock;
+      const newProdStock = Math.max(0, Number((prevProdStock + deltaProduct).toFixed(3)));
+      product.currentStock = newProdStock;
+      await this.updateProduct(product.id, { currentStock: newProdStock });
+
+      movements.unshift({
+        id: `mov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        itemId: product.id,
+        itemType: 'product',
+        itemName: product.name,
+        movementType: deltaProduct > 0 ? 'production_output' : 'adjustment',
+        quantity: deltaProduct,
+        unit: oldRun.unit,
+        previousBalance: prevProdStock,
+        newBalance: newProdStock,
+        reference: `Run ${oldRun.runNumber} Edit`,
+        operatorName: operator,
+        reason: `Batch quantity adjusted from ${oldRun.actualQuantity} to ${params.actualQuantity} ${oldRun.unit}`,
+        createdAt: now,
+      });
+    }
+
+    // 2. Adjust ingredients consumed delta
+    let updatedConsumed = oldRun.ingredientsConsumed;
+    if (params.ingredientsConsumed && params.ingredientsConsumed.length > 0) {
+      updatedConsumed = params.ingredientsConsumed.map((newIng) => {
+        const oldIng = oldRun.ingredientsConsumed.find((c) => c.ingredientId === newIng.ingredientId);
+        const oldQty = oldIng ? oldIng.actualQuantity : 0;
+        const deltaIng = Number((newIng.actualQuantity - oldQty).toFixed(3));
+        const ing = ingredients.find((i) => i.id === newIng.ingredientId);
+
+        if (deltaIng !== 0 && ing) {
+          const prevIngBal = ing.currentStock;
+          const newIngBal = Math.max(0, Number((prevIngBal - deltaIng).toFixed(3)));
+          ing.currentStock = newIngBal;
+          ing.updatedAt = now;
+
+          movements.unshift({
+            id: `mov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            itemId: ing.id,
+            itemType: 'ingredient',
+            itemName: ing.name,
+            movementType: deltaIng > 0 ? 'production_consumption' : 'adjustment',
+            quantity: -deltaIng,
+            unit: newIng.unit,
+            previousBalance: prevIngBal,
+            newBalance: newIngBal,
+            reference: `Run ${oldRun.runNumber} Edit`,
+            operatorName: operator,
+            reason: `Batch ingredient adjustment for ${oldRun.productName}`,
+            createdAt: now,
+          });
+        }
+
+        return {
+          ingredientId: newIng.ingredientId,
+          ingredientName: ing?.name || oldIng?.ingredientName || 'Ingredient',
+          expectedQuantity: newIng.expectedQuantity,
+          actualQuantity: newIng.actualQuantity,
+          unit: newIng.unit,
+          unitCost: newIng.unitCost,
+          totalCost: newIng.totalCost,
+        };
+      });
+
+      this.setItem(STORAGE_KEYS.INGREDIENTS, ingredients);
+    }
+
+    this.setItem(STORAGE_KEYS.MOVEMENTS, movements);
+
+    // 3. Update run record
+    const updatedRun: ProductionRun = {
+      ...oldRun,
+      actualQuantity: params.actualQuantity,
+      plannedQuantity: params.plannedQuantity !== undefined ? params.plannedQuantity : oldRun.plannedQuantity,
+      productionDate: params.productionDate || oldRun.productionDate,
+      operatorName: operator,
+      notes: params.notes !== undefined ? params.notes : oldRun.notes,
+      ingredientsConsumed: updatedConsumed,
+      updatedAt: now,
+    };
+
+    runs[idx] = updatedRun;
+    this.setItem(STORAGE_KEYS.RUNS, runs);
+
+    return updatedRun;
+  }
+
   async cancelProductionRun(params: {
     runId: string;
     reason: string;
@@ -1101,4 +1219,7 @@ export class DemoRepository implements IEpsoRepository {
   async listPackingRecords(_options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
     return [];
   }
+
+  async deletePackingRecordsForRun(_runId: string, _runNumber?: string): Promise<void> {}
 }
+

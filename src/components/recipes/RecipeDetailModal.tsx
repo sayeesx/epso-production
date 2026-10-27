@@ -5,7 +5,7 @@ import { NumberStepper } from '../ui/NumberStepper';
 import { Badge } from '../ui/Badge';
 import { Recipe, Ingredient } from '../../types';
 import { scaleRecipeIngredients, roundCurrency } from '../../services/costing';
-import { TbCheck, TbPencil, TbBuildingFactory2 } from 'react-icons/tb';
+import { TbCheck, TbPencil, TbBuildingFactory2, TbPackage } from 'react-icons/tb';
 
 interface RecipeDetailModalProps {
   isOpen: boolean;
@@ -139,6 +139,29 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({
           <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828] text-xs">
             <span className="font-bold text-charcoal dark:text-white block mb-0.5">Technique & Instructions:</span>
             <p className="text-charcoal-muted dark:text-stone-400 whitespace-pre-wrap">{recipe.notes}</p>
+          </div>
+        )}
+
+        {/* Assigned Packets */}
+        {recipe.packets && recipe.packets.length > 0 && (
+          <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-charcoal-border dark:border-[#2E2828] text-xs space-y-1.5">
+            <span className="font-bold text-charcoal dark:text-white flex items-center gap-1.5">
+              <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
+              <span>Assigned Packets ({recipe.packets.length}):</span>
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {recipe.packets.map((pkt, pIdx) => (
+                <span
+                  key={pIdx}
+                  className="px-2 py-0.5 rounded-lg bg-white dark:bg-[#1E1B1B] border border-charcoal-border/60 dark:border-[#2E2828] text-stone-700 dark:text-stone-300 font-semibold text-[11px]"
+                >
+                  {pkt.packetName}{' '}
+                  <span className="text-stone-400 font-normal">
+                    (₹{pkt.costPerPacket?.toFixed(2)}/pkt)
+                  </span>
+                </span>
+              ))}
+            </div>
           </div>
         )}
 

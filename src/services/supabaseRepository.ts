@@ -736,6 +736,141 @@ export class SupabaseRepository implements IEpsoRepository {
     return saved;
   }
 
+  async updateProductionRun(params: {
+    runId: string;
+    actualQuantity: number;
+    plannedQuantity?: number;
+    productionDate?: string;
+    operatorName?: string;
+    notes?: string;
+    ingredientsConsumed?: Array<{
+      ingredientId: string;
+      expectedQuantity: number;
+      actualQuantity: number;
+      unit: string;
+      unitCost?: number;
+      totalCost?: number;
+    }>;
+  }): Promise<ProductionRun> {
+    const client = this.checkClient();
+    const oldRun = await this.getProductionRunById(params.runId);
+    if (!oldRun) throw new Error(`Production run with id ${params.runId} not found`);
+
+    const now = new Date().toISOString();
+    const operator = params.operatorName || oldRun.operatorName || 'Kitchen Staff';
+
+    // 1. Calculate and apply product stock delta
+    const deltaProduct = Number((params.actualQuantity - oldRun.actualQuantity).toFixed(3));
+    if (deltaProduct !== 0) {
+      const { data: prod } = await client
+        .from('products')
+        .select('current_stock, name')
+        .eq('id', oldRun.productId)
+        .maybeSingle();
+
+      if (prod) {
+        const prevBal = Number(prod.current_stock) || 0;
+        const newBal = Math.max(0, Number((prevBal + deltaProduct).toFixed(3)));
+
+        await client
+          .from('products')
+          .update({ current_stock: newBal, updated_at: now })
+          .eq('id', oldRun.productId);
+
+        await client.from('stock_movements').insert({
+          item_id: oldRun.productId,
+          item_type: 'product',
+          movement_type: deltaProduct > 0 ? 'production_output' : 'adjustment',
+          quantity: deltaProduct,
+          unit: oldRun.unit,
+          previous_balance: prevBal,
+          new_balance: newBal,
+          reference: `Run ${oldRun.runNumber} Edit`,
+          operator_name: operator,
+          reason: `Batch quantity adjusted from ${oldRun.actualQuantity} to ${params.actualQuantity} ${oldRun.unit}`,
+          created_at: now,
+        });
+      }
+    }
+
+    // 2. Calculate and apply ingredients consumed delta
+    if (params.ingredientsConsumed && params.ingredientsConsumed.length > 0) {
+      for (const newIng of params.ingredientsConsumed) {
+        const oldIng = oldRun.ingredientsConsumed.find((c) => c.ingredientId === newIng.ingredientId);
+        const oldQty = oldIng ? oldIng.actualQuantity : 0;
+        const deltaIng = Number((newIng.actualQuantity - oldQty).toFixed(3));
+
+        if (deltaIng !== 0) {
+          const { data: ingData } = await client
+            .from('ingredients')
+            .select('current_stock, name')
+            .eq('id', newIng.ingredientId)
+            .maybeSingle();
+
+          if (ingData) {
+            const prevIngBal = Number(ingData.current_stock) || 0;
+            // deltaIng > 0 means more was consumed (subtract from stock)
+            // deltaIng < 0 means less was consumed (restore to stock)
+            const newIngBal = Math.max(0, Number((prevIngBal - deltaIng).toFixed(3)));
+
+            await client
+              .from('ingredients')
+              .update({ current_stock: newIngBal, updated_at: now })
+              .eq('id', newIng.ingredientId);
+
+            await client.from('stock_movements').insert({
+              item_id: newIng.ingredientId,
+              item_type: 'ingredient',
+              movement_type: deltaIng > 0 ? 'production_consumption' : 'adjustment',
+              quantity: -deltaIng,
+              unit: newIng.unit,
+              previous_balance: prevIngBal,
+              new_balance: newIngBal,
+              reference: `Run ${oldRun.runNumber} Edit`,
+              operator_name: operator,
+              reason: `Batch ingredient adjustment for ${oldRun.productName}`,
+              created_at: now,
+            });
+          }
+        }
+      }
+
+      // Update production_consumption rows
+      await client.from('production_consumption').delete().eq('production_run_id', params.runId);
+      const consumptionRows = params.ingredientsConsumed.map((i) => ({
+        production_run_id: params.runId,
+        ingredient_id: i.ingredientId,
+        expected_quantity: i.expectedQuantity,
+        actual_quantity: i.actualQuantity,
+        unit: i.unit,
+        unit_cost: i.unitCost || 0,
+        total_cost: i.totalCost || 0,
+      }));
+      await client.from('production_consumption').insert(consumptionRows);
+    }
+
+    // 3. Update production_runs record
+    const updatePayload: Record<string, any> = {
+      actual_quantity: params.actualQuantity,
+      updated_at: now,
+    };
+    if (params.plannedQuantity !== undefined) updatePayload.planned_quantity = params.plannedQuantity;
+    if (params.productionDate) updatePayload.production_date = params.productionDate;
+    if (params.operatorName) updatePayload.operator_name = params.operatorName;
+    if (params.notes !== undefined) updatePayload.notes = params.notes;
+
+    const { error: runUpdateErr } = await client
+      .from('production_runs')
+      .update(updatePayload)
+      .eq('id', params.runId);
+
+    if (runUpdateErr) throw new Error(runUpdateErr.message);
+
+    const updated = await this.getProductionRunById(params.runId);
+    if (!updated) throw new Error('Updated production run could not be re-loaded');
+    return updated;
+  }
+
   async cancelProductionRun(params: {
     runId: string;
     reason: string;
@@ -1598,6 +1733,27 @@ export class SupabaseRepository implements IEpsoRepository {
       notes: row.notes,
       createdAt: row.created_at,
     }));
+  }
+
+  async deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void> {
+    const client = this.checkClient();
+    const { error } = await client
+      .from('packing_records')
+      .delete()
+      .eq('production_run_id', runId);
+
+    if (error) {
+      console.error('Error deleting previous packing records for run:', error);
+      throw new Error(error.message);
+    }
+
+    if (runNumber) {
+      await client
+        .from('packing_records')
+        .delete()
+        .is('production_run_id', null)
+        .eq('notes', `Batch #${runNumber}`);
+    }
   }
 }
 

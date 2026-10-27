@@ -70,75 +70,94 @@ export interface IEpsoRepository {
       unit: string;
     }>;
   }): Promise<ProductionRun>;
-  cancelProductionRun(params: {
-    runId: string;
-    reason: string;
-    operatorName: string;
-  }): Promise<boolean>;
-  deleteProductionRun(
-    params:
-      | {
+  updateProductionRun(params: {
+      runId: string;
+      actualQuantity: number;
+      plannedQuantity?: number;
+      productionDate?: string;
+      operatorName?: string;
+      notes?: string;
+      ingredientsConsumed?: Array<{
+        ingredientId: string;
+        expectedQuantity: number;
+        actualQuantity: number;
+        unit: string;
+        unitCost?: number;
+        totalCost?: number;
+      }>;
+    }): Promise<ProductionRun>;
+    cancelProductionRun(params: {
+      runId: string;
+      reason: string;
+      operatorName: string;
+    }): Promise<boolean>;
+    deleteProductionRun(
+      params:
+        | {
           runId: string;
           restock: boolean;
           operatorName: string;
           reason?: string;
         }
-      | string
-  ): Promise<boolean>;
+        | string
+    ): Promise<boolean>;
 
-  // Stock Ledger
-  getStockMovements(filter?: {
-    itemId?: string;
-    itemType?: 'ingredient' | 'product';
-    type?: MovementType;
-    limit?: number;
-  }): Promise<StockMovement[]>;
+    // Stock Ledger
+    getStockMovements(filter?: {
+      itemId?: string;
+      itemType?: 'ingredient' | 'product';
+      type?: MovementType;
+      limit?: number;
+    }): Promise<StockMovement[]>;
 
-  // Admin & Security Management
-  isAdminInitialized(): Promise<boolean>;
-  setupAdminPin(pin: string, recoveryKey: string): Promise<{ success: boolean; sessionToken: string }>;
-  verifyAdminPin(pin: string): Promise<{ success: boolean; sessionToken?: string; needsSetup?: boolean }>;
-  resetAdminPinWithRecovery(recoveryKey: string, newPin: string): Promise<{ success: boolean; message: string }>;
-  verifyAdminSession(token: string): Promise<boolean>;
-  getAdminDashboardMetrics(startDate: string, endDate: string): Promise<AdminDashboardMetrics>;
-  getAuditLogs(limit?: number): Promise<AuditLog[]>;
+    // Admin & Security Management
+    isAdminInitialized(): Promise<boolean>;
+    setupAdminPin(pin: string, recoveryKey: string): Promise<{ success: boolean; sessionToken: string }>;
+    verifyAdminPin(pin: string): Promise<{ success: boolean; sessionToken?: string; needsSetup?: boolean }>;
+    resetAdminPinWithRecovery(recoveryKey: string, newPin: string): Promise<{ success: boolean; message: string }>;
+    verifyAdminSession(token: string): Promise<boolean>;
+    getAdminDashboardMetrics(startDate: string, endDate: string): Promise<AdminDashboardMetrics>;
+    getAuditLogs(limit?: number): Promise<AuditLog[]>;
 
-  // Mode & System status
-  isSupabaseMode(): boolean;
+    // Mode & System status
+    isSupabaseMode(): boolean;
 
-  // Daily Closing & Cost Allocation
-  getDailyClosing(date: string): Promise<DailyClosing | null>;
-  listDailyClosings(limit?: number): Promise<DailyClosing[]>;
-  saveDailyClosing(data: {
-    productionDate: string;
-    oilOpeningBalance: number;
-    oilPurchases: number;
-    oilClosingBalance: number;
-    oilCostPerKg: number;
-    productionWages: number;
-    notes?: string;
-    closedBy: string;
-  }): Promise<DailyClosing>;
-  listCostAllocations(dateOrClosingId: string): Promise<DailyCostAllocation[]>;
+    // Daily Closing & Cost Allocation
+    getDailyClosing(date: string): Promise<DailyClosing | null>;
+    listDailyClosings(limit?: number): Promise<DailyClosing[]>;
+    saveDailyClosing(data: {
+      productionDate: string;
+      oilOpeningBalance: number;
+      oilPurchases: number;
+      oilClosingBalance: number;
+      oilCostPerKg: number;
+      productionWages: number;
+      notes?: string;
+      closedBy: string;
+    }): Promise<DailyClosing>;
+    listCostAllocations(dateOrClosingId: string): Promise<DailyCostAllocation[]>;
 
-  // Packet Types Catalog
-  listPacketTypes(): Promise<PacketType[]>;
-  savePacketType(data: Partial<PacketType> & { name: string }): Promise<PacketType>;
-  deletePacketType(id: string): Promise<void>;
+    // Packet Types Catalog
+    listPacketTypes(): Promise<PacketType[]>;
+    savePacketType(data: Partial<PacketType> & { name: string }): Promise<PacketType>;
+    deletePacketType(id: string): Promise<void>;
 
-  // Packaging & Packing
-  listPackagingItems(productId?: string): Promise<PackagingItem[]>;
-  savePackagingItem(item: Partial<PackagingItem> & { productId: string; sizeLabel: string }): Promise<PackagingItem>;
-  deletePackagingItem(id: string): Promise<void>;
-  recordPacking(params: {
-    packingDate: string;
-    productId: string;
-    productionRunId?: string;
-    packagingItemId?: string;
-    packetSize: string;
-    packetsPacked: number;
-    operatorName: string;
-    notes?: string;
-  }): Promise<PackingRecord>;
-  listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]>;
-}
+    // Packaging & Packing
+    listPackagingItems(productId?: string): Promise<PackagingItem[]>;
+    savePackagingItem(item: Partial<PackagingItem> & { productId: string; sizeLabel: string }): Promise<PackagingItem>;
+    deletePackagingItem(id: string): Promise<void>;
+    recordPacking(params: {
+      packingDate: string;
+      productId: string;
+      productionRunId?: string;
+      packagingItemId?: string;
+      packetSize: string;
+      packetsPacked: number;
+      operatorName: string;
+      notes?: string;
+    }): Promise<PackingRecord>;
+    listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]>;
+    deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void>;
+  }
+
+

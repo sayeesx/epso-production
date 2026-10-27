@@ -2,9 +2,24 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import fs from 'fs'
+
+let appVersion = '1.0.1';
+let appCommit = 'latest';
+try {
+  const vData = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, './public/version.json'), 'utf8'));
+  appVersion = vData.version || '1.0.1';
+  appCommit = vData.commit || 'latest';
+} catch (e) {
+  // fallback
+}
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_COMMIT__: JSON.stringify(appCommit),
+  },
   plugins: [
     react(),
     VitePWA({

@@ -4,6 +4,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AppProvider } from './context/AppContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { AppLayout } from './components/layout/AppLayout';
+import { ForceUpdateModal } from './components/common/ForceUpdateModal';
 import { ProductionPage } from './pages/ProductionPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { IngredientsPage } from './pages/IngredientsPage';
@@ -14,7 +15,8 @@ export const App: React.FC = () => {
     <ThemeProvider>
       <LanguageProvider>
         <AppProvider>
-        <BrowserRouter>
+          <ForceUpdateModal />
+          <BrowserRouter>
           <Routes>
             <Route element={<AppLayout />}>
               {/* Kitchen / Production Staff Default Interface: / */}

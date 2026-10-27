@@ -1,11 +1,12 @@
 {
   "name": "epso-production-pwa",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "bump-version": "node scripts/bump-version.js",
     "test": "vitest run",
     "lint": "oxlint",
     "preview": "vite preview"
