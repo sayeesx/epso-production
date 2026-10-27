@@ -588,6 +588,19 @@ export const ProductionPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Add Basic ingredients button */}
+          <button
+            onClick={() => {
+              setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
+              setIsBasicSelectorOpen(true);
+            }}
+            className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
+            title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക (ഓയിൽ, ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില)' : 'Add basic ingredients (Oil, Salt, Cashew shell, Chippli, Curry leaves)'}
+          >
+            <TbToolsKitchen2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
+          </button>
+
           <button
             onClick={handleOpenNewBatch}
             disabled={isOpeningNewBatch}
@@ -724,10 +737,7 @@ export const ProductionPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold text-xs shrink-0 pl-1">
-              <span className="text-[11px] group-hover:underline font-malayalam">
-                {language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}
-              </span>
+            <div className="flex items-center shrink-0 pl-1 text-amber-700 dark:text-amber-300">
               <TbChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 text-amber-600 dark:text-amber-400" />
             </div>
           </button>
