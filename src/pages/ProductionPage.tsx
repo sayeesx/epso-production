@@ -26,6 +26,7 @@ import {
   TbAlertCircle,
   TbPencil,
   TbToolsKitchen2,
+  TbChevronRight,
 } from 'react-icons/tb';
 
 // 3D Rotating Warning Message Cube (transforms across X-axis every 2.8s in a loop)
@@ -188,7 +189,7 @@ export const ProductionPage: React.FC = () => {
     } else {
       const name = ingredientOrKey.name.toLowerCase();
       if (name.includes('ഓയിൽ') || name.includes('oil')) key = 'oil';
-      else if (name.includes('ഉപ്പ്') || (name.includes('salt') && !name.includes('black'))) key = 'salt';
+      else if (name.includes('ഉപ്പ്') || name.includes('salt')) key = 'salt';
       else if (name.includes('അണ്ടി തോട്') || name.includes('തോട്') || name.includes('shell') || name.includes('cashew')) key = 'cashew_shell';
       else if (name.includes('ചിപ്പ്ളി') || name.includes('chippli')) key = 'chippli';
       else if (name.includes('കറിവേപ്പില') || name.includes('curry')) key = 'curry_leaves';
@@ -213,7 +214,7 @@ export const ProductionPage: React.FC = () => {
     let mounted = true;
     const load = async () => {
       try {
-        setLoading(true);
+        setLoading((prev) => (runs.length === 0 ? true : prev));
         const [rList, pList, recList, iList, oilCloseToday, oilCloseYesterday, packList, movements] = await Promise.all([
           repo.listProductionRuns({ limit: 60 }),
           repo.listProducts(false),
@@ -239,20 +240,27 @@ export const ProductionPage: React.FC = () => {
 
             for (const m of movements) {
               const mDate = m.createdAt ? m.createdAt.split('T')[0] : '';
+              let mLocalDate = '';
+              try {
+                if (m.createdAt) {
+                  mLocalDate = new Date(m.createdAt).toLocaleDateString('en-CA');
+                }
+              } catch {}
               const r = (m.reason || '').toLowerCase();
               const n = (m.itemName || '').toLowerCase();
 
               let key = '';
-              if (n.includes('ഉപ്പ്') || (n.includes('salt') && !n.includes('black'))) key = 'salt';
+              if (n.includes('ഓയിൽ') || n.includes('oil')) key = 'oil';
+              else if (n.includes('ഉപ്പ്') || n.includes('salt')) key = 'salt';
               else if (n.includes('അണ്ടി തോട്') || n.includes('തോട്') || n.includes('shell') || n.includes('cashew')) key = 'cashew_shell';
               else if (n.includes('ചിപ്പ്ളി') || n.includes('chippli')) key = 'chippli';
               else if (n.includes('കറിവേപ്പില') || n.includes('curry')) key = 'curry_leaves';
 
               if (key) {
-                if (mDate === todayStr || r.includes(todayStr)) {
+                if (mDate === todayStr || mLocalDate === todayStr || r.includes(todayStr) || isTodayDate(mDate)) {
                   if (!detectedToday.includes(key)) detectedToday.push(key);
                 }
-                if (mDate === yesterdayStr || r.includes(yesterdayStr)) {
+                if (mDate === yesterdayStr || mLocalDate === yesterdayStr || r.includes(yesterdayStr) || isYesterdayDate(mDate)) {
                   if (!detectedYesterday.includes(key)) detectedYesterday.push(key);
                 }
               }
@@ -390,17 +398,8 @@ export const ProductionPage: React.FC = () => {
       );
     }
 
-    const missingPacketsCount = (isYesterday ? yesterdayMissingPackets : todayMissingPackets).length;
-    if (missingPacketsCount > 0) {
-      list.push(
-        language === 'ml'
-          ? `${missingPacketsCount} ബാച്ചുകളിൽ പാക്കറ്റ് എണ്ണം ചേർത്തിട്ടില്ല`
-          : `${missingPacketsCount} batch(es) pending packet counts`
-      );
-    }
-
     return list;
-  }, [runs, activeClosing, isYesterday, isYesterdayDate, isTodayDate, recordedKeysForActiveDate, language, hasRecordedOil, yesterdayMissingPackets, todayMissingPackets]);
+  }, [runs, activeClosing, isYesterday, isYesterdayDate, isTodayDate, recordedKeysForActiveDate, language, hasRecordedOil]);
 
   const todayHasWarning = todayMissingPackets.length > 0 || (activeFilter === 'today' ? missingBasicItems.length > 0 : todayMissingOil);
   const yesterdayHasWarning = yesterdayMissingPackets.length > 0 || (activeFilter === 'yesterday' ? missingBasicItems.length > 0 : yesterdayMissingOil);
@@ -604,19 +603,6 @@ export const ProductionPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Add Basic ingredients button (replaces Add Oil) */}
-          <button
-            onClick={() => {
-              setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
-              setIsBasicSelectorOpen(true);
-            }}
-            className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
-            title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക (ഓയിൽ, ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില)' : 'Add basic ingredients (Oil, Salt, Cashew shell, Chippli, Curry leaves)'}
-          >
-            <TbToolsKitchen2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
-          </button>
-
           <button
             onClick={handleOpenNewBatch}
             disabled={isOpeningNewBatch}
@@ -735,26 +721,29 @@ export const ProductionPage: React.FC = () => {
           leftAddon={<TbSearch className="w-4 h-4 text-stone-400" />}
         />
 
-        {/* Actionable 3D Rotating Warning Banner for Basic Ingredients & Missing Packets */}
+        {/* Actionable 3D Rotating Warning Banner for Basic Ingredients: clickable card that acts directly as Add Basic */}
         {(activeFilter === 'today' || activeFilter === 'yesterday') && missingBasicItems.length > 0 && (
-          <div className="bg-amber-50/90 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800/60 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 animate-in fade-in shadow-2xs">
+          <button
+            type="button"
+            onClick={() => {
+              setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
+              setIsBasicSelectorOpen(true);
+            }}
+            className="w-full text-left bg-amber-50/90 hover:bg-amber-100/90 dark:bg-amber-950/50 dark:hover:bg-amber-950/70 border border-amber-300 dark:border-amber-800/60 hover:border-amber-400 dark:hover:border-amber-700 rounded-xl px-3 sm:px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 transition-all active:scale-[0.99] shadow-2xs cursor-pointer group select-none"
+            title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക' : 'Add Basic Ingredients'}
+          >
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-sm">⚠️</span>
               <Rotating3DWarning items={missingBasicItems} />
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
-                setIsBasicSelectorOpen(true);
-              }}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-            >
-              <TbToolsKitchen2 className="w-3.5 h-3.5" />
-              <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
-            </button>
-          </div>
+            <div className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold text-xs shrink-0 pl-1">
+              <span className="text-[11px] group-hover:underline font-malayalam">
+                {language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}
+              </span>
+              <TbChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </button>
         )}
 
         {/* Loading state: skeleton shimmer effect */}
@@ -979,17 +968,25 @@ export const ProductionPage: React.FC = () => {
                           type="button"
                           onClick={() => setBatchForPacking(run)}
                           className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/60 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600/80 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-                          title={language === 'ml' ? 'ചേർക്കുക' : 'Add'}
+                          title={
+                            packedTypesCount > 0
+                              ? language === 'ml'
+                                ? 'ബാക്കി പാക്കറ്റുകൾ ചേർക്കുക'
+                                : 'Add remaining packets'
+                              : language === 'ml'
+                              ? 'പാക്കറ്റുകൾ ചേർക്കുക'
+                              : 'Add packets'
+                          }
                         >
                           <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" />
                           <span>
                             {totalExpectedPackets > 0 && packedTypesCount > 0
                               ? language === 'ml'
-                                ? `ചേർക്കുക (${packedTypesCount}/${totalExpectedPackets})`
-                                : `Add (${packedTypesCount}/${totalExpectedPackets})`
+                                ? `ബാക്കി ചേർക്കുക (${packedTypesCount}/${totalExpectedPackets})`
+                                : `Add remaining (${packedTypesCount}/${totalExpectedPackets})`
                               : language === 'ml'
-                              ? 'ചേർക്കുക'
-                              : 'Add'}
+                              ? 'പാക്കറ്റുകൾ ചേർക്കുക'
+                              : 'Add packets'}
                           </span>
                         </button>
                       )}
@@ -1080,7 +1077,7 @@ export const ProductionPage: React.FC = () => {
             setRuns((prev) => {
               const exists = prev.some((r) => r.id === savedRun.id);
               if (exists) {
-                return prev.map((r) => (r.id === savedRun.id ? savedRun : r));
+                return prev.map((r) => (r.id === savedRun.id ? { ...r, ...savedRun } : r));
               }
               return [savedRun, ...prev];
             });

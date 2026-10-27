@@ -275,7 +275,8 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
             className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-16 relative select-none"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
-            <div className="shrink-0 w-1/2" />
+            {/* Left padding spacer calibrated so tick 0 center aligns precisely with the center needle */}
+            <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
             <div className="flex items-end shrink-0">
               {Array.from({ length: totalTicks + 1 }).map((_, idx) => {
                 const val = Number((RULER_MIN_KG + idx * RULER_STEP_KG).toFixed(1));
@@ -308,7 +309,8 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
                 );
               })}
             </div>
-            <div className="shrink-0 w-1/2" />
+            {/* Right padding spacer calibrated so last tick center aligns precisely with the center needle */}
+            <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
           </div>
 
           {/* Edge fades */}

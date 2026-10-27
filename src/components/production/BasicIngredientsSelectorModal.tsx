@@ -117,13 +117,28 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
     >
       <div className="space-y-2.5 pb-2">
         {basicItemsConfig.map((item) => {
-          const matchingIngredient = ingredients.find((i) =>
-            item.matchNames.some(
-              (name) =>
-                i.name.toLowerCase().includes(name.toLowerCase()) ||
-                name.toLowerCase().includes(i.name.toLowerCase())
-            )
-          );
+          const isSalt = item.key === 'salt';
+          // Prioritize ingredients with category === 'basic', and ensure black salt is never picked for common salt
+          const matchingIngredient =
+            ingredients.find((i) => {
+              const iName = i.name.toLowerCase();
+              if (isSalt && iName.includes('black')) return false;
+              return (
+                i.category === 'basic' &&
+                item.matchNames.some(
+                  (name) =>
+                    iName.includes(name.toLowerCase()) || name.toLowerCase().includes(iName)
+                )
+              );
+            }) ||
+            ingredients.find((i) => {
+              const iName = i.name.toLowerCase();
+              if (isSalt && iName.includes('black')) return false;
+              return item.matchNames.some(
+                (name) =>
+                  iName.includes(name.toLowerCase()) || name.toLowerCase().includes(iName)
+              );
+            });
 
           const stockStr = matchingIngredient
             ? `${Number(matchingIngredient.currentStock).toFixed(1)} ${matchingIngredient.unit}`

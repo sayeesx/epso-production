@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -89,6 +89,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
   const [savedRunData, setSavedRunData] = useState<any>(null);
+  const savedRunRef = useRef<any>(null);
 
   // Ingredients consumption list: { ingredientId, expectedQuantity, actualQuantity, unit }
   const [consumptionItems, setConsumptionItems] = useState<
@@ -528,8 +529,15 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         console.error('Failed to refresh ingredient stock after run', e);
       }
 
+      savedRunRef.current = saved;
       setSavedRunData(saved);
       setIsSubmitting(false);
+
+      // Immediately propagate updated run to parent so batch cards update with zero lag
+      if (saved) {
+        onSuccess(saved);
+      }
+
       setShowSuccessAnim(true);
     } catch (err: any) {
       console.error('Production save error', err);
@@ -548,8 +556,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         : t.productionSavedSuccess,
       'success'
     );
-    if (savedRunData) {
-      onSuccess(savedRunData);
+    const runResult = savedRunRef.current || savedRunData;
+    if (runResult) {
+      onSuccess(runResult);
     }
     onClose();
   };

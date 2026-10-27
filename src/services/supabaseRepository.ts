@@ -835,10 +835,12 @@ export class SupabaseRepository implements IEpsoRepository {
         }
       }
 
-      // Update production_consumption rows
-      await client.from('production_consumption').delete().eq('production_run_id', params.runId);
+      // Update production_consumption rows (foreign key column is run_id)
+      const { error: delErr } = await client.from('production_consumption').delete().eq('run_id', params.runId);
+      if (delErr) console.warn('Warning deleting old consumption rows:', delErr.message);
+
       const consumptionRows = params.ingredientsConsumed.map((i) => ({
-        production_run_id: params.runId,
+        run_id: params.runId,
         ingredient_id: i.ingredientId,
         expected_quantity: i.expectedQuantity,
         actual_quantity: i.actualQuantity,
@@ -846,7 +848,8 @@ export class SupabaseRepository implements IEpsoRepository {
         unit_cost: i.unitCost || 0,
         total_cost: i.totalCost || 0,
       }));
-      await client.from('production_consumption').insert(consumptionRows);
+      const { error: insErr } = await client.from('production_consumption').insert(consumptionRows);
+      if (insErr) console.warn('Warning inserting updated consumption rows:', insErr.message);
     }
 
     // 3. Update production_runs record
