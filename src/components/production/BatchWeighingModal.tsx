@@ -169,10 +169,10 @@ export const BatchWeighingModal: React.FC<BatchWeighingModalProps> = ({
             unit={batch.unit || 'kg'}
             value={producedKg}
             onChange={(val) => setProducedKg(val)}
-            min={0.1}
+            min={0}
             max={250}
             step={0.5}
-            presets={[5, 10, 25, 50, 100, 250]}
+            presets={[0.5, 1, 2, 5, 10, 25, 50, 100]}
             hideHeader={false}
           />
 

@@ -125,8 +125,8 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
   const [typedValue, setTypedValue] = useState<string>('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Spacing between each tick mark in pixels
-  const TICK_SPACING = 14;
+  // Spacing between each tick mark in pixels (24px for 0.5 steps to clearly fit 0.5, 1.5 labels)
+  const TICK_SPACING = effectiveStep === 0.5 ? 24 : 14;
 
   // Calculate starting tick count to accommodate current value plus scroll runway
   const initialTicks = useMemo(() => {
@@ -397,18 +397,27 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
                     onChange(currentStepVal);
                     scrollToValue(currentStepVal, true);
                   }}
-                  className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-12 pb-1"
+                  className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-16 pb-0.5"
                   style={{ width: '2px' }}
                 >
                   <div
                     className={`rounded-full transition-colors ${
                       isMajor
-                        ? 'h-10 bg-stone-500/40 dark:bg-stone-400/35 w-[2px]'
+                        ? 'h-9 bg-stone-600/60 dark:bg-stone-300/60 w-[2px]'
                         : isMedium
-                        ? 'h-6 bg-stone-400/30 dark:bg-stone-500/25 w-[1.5px]'
-                        : 'h-4 bg-stone-300/25 dark:bg-stone-600/20 w-[1px]'
+                        ? 'h-5 bg-stone-400/40 dark:bg-stone-500/35 w-[1.5px]'
+                        : 'h-3 bg-stone-300/25 dark:bg-stone-600/20 w-[1px]'
                     }`}
                   />
+                  {label ? (
+                    <span className="text-[10px] font-mono font-bold text-stone-500 dark:text-stone-400 mt-1 select-none pointer-events-none whitespace-nowrap leading-none">
+                      {label}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] opacity-0 mt-1 select-none pointer-events-none leading-none">
+                      -
+                    </span>
+                  )}
                 </div>
               );
             })}
