@@ -877,10 +877,8 @@ export const ProductionPage: React.FC = () => {
                   padding="md"
                   className={`transition-all select-none space-y-3 press-apple ${
                     isDeleted
-                      ? 'bg-stone-100/70 dark:bg-[#181515] border-stone-200 dark:border-[#282323] opacity-75'
-                      : isWarningYellow
-                      ? 'hover:border-yellow-400/60 dark:hover:border-yellow-500/60 border-yellow-200/50 dark:border-yellow-900/30'
-                      : 'hover:border-epso-red/40 dark:hover:border-epso-red/50'
+                      ? 'bg-stone-100/70 dark:bg-[#181515] !border-stone-200 dark:!border-[#282323] opacity-75'
+                      : '!border-orange-500/40 dark:!border-orange-500/45 hover:!border-orange-500 dark:hover:!border-orange-400 shadow-2xs'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">

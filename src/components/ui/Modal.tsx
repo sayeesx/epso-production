@@ -7,6 +7,7 @@ interface ModalProps {
   title: React.ReactNode;
   description?: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
   size?: 'sm' | 'md' | 'lg' | 'xl';
   expanded?: boolean;
@@ -19,6 +20,7 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   description,
   children,
+  footer,
   maxWidth,
   size,
   expanded = false,
@@ -66,7 +68,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={`relative w-full ${maxWidths[effectiveMaxWidth]} bg-white dark:bg-[#1E1B1B] text-charcoal dark:text-stone-100 border border-charcoal-border dark:border-[#2E2828] rounded-t-3xl landscape:rounded-2xl sm:rounded-2xl ${
           expanded ? 'h-[94dvh] landscape:h-[88dvh] sm:h-[88dvh] max-h-[94dvh]' : 'max-h-[90dvh] landscape:max-h-[88dvh]'
-        } flex flex-col z-10 overflow-hidden transform transition-all duration-300 animate-in slide-in-from-bottom sm:zoom-in-95 shadow-2xl pb-safe`}
+        } flex flex-col z-10 overflow-hidden transform transition-all duration-300 animate-in slide-in-from-bottom sm:zoom-in-95`}
       >
         {/* Mobile handle indicator */}
         <div className="w-12 h-1 bg-stone-300 dark:bg-stone-700 rounded-full mx-auto mt-2.5 landscape:hidden sm:hidden" />
@@ -90,15 +92,18 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Scrollable Content */}
         <div
-          className={`p-3.5 sm:p-6 overflow-y-auto space-y-4 overscroll-contain ${
-            expanded
-              ? 'flex-1 max-h-[calc(94dvh-80px)] landscape:max-h-[calc(88dvh-75px)]'
-              : 'max-h-[calc(90dvh-115px)] landscape:max-h-[calc(88dvh-95px)]'
-          }`}
+          className="p-3.5 sm:p-6 overflow-y-auto space-y-4 overscroll-contain flex-1"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {children}
         </div>
+
+        {/* Pinned Footer attached directly to the bottom margin with zero gap */}
+        {footer && (
+          <div className="shrink-0 p-3 sm:p-4 bg-white dark:bg-[#1E1B1B] border-t border-charcoal-border/70 dark:border-[#2E2828] z-20 pb-safe">
+            {footer}
+          </div>
+        )}
 
         {/* In-modal overlay (e.g. success animation with white background directly on the modal) */}
         {overlay}

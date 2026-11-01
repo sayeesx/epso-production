@@ -598,6 +598,101 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         </div>
       }
       size="lg"
+      footer={
+        activeRulerItem ? undefined : (
+          <div className="flex items-center justify-between w-full">
+            {step === 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSuccessAnim(false);
+                    setIsSubmitting(false);
+                    onClose();
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200 dark:bg-[#252020] dark:hover:bg-[#2e2828] text-stone-700 dark:text-stone-300 font-bold text-xs transition-colors cursor-pointer select-none"
+                >
+                  <span>{language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}</span>
+                </button>
+
+                {selectedProductId && (
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white font-extrabold text-xs transition-all cursor-pointer select-none"
+                  >
+                    <span>{language === 'ml' ? 'അടുത്തത്' : 'Next'}</span>
+                    <TbChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                  </button>
+                )}
+              </>
+            ) : step === 2 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (runToEdit) {
+                      onClose();
+                    } else {
+                      setStep(1);
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200 dark:bg-[#252020] dark:hover:bg-[#2e2828] text-stone-700 dark:text-stone-300 font-bold text-xs transition-colors cursor-pointer select-none"
+                >
+                  {!runToEdit && <TbChevronLeft className="w-4 h-4 shrink-0" />}
+                  <span>{runToEdit ? (language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel') : (language === 'ml' ? 'പിന്നോട്ട്' : 'Back')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isAnyIngredientOutOfStock && consumptionItems.length > 0) {
+                      setStep(3);
+                    }
+                  }}
+                  disabled={isAnyIngredientOutOfStock || consumptionItems.length === 0}
+                  className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white font-extrabold text-xs transition-all cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  <span>{language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Review & Next'}</span>
+                  <TbChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                </button>
+              </>
+            ) : step === 3 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  disabled={isSubmitting}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200 dark:bg-[#252020] dark:hover:bg-[#2e2828] text-stone-700 dark:text-stone-300 font-bold text-xs transition-colors cursor-pointer select-none disabled:opacity-50"
+                >
+                  <TbChevronLeft className="w-4 h-4 shrink-0" />
+                  <span>{language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting}
+                  className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white font-extrabold text-xs transition-all cursor-pointer select-none disabled:opacity-50"
+                >
+                  {isSubmitting ? (
+                    <LoadingSpinner size="sm" color="orange" />
+                  ) : (
+                    <>
+                      <span>
+                        {runToEdit
+                          ? (language === 'ml' ? 'മാറ്റങ്ങൾ സേവ് ചെയ്യുക' : 'Save Changes')
+                          : (language === 'ml' ? 'പ്രൊഡക്ഷൻ ആരംഭിക്കുക' : 'Start Production')}
+                      </span>
+                      <TbCheck className="w-4 h-4 stroke-[3]" />
+                    </>
+                  )}
+                </button>
+              </>
+            ) : null}
+          </div>
+        )
+      }
       overlay={
         <>
           {isSubmitting && (
@@ -1007,41 +1102,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   </div>
                 )}
               </div>
-
-              {/* Step 2 Actions: Back and Review Buttons FIXED ON BOTTOM (sticky) */}
-              <div className="sticky bottom-0 -mx-3.5 sm:-mx-6 -mb-3.5 sm:-mb-6 p-3.5 sm:p-4 bg-white/95 dark:bg-[#1E1B1B]/95 backdrop-blur-md border-t border-charcoal-border/60 dark:border-[#2E2828] flex items-center justify-between gap-3 z-30 shadow-lg mt-auto">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    if (runToEdit) {
-                      onClose();
-                    } else {
-                      setStep(1);
-                    }
-                  }}
-                  icon={runToEdit ? undefined : <TbChevronLeft className="w-4 h-4" />}
-                >
-                  {runToEdit ? (language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel') : (language === 'ml' ? 'പിന്നോട്ട്' : 'Back')}
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isAnyIngredientOutOfStock && consumptionItems.length > 0) {
-                      setStep(3);
-                    }
-                  }}
-                  disabled={isAnyIngredientOutOfStock || consumptionItems.length === 0}
-                  className={`flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all select-none ${
-                    isAnyIngredientOutOfStock || consumptionItems.length === 0
-                      ? 'bg-stone-200 dark:bg-stone-800 text-stone-400 dark:text-stone-600 border border-stone-200 dark:border-stone-800 cursor-not-allowed opacity-80 pointer-events-none'
-                      : 'bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white shadow-md press-apple cursor-pointer'
-                  }`}
-                >
-                  <span>{language === 'ml' ? 'റിവ്യൂ ചെയ്യുക' : 'Review & Next'}</span>
-                  <TbChevronRight className="w-4 h-4 shrink-0 stroke-[2.5]" />
-                </button>
-              </div>
             </div>
           )
         )}
@@ -1051,30 +1111,27 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         {/* ======================================================== */}
         {step === 3 && selectedProduct && (
           <div className="space-y-3.5">
-            {/* Product Run Summary Card */}
-            <div className="p-3.5 bg-red-50/60 dark:bg-red-950/30 rounded-2xl border border-red-200 dark:border-red-900/40">
-              <div className="flex items-start justify-between gap-2">
+            {/* Product Run Summary Card - compact height */}
+            <div className="p-2.5 sm:p-3 bg-red-50/60 dark:bg-red-950/30 rounded-2xl border border-red-200 dark:border-red-900/40">
+              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-epso-red dark:text-red-400 font-malayalam">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-epso-red dark:text-red-400 font-malayalam block">
                     ഉൽപ്പാദന ബാച്ച് സംഗ്രഹം
                   </span>
-                  <h4 className="text-lg font-black text-stone-900 dark:text-white leading-tight mt-0.5 font-malayalam">
+                  <h4 className="text-base font-black text-stone-900 dark:text-white leading-tight mt-0.5 font-malayalam">
                     {selectedProduct.name}
                   </h4>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam mt-1">
-                    തിരഞ്ഞെടുത്ത ചേരുവകൾ: {consumptionItems.length}
-                  </p>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam block">
                     {runToEdit && actualOutputQty > 0
                       ? `${actualOutputQty} ${selectedProduct.unit}`
-                      : (language === 'ml' ? 'തൂക്കം: നിർമ്മാണ ശേഷം' : 'Weigh After Production')}
+                      : 'നിർമ്മാണ ശേഷം തൂക്കുക'}
                   </span>
                   <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
                     {runToEdit && actualOutputQty > 0
                       ? (language === 'ml' ? 'ഉൽപ്പാദിപ്പിച്ചത്' : 'Produced')
-                      : (language === 'ml' ? 'സ്കെയിൽ വഴി രേഖപ്പെടുത്താം' : 'Record via scale button')}
+                      : 'സ്കെയിൽ വഴി രേഖപ്പെടുത്താം'}
                   </p>
                 </div>
               </div>
@@ -1095,8 +1152,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 </button>
               </div>
 
-              {/* Scrollable list within fixed container */}
-              <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+              {/* Scrollable list within container */}
+              <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
                 {consumptionItems.map((item) => {
                   const ing = liveIngredients.find((i) => i.id === item.ingredientId);
                   const inStock = ing ? ing.currentStock : 0;
@@ -1135,32 +1192,6 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   );
                 })}
               </div>
-            </div>
-
-            {/* Step 3 Bottom Action Bar FIXED ON BOTTOM (sticky) */}
-            <div className="sticky bottom-0 -mx-3.5 sm:-mx-6 -mb-3.5 sm:-mb-6 p-3.5 sm:p-4 bg-white/95 dark:bg-[#1E1B1B]/95 backdrop-blur-md border-t border-charcoal-border/60 dark:border-[#2E2828] flex items-center justify-between gap-3 z-30 shadow-lg mt-auto">
-              <Button
-                variant="ghost"
-                onClick={() => setStep(2)}
-                icon={<TbChevronLeft className="w-4 h-4" />}
-              >
-                {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
-              </Button>
-
-              <Button
-                variant="primary"
-                onClick={handleFinalSubmit}
-                isLoading={isSubmitting}
-                className="font-bold px-6 shadow-md"
-              >
-                {runToEdit
-                  ? language === 'ml'
-                    ? 'മാറ്റങ്ങൾ സേവ് ചെയ്യുക'
-                    : 'Save Changes'
-                  : language === 'ml'
-                  ? 'പ്രൊഡക്ഷൻ ആരംഭിക്കുക'
-                  : 'Start Production'}
-              </Button>
             </div>
           </div>
         )}

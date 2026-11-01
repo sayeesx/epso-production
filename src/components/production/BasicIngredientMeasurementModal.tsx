@@ -172,8 +172,32 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
         </div>
       }
       size="md"
+      footer={
+        <div className="flex items-center justify-end gap-3 w-full">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200 dark:bg-[#252020] dark:hover:bg-[#2e2828] text-stone-700 dark:text-stone-300 font-bold text-xs transition-colors cursor-pointer select-none"
+          >
+            <span>{language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}</span>
+          </button>
+
+          <button
+            type="submit"
+            form="basicIngredientForm"
+            disabled={isSubmitting || weightKg <= 0}
+            className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-gradient-to-r from-epso-red to-epso-orange hover:bg-epso-red-hover text-white font-extrabold text-xs transition-all cursor-pointer select-none disabled:opacity-50 disabled:pointer-events-none"
+          >
+            <TbCheck className="w-4 h-4 stroke-[2.5]" />
+            <span>
+              {language === 'ml' ? 'ഉപയോഗം ചേർക്കുക' : 'Record Usage'}
+            </span>
+          </button>
+        </div>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4 pb-2">
+      <form id="basicIngredientForm" onSubmit={handleSubmit} className="space-y-4">
         {/* Main Measurement Display Card */}
         <div className="p-4 rounded-3xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 shadow-xs space-y-3">
           <div className="flex items-center justify-between text-xs">
@@ -316,30 +340,6 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
           {/* Edge fades */}
           <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
           <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            {language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}
-          </Button>
-
-          <Button
-            type="submit"
-            variant="primary"
-            isLoading={isSubmitting}
-            className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-6"
-          >
-            <TbCheck className="w-4 h-4 stroke-[2.5]" />
-            <span>
-              {language === 'ml' ? 'ഉപയോഗം ചേർക്കുക' : 'Record Usage'}
-            </span>
-          </Button>
         </div>
       </form>
     </Modal>
