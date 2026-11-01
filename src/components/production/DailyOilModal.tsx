@@ -71,6 +71,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   // Load existing data if recorded for target date
   useEffect(() => {
     if (isOpen) {
+      setShowSuccessAnim(false);
+      setIsSubmitting(false);
       setIsLoadingExisting(true);
       let isMounted = true;
       repo.getDailyClosing(targetDate).then((existing) => {
@@ -340,7 +342,11 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => {
+        setShowSuccessAnim(false);
+        setIsSubmitting(false);
+        onClose();
+      }}
       title={
         <div className="flex items-center gap-2.5">
           <span className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
@@ -365,8 +371,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
           onComplete={handleSuccessAnimComplete}
           message={
             targetDate === yesterdayStr
-              ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ രേഖപ്പെടുത്തി!' : 'Yesterday Oil Saved!')
-              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തി!' : 'Oil Usage Saved!')
+              ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ രേഖപ്പെടുത്തി!' : 'Yesterday Oil Recorded!')
+              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തി!' : 'Oil Usage Recorded!')
           }
           subMessage={
             language === 'ml'
@@ -636,7 +642,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               ? language === 'ml'
                 ? `ബാക്കി ${oilStock} ${oilUnit} മാത്രമേ ഉള്ളൂ..`
                 : `Only ${oilStock} ${oilUnit} remaining..`
-              : language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Daily Oil'}
+              : language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Add Oil'}
           </Button>
         </div>
       </form>

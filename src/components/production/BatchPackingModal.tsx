@@ -115,6 +115,8 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   // Load existing records for this batch
   useEffect(() => {
     if (isOpen && batch) {
+      setShowSuccessAnim(false);
+      setIsSubmitting(false);
       let isMounted = true;
       const initialMap: Record<string, number> = {};
       const loadedExtras: Array<{ name: string; costPerPacket?: number }> = [];
@@ -296,7 +298,11 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     <>
       <Modal
         isOpen={isOpen && !activeRulerPacket}
-      onClose={onClose}
+        onClose={() => {
+          setShowSuccessAnim(false);
+          setIsSubmitting(false);
+          onClose();
+        }}
       title={
         <div className="flex items-center gap-2.5">
           <span className="p-2.5 rounded-2xl bg-epso-red/10 text-epso-red dark:bg-amber-500/20 dark:text-amber-400">

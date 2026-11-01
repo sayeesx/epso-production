@@ -476,20 +476,37 @@ export const ProductionPage: React.FC = () => {
     };
 
     return [...filteredRuns].sort((a, b) => {
+      // 1. Cancelled/deleted items always move to the very bottom
+      const aCancelled = a.status === 'cancelled';
+      const bCancelled = b.status === 'cancelled';
+      if (aCancelled !== bCancelled) {
+        return aCancelled ? 1 : -1;
+      }
+
+      // If both are cancelled, sort descending (newest cancelled first)
+      if (aCancelled && bCancelled) {
+        const timeA = new Date(a.createdAt || a.productionDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.productionDate || 0).getTime();
+        if (timeA !== timeB) return timeB - timeA;
+        const numA = batchNumberMap.get(a.id) || 0;
+        const numB = batchNumberMap.get(b.id) || 0;
+        return numB - numA;
+      }
+
+      // 2. Active batches where packets are yet to be added go to top
       const aPending = isPacketsPending(a);
       const bPending = isPacketsPending(b);
-      // Batches where packets are yet to be added go to the top
       if (aPending && !bPending) return -1;
       if (!aPending && bPending) return 1;
 
-      // Within each group, display in ascending order of creation (Batch 1, 2, 3...)
+      // 3. All completed / active production show in descending order on top (newest first)
+      const timeA = new Date(a.createdAt || a.productionDate || 0).getTime();
+      const timeB = new Date(b.createdAt || b.productionDate || 0).getTime();
+      if (timeA !== timeB) return timeB - timeA;
+
       const numA = batchNumberMap.get(a.id) || 0;
       const numB = batchNumberMap.get(b.id) || 0;
-      if (numA !== numB) return numA - numB;
-
-      const timeA = new Date(a.createdAt || a.productionDate).getTime();
-      const timeB = new Date(b.createdAt || b.productionDate).getTime();
-      return timeA - timeB;
+      return numB - numA;
     });
   }, [filteredRuns, recipes, packingRecords, batchNumberMap]);
 
@@ -1035,7 +1052,7 @@ export const ProductionPage: React.FC = () => {
                             >
                               <TbScale className="w-5 h-5 stroke-[2.2] text-orange-600 dark:text-orange-400 shrink-0" />
                               <span className="font-mono text-sm font-extrabold whitespace-nowrap">
-                                {run.actualQuantity > 0 ? `${run.actualQuantity} ${run.unit}` : (language === 'ml' ? '+ തൂക്കം നൽകുക' : '+ Set Qty')}
+                                {run.actualQuantity > 0 ? `${run.actualQuantity} ${run.unit}` : (language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Qty')}
                               </span>
                               {isProducedMissing && (
                                 <span

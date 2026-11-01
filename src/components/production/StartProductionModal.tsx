@@ -160,6 +160,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   // Reset / initialize form when modal opens
   useEffect(() => {
     if (isOpen) {
+      setShowSuccessAnim(false);
+      setIsSubmitting(false);
+      savedRunRef.current = null;
+      setSavedRunData(null);
+
       if (runToEdit) {
         setStep(2);
         setSelectedProductId(runToEdit.productId);
@@ -571,7 +576,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={() => {
+        setShowSuccessAnim(false);
+        setIsSubmitting(false);
+        onClose();
+      }}
       expanded={step === 1 && isModalExpanded}
       title={
         <div className="flex items-center gap-2 text-stone-900 dark:text-white">
@@ -999,8 +1008,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 )}
               </div>
 
-              {/* Step 2 Actions: Back and Review Buttons on BOTTOM */}
-              <div className="flex items-center justify-between gap-3 pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
+              {/* Step 2 Actions: Back and Review Buttons FIXED ON BOTTOM (sticky) */}
+              <div className="sticky bottom-0 -mx-3.5 sm:-mx-6 -mb-3.5 sm:-mb-6 p-3.5 sm:p-4 bg-white/95 dark:bg-[#1E1B1B]/95 backdrop-blur-md border-t border-charcoal-border/60 dark:border-[#2E2828] flex items-center justify-between gap-3 z-30 shadow-lg mt-auto">
                 <Button
                   variant="ghost"
                   onClick={() => {
@@ -1128,8 +1137,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </div>
             </div>
 
-            {/* Step 3 Bottom Action Bar */}
-            <div className="flex items-center justify-between pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
+            {/* Step 3 Bottom Action Bar FIXED ON BOTTOM (sticky) */}
+            <div className="sticky bottom-0 -mx-3.5 sm:-mx-6 -mb-3.5 sm:-mb-6 p-3.5 sm:p-4 bg-white/95 dark:bg-[#1E1B1B]/95 backdrop-blur-md border-t border-charcoal-border/60 dark:border-[#2E2828] flex items-center justify-between gap-3 z-30 shadow-lg mt-auto">
               <Button
                 variant="ghost"
                 onClick={() => setStep(2)}
@@ -1142,7 +1151,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 variant="primary"
                 onClick={handleFinalSubmit}
                 isLoading={isSubmitting}
-                className="font-bold px-6"
+                className="font-bold px-6 shadow-md"
               >
                 {runToEdit
                   ? language === 'ml'

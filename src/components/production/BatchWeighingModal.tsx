@@ -42,6 +42,8 @@ export const BatchWeighingModal: React.FC<BatchWeighingModalProps> = ({
 
   useEffect(() => {
     if (isOpen && batch) {
+      setShowSuccessAnim(false);
+      setIsSubmitting(false);
       const initial = Number(batch.actualQuantity) || Number(batch.plannedQuantity) || 10;
       setProducedKg(initial);
       setShouldOpenPackingAfter(false);
