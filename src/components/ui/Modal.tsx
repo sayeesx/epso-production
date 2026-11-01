@@ -55,7 +55,7 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-end landscape:items-center sm:items-center justify-center p-0 landscape:p-3 sm:p-4 animate-in fade-in duration-200">
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm transition-opacity"
@@ -64,17 +64,17 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Sheet / Dialog */}
       <div
-        className={`relative w-full ${maxWidths[effectiveMaxWidth]} bg-white dark:bg-[#1E1B1B] text-charcoal dark:text-stone-100 border border-charcoal-border dark:border-[#2E2828] rounded-t-3xl sm:rounded-2xl ${
-          expanded ? 'h-[96vh] sm:h-[92vh] max-h-[96vh]' : 'max-h-[92vh]'
-        } flex flex-col z-10 overflow-hidden transform transition-all duration-300 animate-in slide-in-from-bottom sm:zoom-in-95 shadow-2xl`}
+        className={`relative w-full ${maxWidths[effectiveMaxWidth]} bg-white dark:bg-[#1E1B1B] text-charcoal dark:text-stone-100 border border-charcoal-border dark:border-[#2E2828] rounded-t-3xl landscape:rounded-2xl sm:rounded-2xl ${
+          expanded ? 'h-[94dvh] landscape:h-[88dvh] sm:h-[88dvh] max-h-[94dvh]' : 'max-h-[90dvh] landscape:max-h-[88dvh]'
+        } flex flex-col z-10 overflow-hidden transform transition-all duration-300 animate-in slide-in-from-bottom sm:zoom-in-95 shadow-2xl pb-safe`}
       >
         {/* Mobile handle indicator */}
-        <div className="w-12 h-1 bg-stone-300 dark:bg-stone-700 rounded-full mx-auto mt-2.5 sm:hidden" />
+        <div className="w-12 h-1 bg-stone-300 dark:bg-stone-700 rounded-full mx-auto mt-2.5 landscape:hidden sm:hidden" />
 
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-5 border-b border-charcoal-border/70 dark:border-[#2E2828] shrink-0">
+        <div className="flex items-start justify-between p-3.5 sm:p-5 border-b border-charcoal-border/70 dark:border-[#2E2828] shrink-0">
           <div>
-            <h3 className="text-lg font-bold text-charcoal dark:text-white leading-snug">{title}</h3>
+            <h3 className="text-base sm:text-lg font-bold text-charcoal dark:text-white leading-snug">{title}</h3>
             {description && (
               <p className="text-xs text-charcoal-muted dark:text-stone-400 mt-0.5">{description}</p>
             )}
@@ -89,7 +89,14 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className={`p-4 sm:p-6 overflow-y-auto space-y-4 ${expanded ? 'flex-1 max-h-[calc(96vh-85px)]' : 'max-h-[calc(92vh-130px)]'}`}>
+        <div
+          className={`p-3.5 sm:p-6 overflow-y-auto space-y-4 overscroll-contain ${
+            expanded
+              ? 'flex-1 max-h-[calc(94dvh-80px)] landscape:max-h-[calc(88dvh-75px)]'
+              : 'max-h-[calc(90dvh-115px)] landscape:max-h-[calc(88dvh-95px)]'
+          }`}
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           {children}
         </div>
 

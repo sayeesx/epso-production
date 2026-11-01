@@ -108,7 +108,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         if (oil) {
           const stock = Number(oil.currentStock) || 0;
           setOilStock(stock);
-          setOilUnit(oil.unit || 'L');
+          setOilUnit(oil.unit || 'kg');
           setUsedOil((prev) => {
             const clamped = Math.min(stock, prev);
             setUsedInputStr(String(clamped));
@@ -370,8 +370,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
           }
           subMessage={
             language === 'ml'
-              ? `${usedOil} ${oilUnit || 'L'} ഉപയോഗം • ${Math.min(usedOil, Math.max(0, leftoverOil))} ${oilUnit || 'L'} ബാക്കി`
-              : `${usedOil} ${oilUnit || 'L'} used • ${Math.min(usedOil, Math.max(0, leftoverOil))} ${oilUnit || 'L'} leftover`
+              ? `${usedOil} ${oilUnit || 'kg'} ഉപയോഗം • ${Math.min(usedOil, Math.max(0, leftoverOil))} ${oilUnit || 'kg'} ബാക്കി`
+              : `${usedOil} ${oilUnit || 'kg'} used • ${Math.min(usedOil, Math.max(0, leftoverOil))} ${oilUnit || 'kg'} leftover`
           }
         />
       }
@@ -388,31 +388,14 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                 </label>
               </div>
               <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                Max {maxAllowedOil} {oilUnit || 'L'}
+                Max {maxAllowedOil} {oilUnit || 'kg'}
               </span>
             </div>
 
-            {/* Quick Stepper & Touchable Value Display */}
+            {/* Touchable Value Display */}
             <div className="flex flex-col items-center justify-center py-1 gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjustUsedOil(-5)}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
-                  title="-5"
-                >
-                  -5
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustUsedOil(-1)}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
-                  title="-1"
-                >
-                  -1
-                </button>
-
-                <div className="flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
+              <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
                   <input
                     type="text"
                     inputMode="decimal"
@@ -448,35 +431,16 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                     className="text-3xl sm:text-4xl font-black text-amber-900 dark:text-amber-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
                   />
                   <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 uppercase select-none">
-                    {oilUnit || 'L'}
+                    {oilUnit || 'kg'}
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => adjustUsedOil(+1)}
-                  disabled={usedOil >= maxAllowedOil}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="+1"
-                >
-                  +1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustUsedOil(+5)}
-                  disabled={usedOil >= maxAllowedOil}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 text-xs font-black transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                  title="+5"
-                >
-                  +5
-                </button>
               </div>
 
               {/* Oil remaining always active */}
               {oilStock !== null && (
                 <div className="flex flex-col items-center justify-center text-center my-0.5 select-none">
                   <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam">
-                    {oilStock} {oilUnit || 'L'} {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
+                    {oilStock} {oilUnit || 'kg'} {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
                   </span>
                 </div>
               )}
@@ -559,27 +523,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               </span>
             </div>
 
-            {/* Quick Stepper & Touchable Value Display */}
+            {/* Touchable Value Display */}
             <div className="flex flex-col items-center justify-center py-1 gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjustLeftoverOil(-5)}
-                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
-                  title="-5 kg"
-                >
-                  -5
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustLeftoverOil(-1)}
-                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
-                  title="-1 kg"
-                >
-                  -1
-                </button>
-
-                <div className="flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
+              <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
                   <input
                     type="text"
                     inputMode="decimal"
@@ -605,27 +552,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                     kg
                   </span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => adjustLeftoverOil(+1)}
-                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
-                  title="+1 kg"
-                >
-                  +1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustLeftoverOil(+5)}
-                  className="px-2.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 text-xs font-black transition-all active:scale-95 cursor-pointer"
-                  title="+5 kg"
-                >
-                  +5
-                </button>
               </div>
               <div className="flex items-center justify-center gap-1.5 flex-wrap text-center">
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/50">
-                  Max: {usedOil.toFixed(1)} {oilUnit || 'L'}
+                  Max: {usedOil.toFixed(1)} {oilUnit || 'kg'}
                 </span>
               </div>
 

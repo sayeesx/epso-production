@@ -158,6 +158,9 @@ export interface IEpsoRepository {
   }): Promise<PackingRecord>;
   listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]>;
   deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void>;
+
+  // Cache Management
+  invalidateCache(key?: string): void;
 }
 
 

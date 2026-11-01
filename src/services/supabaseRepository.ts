@@ -22,6 +22,7 @@ import {
   roundCurrency,
   roundStock,
 } from './costing';
+import { dbCache } from './dbCache';
 
 export class SupabaseRepository implements IEpsoRepository {
   private checkClient() {
@@ -37,31 +38,45 @@ export class SupabaseRepository implements IEpsoRepository {
     return true;
   }
 
+  invalidateCache(key?: string): void {
+    if (key) {
+      dbCache.invalidate(key);
+    } else {
+      dbCache.invalidateAll();
+    }
+  }
+
   // ============================================================================
   // PRODUCTS
   // ============================================================================
 
   async listProducts(includeInactive = false): Promise<Product[]> {
-    const client = this.checkClient();
-    let query = client.from('products').select('*').order('name', { ascending: true });
-    if (!includeInactive) {
-      query = query.eq('is_active', true);
-    }
+    return dbCache.wrap(
+      `products_${includeInactive}`,
+      async () => {
+        const client = this.checkClient();
+        let query = client.from('products').select('*').order('name', { ascending: true });
+        if (!includeInactive) {
+          query = query.eq('is_active', true);
+        }
 
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      sku: row.sku || undefined,
-      unit: row.unit,
-      currentStock: Number(row.current_stock || 0),
-      wholesalePrice: row.wholesale_price ? Number(row.wholesale_price) : undefined,
-      isActive: row.is_active,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+        return (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          sku: row.sku || undefined,
+          unit: row.unit,
+          currentStock: Number(row.current_stock || 0),
+          wholesalePrice: row.wholesale_price ? Number(row.wholesale_price) : undefined,
+          isActive: row.is_active,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      },
+      { ttl: 5 * 60 * 1000 }
+    );
   }
 
   async getProductById(id: string): Promise<Product | null> {
@@ -75,7 +90,7 @@ export class SupabaseRepository implements IEpsoRepository {
       sku: data.sku || undefined,
       unit: data.unit,
       currentStock: Number(data.current_stock || 0),
-      wholesalePrice: data.wholesale_price ? Number(data.wholesale_price) : undefined,
+      wholesalePrice: data.wholesalePrice ? Number(data.wholesale_price) : undefined,
       isActive: data.is_active,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
@@ -98,6 +113,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .single();
 
     if (error) throw new Error(error.message);
+    dbCache.invalidate('product');
 
     // Audit log
     await client.from('audit_logs').insert({
@@ -139,6 +155,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .single();
 
     if (error) throw new Error(error.message);
+    dbCache.invalidate('product');
 
     // Audit log
     await client.from('audit_logs').insert({
@@ -203,28 +220,34 @@ export class SupabaseRepository implements IEpsoRepository {
   // ============================================================================
 
   async listIngredients(includeInactive = false): Promise<Ingredient[]> {
-    const client = this.checkClient();
-    let query = client.from('ingredients').select('*').order('name', { ascending: true });
-    if (!includeInactive) {
-      query = query.eq('is_active', true);
-    }
+    return dbCache.wrap(
+      `ingredients_${includeInactive}`,
+      async () => {
+        const client = this.checkClient();
+        let query = client.from('ingredients').select('*').order('name', { ascending: true });
+        if (!includeInactive) {
+          query = query.eq('is_active', true);
+        }
 
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      category: row.category,
-      unit: row.unit,
-      currentStock: Number(row.current_stock || 0),
-      minStock: Number(row.min_stock || 0),
-      avgCostPerUnit: Number(row.avg_cost_per_unit || 0),
-      isActive: row.is_active,
-      notes: row.notes || undefined,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+        return (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          category: row.category,
+          unit: row.unit,
+          currentStock: Number(row.current_stock || 0),
+          minStock: Number(row.min_stock || 0),
+          avgCostPerUnit: Number(row.avg_cost_per_unit || 0),
+          isActive: row.is_active,
+          notes: row.notes || undefined,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      },
+      { ttl: 60 * 1000 }
+    );
   }
 
   async getIngredientById(id: string): Promise<Ingredient | null> {
@@ -265,6 +288,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .single();
 
     if (error) throw new Error(error.message);
+    dbCache.invalidate('ingredient');
 
     await client.from('audit_logs').insert({
       actor: 'Catalogue Staff',
@@ -309,6 +333,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .single();
 
     if (error) throw new Error(error.message);
+    dbCache.invalidate('ingredient');
 
     await client.from('audit_logs').insert({
       actor: 'Catalogue Staff',
@@ -354,6 +379,7 @@ export class SupabaseRepository implements IEpsoRepository {
 
     const { error } = await client.from('ingredients').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    dbCache.invalidate('ingredient');
 
     await client.from('audit_logs').insert({
       actor: 'Catalogue Staff',
@@ -400,6 +426,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .single();
 
     if (error) throw new Error(error.message);
+    dbCache.invalidate('ingredient');
 
     return {
       ingredient: updated,
@@ -426,67 +453,73 @@ export class SupabaseRepository implements IEpsoRepository {
   // ============================================================================
 
   async listRecipes(): Promise<Recipe[]> {
-    const client = this.checkClient();
-    const { data, error } = await client
-      .from('recipes')
-      .select('*, products!recipes_product_id_fkey(name), recipe_items(*, ingredients(name))')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
+    return dbCache.wrap(
+      'recipes',
+      async () => {
+        const client = this.checkClient();
+        const { data, error } = await client
+          .from('recipes')
+          .select('*, products!recipes_product_id_fkey(name), recipe_items(*, ingredients(name))')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
 
-    if (error) throw new Error(error.message);
+        if (error) throw new Error(error.message);
 
-    const { data: packetsData } = await client
-      .from('recipe_packets')
-      .select('*');
+        const { data: packetsData } = await client
+          .from('recipe_packets')
+          .select('*');
 
-    return (data || []).map((row: any) => {
-      let packets: RecipePacket[] = [];
-      if (packetsData && packetsData.length > 0) {
-        packets = packetsData
-          .filter((p: any) => p.recipe_id === row.id)
-          .map((p: any) => ({
-            id: p.id,
-            recipeId: p.recipe_id,
-            packetTypeId: p.packet_type_id,
-            packetName: p.packet_name,
-            costPerPacket: Number(p.cost_per_packet) || 0,
-            bundleCost: Number(p.bundle_cost) || 0,
-            bundleQuantity: Number(p.bundle_quantity) || 1,
-          }));
-      }
-      if (packets.length === 0 && Array.isArray(row.packets) && row.packets.length > 0) {
-        packets = row.packets.map((p: any) => ({
-          id: p.id,
-          recipeId: row.id,
-          packetTypeId: p.packetTypeId,
-          packetName: p.packetName || p.name || 'Packet',
-          costPerPacket: Number(p.costPerPacket) || 0,
-          bundleCost: Number(p.bundleCost) || 0,
-          bundleQuantity: Number(p.bundleQuantity) || 1,
-        }));
-      }
+        return (data || []).map((row: any) => {
+          let packets: RecipePacket[] = [];
+          if (packetsData && packetsData.length > 0) {
+            packets = packetsData
+              .filter((p: any) => p.recipe_id === row.id)
+              .map((p: any) => ({
+                id: p.id,
+                recipeId: p.recipe_id,
+                packetTypeId: p.packet_type_id,
+                packetName: p.packet_name,
+                costPerPacket: Number(p.cost_per_packet) || 0,
+                bundleCost: Number(p.bundle_cost) || 0,
+                bundleQuantity: Number(p.bundle_quantity) || 1,
+              }));
+          }
+          if (packets.length === 0 && Array.isArray(row.packets) && row.packets.length > 0) {
+            packets = row.packets.map((p: any) => ({
+              id: p.id,
+              recipeId: row.id,
+              packetTypeId: p.packetTypeId,
+              packetName: p.packetName || p.name || 'Packet',
+              costPerPacket: Number(p.costPerPacket) || 0,
+              bundleCost: Number(p.bundleCost) || 0,
+              bundleQuantity: Number(p.bundleQuantity) || 1,
+            }));
+          }
 
-      return {
-        id: row.id,
-        productId: row.product_id,
-        productName: row.products?.name || 'Snack Product',
-        version: row.version,
-        baseOutputQuantity: Number(row.base_output_quantity),
-        baseOutputUnit: row.base_output_unit,
-        instructions: row.instructions || undefined,
-        notes: row.notes || undefined,
-        isActive: row.is_active,
-        packets,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        ingredients: (row.recipe_items || []).map((item: any) => ({
-          ingredientId: item.ingredient_id,
-          ingredientName: item.ingredients?.name || 'Ingredient',
-          quantity: Number(item.quantity),
-          unit: item.unit,
-        })),
-      };
-    });
+          return {
+            id: row.id,
+            productId: row.product_id,
+            productName: row.products?.name || 'Snack Product',
+            version: row.version,
+            baseOutputQuantity: Number(row.base_output_quantity),
+            baseOutputUnit: row.base_output_unit,
+            instructions: row.instructions || undefined,
+            notes: row.notes || undefined,
+            isActive: row.is_active,
+            packets,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            ingredients: (row.recipe_items || []).map((item: any) => ({
+              ingredientId: item.ingredient_id,
+              ingredientName: item.ingredients?.name || 'Ingredient',
+              quantity: Number(item.quantity),
+              unit: item.unit,
+            })),
+          };
+        });
+      },
+      { ttl: 5 * 60 * 1000 }
+    );
   }
 
   async getRecipeById(id: string): Promise<Recipe | null> {
@@ -579,6 +612,8 @@ export class SupabaseRepository implements IEpsoRepository {
       }
     }
 
+    dbCache.invalidate('recipe');
+
     const saved = await this.getRecipeById(recipeId!);
     if (!saved) throw new Error('Recipe could not be retrieved after save');
     return saved;
@@ -595,52 +630,58 @@ export class SupabaseRepository implements IEpsoRepository {
     productId?: string;
     status?: 'completed' | 'cancelled';
   }): Promise<ProductionRun[]> {
-    const client = this.checkClient();
-    let query = client
-      .from('production_runs')
-      .select('*, products(name), production_consumption(*, ingredients(name))')
-      .order('production_date', { ascending: false })
-      .order('created_at', { ascending: false });
+    return dbCache.wrap(
+      `production_runs_${JSON.stringify(options || {})}`,
+      async () => {
+        const client = this.checkClient();
+        let query = client
+          .from('production_runs')
+          .select('*, products(name), production_consumption(*, ingredients(name))')
+          .order('production_date', { ascending: false })
+          .order('created_at', { ascending: false });
 
-    if (options?.limit) query = query.limit(options.limit);
-    if (options?.startDate) query = query.gte('production_date', options.startDate);
-    if (options?.endDate) query = query.lte('production_date', options.endDate);
-    if (options?.productId) query = query.eq('product_id', options.productId);
-    if (options?.status) query = query.eq('status', options.status);
+        if (options?.limit) query = query.limit(options.limit);
+        if (options?.startDate) query = query.gte('production_date', options.startDate);
+        if (options?.endDate) query = query.lte('production_date', options.endDate);
+        if (options?.productId) query = query.eq('product_id', options.productId);
+        if (options?.status) query = query.eq('status', options.status);
 
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      runNumber: row.run_number,
-      productId: row.product_id,
-      productName: row.products?.name || 'Product',
-      recipeId: row.recipe_id || undefined,
-      recipeVersion: row.recipe_version || undefined,
-      productionDate: row.production_date,
-      plannedQuantity: Number(row.planned_quantity),
-      actualQuantity: Number(row.actual_quantity),
-      unit: row.unit,
-      status: row.status,
-      cancellationReason: row.cancellation_reason || undefined,
-      cancelledAt: row.cancelled_at || undefined,
-      cancelledBy: row.cancelled_by || undefined,
-      notes: row.notes || undefined,
-      operatorName: row.operator_name,
-      totalIngredientCost: Number(row.total_ingredient_cost) || 0,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      ingredientsConsumed: (row.production_consumption || []).map((c: any) => ({
-        ingredientId: c.ingredient_id,
-        ingredientName: c.ingredients?.name || 'Ingredient',
-        expectedQuantity: Number(c.expected_quantity || 0),
-        actualQuantity: Number(c.actual_quantity),
-        unit: c.unit,
-        unitCost: Number(c.unit_cost) || 0,
-        totalCost: Number(c.total_cost) || 0,
-      })),
-    }));
+        return (data || []).map((row: any) => ({
+          id: row.id,
+          runNumber: row.run_number,
+          productId: row.product_id,
+          productName: row.products?.name || 'Product',
+          recipeId: row.recipe_id || undefined,
+          recipeVersion: row.recipe_version || undefined,
+          productionDate: row.production_date,
+          plannedQuantity: Number(row.planned_quantity),
+          actualQuantity: Number(row.actual_quantity),
+          unit: row.unit,
+          status: row.status,
+          cancellationReason: row.cancellation_reason || undefined,
+          cancelledAt: row.cancelled_at || undefined,
+          cancelledBy: row.cancelled_by || undefined,
+          notes: row.notes || undefined,
+          operatorName: row.operator_name,
+          totalIngredientCost: Number(row.total_ingredient_cost) || 0,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          ingredientsConsumed: (row.production_consumption || []).map((c: any) => ({
+            ingredientId: c.ingredient_id,
+            ingredientName: c.ingredients?.name || 'Ingredient',
+            expectedQuantity: Number(c.expected_quantity || 0),
+            actualQuantity: Number(c.actual_quantity),
+            unit: c.unit,
+            unitCost: Number(c.unit_cost) || 0,
+            totalCost: Number(c.total_cost) || 0,
+          })),
+        }));
+      },
+      { ttl: 45 * 1000 }
+    );
   }
 
   async getProductionRunById(id: string): Promise<ProductionRun | null> {
@@ -730,6 +771,10 @@ export class SupabaseRepository implements IEpsoRepository {
     });
 
     if (error) throw new Error(error.message);
+
+    dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
+    dbCache.invalidate('ingredient');
 
     const saved = await this.getProductionRunById(runId);
     if (!saved) throw new Error('Production run saved but could not be loaded');
@@ -869,6 +914,10 @@ export class SupabaseRepository implements IEpsoRepository {
 
     if (runUpdateErr) throw new Error(runUpdateErr.message);
 
+    dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
+    dbCache.invalidate('ingredient');
+
     const updated = await this.getProductionRunById(params.runId);
     if (!updated) throw new Error('Updated production run could not be re-loaded');
     return updated;
@@ -887,6 +936,11 @@ export class SupabaseRepository implements IEpsoRepository {
     });
 
     if (error) throw new Error(error.message);
+
+    dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
+    dbCache.invalidate('ingredient');
+
     return Boolean(data);
   }
 
@@ -922,6 +976,9 @@ export class SupabaseRepository implements IEpsoRepository {
         p_operator: operatorName,
       });
       if (cancelErr) throw new Error(cancelErr.message);
+      dbCache.invalidate('production_runs');
+      dbCache.invalidate('product');
+      dbCache.invalidate('ingredient');
       return true;
     } else {
       // 2. If wastage: do NOT add ingredients back to stock!
@@ -969,6 +1026,9 @@ export class SupabaseRepository implements IEpsoRepository {
         });
       }
 
+      dbCache.invalidate('production_runs');
+      dbCache.invalidate('product');
+      dbCache.invalidate('ingredient');
       return true;
     }
   }
@@ -1185,33 +1245,39 @@ export class SupabaseRepository implements IEpsoRepository {
   }
 
   async listDailyClosings(limit = 60): Promise<DailyClosing[]> {
-    const client = this.checkClient();
-    const { data, error } = await client
-      .from('daily_closings')
-      .select('*')
-      .order('production_date', { ascending: false })
-      .limit(limit);
+    return dbCache.wrap(
+      `daily_closings_${limit}`,
+      async () => {
+        const client = this.checkClient();
+        const { data, error } = await client
+          .from('daily_closings')
+          .select('*')
+          .order('production_date', { ascending: false })
+          .limit(limit);
 
-    if (error) throw new Error(error.message);
+        if (error) throw new Error(error.message);
 
-    return (data || []).map((d: any) => ({
-      id: d.id,
-      productionDate: d.production_date,
-      oilOpeningBalance: Number(d.oil_opening_balance) || 0,
-      oilPurchases: Number(d.oil_purchases) || 0,
-      oilClosingBalance: Number(d.oil_closing_balance) || 0,
-      oilConsumed: Number(d.oil_consumed) || 0,
-      oilCostPerKg: Number(d.oil_cost_per_kg) || 0,
-      oilTotalExpense: Number(d.oil_total_expense) || 0,
-      productionWages: Number(d.production_wages) || 0,
-      totalSharedExpense: Number(d.total_shared_expense) || 0,
-      totalProductionKg: Number(d.total_production_kg) || 0,
-      status: d.status,
-      notes: d.notes || undefined,
-      closedBy: d.closed_by || 'Admin',
-      createdAt: d.created_at,
-      updatedAt: d.updated_at,
-    }));
+        return (data || []).map((d: any) => ({
+          id: d.id,
+          productionDate: d.production_date,
+          oilOpeningBalance: Number(d.oil_opening_balance) || 0,
+          oilPurchases: Number(d.oil_purchases) || 0,
+          oilClosingBalance: Number(d.oil_closing_balance) || 0,
+          oilConsumed: Number(d.oil_consumed) || 0,
+          oilCostPerKg: Number(d.oil_cost_per_kg) || 0,
+          oilTotalExpense: Number(d.oil_total_expense) || 0,
+          productionWages: Number(d.production_wages) || 0,
+          totalSharedExpense: Number(d.total_shared_expense) || 0,
+          totalProductionKg: Number(d.total_production_kg) || 0,
+          status: d.status,
+          notes: d.notes || undefined,
+          closedBy: d.closed_by || 'Admin',
+          createdAt: d.created_at,
+          updatedAt: d.updated_at,
+        }));
+      },
+      { ttl: 2 * 60 * 1000 }
+    );
   }
 
   async saveDailyClosing(params: {
@@ -1388,6 +1454,9 @@ export class SupabaseRepository implements IEpsoRepository {
       }
     }
 
+    dbCache.invalidate('daily_closing');
+    dbCache.invalidate('ingredient');
+
     return {
       id: upsertedClosing.id,
       productionDate: upsertedClosing.production_date,
@@ -1523,27 +1592,33 @@ export class SupabaseRepository implements IEpsoRepository {
   }
 
   async listPacketTypes(): Promise<PacketType[]> {
-    const client = this.checkClient();
-    const { data, error } = await client
-      .from('packet_types')
-      .select('*')
-      .order('name', { ascending: true });
+    return dbCache.wrap(
+      'packet_types',
+      async () => {
+        const client = this.checkClient();
+        const { data, error } = await client
+          .from('packet_types')
+          .select('*')
+          .order('name', { ascending: true });
 
-    if (error) {
-      console.error('Error fetching packet types:', error);
-      return [];
-    }
+        if (error) {
+          console.error('Error fetching packet types:', error);
+          return [];
+        }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      bundleCost: Number(row.bundle_cost) || 0,
-      bundleQuantity: Number(row.bundle_quantity) || 1,
-      costPerPacket: Number(row.cost_per_packet) || 0,
-      isActive: row.is_active ?? true,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+        return (data || []).map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          bundleCost: Number(row.bundle_cost) || 0,
+          bundleQuantity: Number(row.bundle_quantity) || 1,
+          costPerPacket: Number(row.cost_per_packet) || 0,
+          isActive: row.is_active ?? true,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }));
+      },
+      { ttl: 10 * 60 * 1000 }
+    );
   }
 
   async savePacketType(packet: Partial<PacketType> & { name: string }): Promise<PacketType> {
@@ -1563,6 +1638,7 @@ export class SupabaseRepository implements IEpsoRepository {
       updated_at: new Date().toISOString(),
     };
 
+    let result: PacketType;
     if (packet.id) {
       const { data, error } = await client
         .from('packet_types')
@@ -1572,7 +1648,7 @@ export class SupabaseRepository implements IEpsoRepository {
         .single();
 
       if (error) throw new Error(error.message);
-      return {
+      result = {
         id: data.id,
         name: data.name,
         bundleCost: Number(data.bundle_cost) || 0,
@@ -1593,7 +1669,7 @@ export class SupabaseRepository implements IEpsoRepository {
         .single();
 
       if (error) throw new Error(error.message);
-      return {
+      result = {
         id: data.id,
         name: data.name,
         bundleCost: Number(data.bundle_cost) || 0,
@@ -1604,12 +1680,18 @@ export class SupabaseRepository implements IEpsoRepository {
         updatedAt: data.updated_at,
       };
     }
+
+    dbCache.invalidate('packet_types');
+    dbCache.invalidate('recipe');
+    return result;
   }
 
   async deletePacketType(id: string): Promise<void> {
     const client = this.checkClient();
     const { error } = await client.from('packet_types').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    dbCache.invalidate('packet_types');
+    dbCache.invalidate('recipe');
   }
 
   async recordPacking(params: {
@@ -1709,6 +1791,9 @@ export class SupabaseRepository implements IEpsoRepository {
 
     if (error) throw new Error(error.message);
 
+    dbCache.invalidate('packing_records');
+    dbCache.invalidate('production_runs');
+
     return {
       id: created.id,
       packingDate: created.packing_date,
@@ -1732,35 +1817,41 @@ export class SupabaseRepository implements IEpsoRepository {
   }
 
   async listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
-    const client = this.checkClient();
-    let query = client.from('packing_records').select('*, products(name)').order('created_at', { ascending: false });
-    if (options?.limit) query = query.limit(options.limit);
-    if (options?.productId) query = query.eq('product_id', options.productId);
-    if (options?.date) query = query.eq('packing_date', options.date);
+    return dbCache.wrap(
+      `packing_records_${JSON.stringify(options || {})}`,
+      async () => {
+        const client = this.checkClient();
+        let query = client.from('packing_records').select('*, products(name)').order('created_at', { ascending: false });
+        if (options?.limit) query = query.limit(options.limit);
+        if (options?.productId) query = query.eq('product_id', options.productId);
+        if (options?.date) query = query.eq('packing_date', options.date);
 
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      packingDate: row.packing_date,
-      productId: row.product_id,
-      productName: row.products?.name || 'Product',
-      productionRunId: row.production_run_id,
-      packagingItemId: row.packaging_item_id,
-      packetSize: row.packet_size,
-      packetsPacked: Number(row.packets_packed) || 0,
-      coversConsumed: Number(row.covers_consumed) || 0,
-      coverUnitCost: Number(row.cover_unit_cost) || 0,
-      packagingCost: Number(row.packaging_cost) || 0,
-      packingLabourRate: Number(row.packing_labour_rate) || 0,
-      packingLabourCost: Number(row.packing_labour_cost) || 0,
-      totalPackingCost: Number(row.total_packing_cost) || 0,
-      weightPackedKg: Number(row.weight_packed_kg) || 0,
-      operatorName: row.operator_name,
-      notes: row.notes,
-      createdAt: row.created_at,
-    }));
+        return (data || []).map((row: any) => ({
+          id: row.id,
+          packingDate: row.packing_date,
+          productId: row.product_id,
+          productName: row.products?.name || 'Product',
+          productionRunId: row.production_run_id,
+          packagingItemId: row.packaging_item_id,
+          packetSize: row.packet_size,
+          packetsPacked: Number(row.packets_packed) || 0,
+          coversConsumed: Number(row.covers_consumed) || 0,
+          coverUnitCost: Number(row.cover_unit_cost) || 0,
+          packagingCost: Number(row.packaging_cost) || 0,
+          packingLabourRate: Number(row.packing_labour_rate) || 0,
+          packingLabourCost: Number(row.packing_labour_cost) || 0,
+          totalPackingCost: Number(row.total_packing_cost) || 0,
+          weightPackedKg: Number(row.weight_packed_kg) || 0,
+          operatorName: row.operator_name,
+          notes: row.notes,
+          createdAt: row.created_at,
+        }));
+      },
+      { ttl: 60 * 1000 }
+    );
   }
 
   async deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void> {
@@ -1782,6 +1873,9 @@ export class SupabaseRepository implements IEpsoRepository {
         .is('production_run_id', null)
         .eq('notes', `Batch #${runNumber}`);
     }
+
+    dbCache.invalidate('packing_records');
+    dbCache.invalidate('production_runs');
   }
 }
 

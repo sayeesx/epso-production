@@ -123,8 +123,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const triggerRefresh = useCallback(() => {
+    repo.invalidateCache?.();
     setDataVersion((v) => v + 1);
-  }, []);
+  }, [repo]);
 
   return (
     <AppContext.Provider

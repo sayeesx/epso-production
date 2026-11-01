@@ -46,7 +46,7 @@ interface StartProductionModalProps {
   runToEdit?: ProductionRun | null;
 }
 
-type WizardStep = 1 | 2 | 3 | 4;
+type WizardStep = 1 | 2 | 3;
 
 export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   isOpen,
@@ -61,11 +61,10 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const { repo, staffName, addToast } = useApp();
   const { t, language } = useLanguage();
 
-  // 4-Step Stepper:
+  // 3-Step Stepper:
   // 1 = Select Product
-  // 2 = Measure Production Quantity with Ruler
-  // 3 = Select Ingredients to tick (with measurement ruler for each)
-  // 4 = Review & Confirm
+  // 2 = Select Ingredients & Quantities
+  // 3 = Review & Start Production
   const [step, setStep] = useState<WizardStep>(1);
 
   // Form State
@@ -82,7 +81,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
   const [ingredientSearch, setIngredientSearch] = useState<string>('');
   const [isModalExpanded, setIsModalExpanded] = useState<boolean>(false);
   const [plannedQty, setPlannedQty] = useState<number>(10);
-  const [actualOutputQty, setActualOutputQty] = useState<number>(10);
+  const [actualOutputQty, setActualOutputQty] = useState<number>(0);
   const [productionDate, setProductionDate] = useState<string>(getTodayDateStr);
   const [operator, setOperator] = useState<string>(staffName);
   const [notes, setNotes] = useState<string>('');
@@ -210,7 +209,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         setActiveRulerItem(null);
         setItemToDelete(null);
         setPlannedQty(10);
-        setActualOutputQty(10);
+        setActualOutputQty(0);
         setProductionDate(getTodayDateStr());
         setOperator(staffName);
         setNotes('');
@@ -247,7 +246,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     return Boolean(activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0);
   }, [activeRecipe]);
 
-  // Filter ingredients for Step 3: show all recipe ingredients configured for this product
+  // Filter ingredients for Step 2: show all recipe ingredients configured for this product
   const displayedRecipeIngredients = useMemo(() => {
     if (activeRecipe && activeRecipe.ingredients && activeRecipe.ingredients.length > 0) {
       return activeRecipe.ingredients.map((ri) => {
@@ -279,7 +278,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     return displayedRecipeIngredients.some((ing) => (ing.currentStock || 0) <= 0);
   }, [displayedRecipeIngredients]);
 
-  // When a product is selected in Step 1, advance to Step 2 (measure quantity)
+  // When a product is selected in Step 1, advance directly to Step 2 (Ingredients selection)
   const handleSelectProduct = (productId: string) => {
     setSelectedProductId(productId);
     setIsModalExpanded(false);
@@ -288,9 +287,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     );
     const initialQty = prodRecipe?.baseOutputQuantity || 10;
     setPlannedQty(initialQty);
-    setActualOutputQty(initialQty);
+    setActualOutputQty(0);
 
-    // Pre-populate with recipe ingredients scaled for initial planned quantity
+    // Pre-populate with recipe ingredients scaled for base recipe output
     if (prodRecipe && prodRecipe.ingredients && prodRecipe.ingredients.length > 0) {
       const scaled = prodRecipe.ingredients.map((item) => {
         const requiredQty = Number(item.quantity.toFixed(3));
@@ -442,7 +441,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
   const handleFinalSubmit = async () => {
     if (!selectedProduct) return;
-    if (actualOutputQty <= 0) {
+    if (runToEdit && actualOutputQty <= 0) {
       addToast(
         language === 'ml' ? 'ശരിയായ അളവ് നൽകുക' : 'Please provide a valid output quantity',
         'warning'
@@ -511,7 +510,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
           recipeVersion: activeRecipe?.version,
           productionDate,
           plannedQuantity: plannedQty,
-          actualQuantity: actualOutputQty,
+          actualQuantity: 0,
           unit: selectedProduct.unit,
           operatorName: operator.trim() || 'Kitchen Staff',
           notes: notes.trim() || undefined,
@@ -553,7 +552,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         ? language === 'ml'
           ? 'ബാച്ച് വിജയകരമായി തിരുത്തി!'
           : 'Batch updated successfully!'
-        : t.productionSavedSuccess,
+        : (language === 'ml' ? 'ബാച്ച് വിജയകരമായി ആരംഭിച്ചു!' : 'Production batch started!'),
       'success'
     );
     const runResult = savedRunRef.current || savedRunData;
@@ -565,9 +564,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
 
   const stepTitles = {
     1: language === 'ml' ? 'ഉൽപ്പന്നം തിരഞ്ഞെടുക്കുക' : 'Select Product',
-    2: language === 'ml' ? 'ഉൽപ്പാദന അളവ്' : 'Target Quantity',
-    3: language === 'ml' ? 'ചേരുവകൾ തിരഞ്ഞെടുക്കുക' : 'Select Ingredients',
-    4: language === 'ml' ? 'റിവ്യൂ & പ്രൊഡക്ഷൻ' : 'Review & Start',
+    2: language === 'ml' ? 'ചേരുവകൾ തിരഞ്ഞെടുക്കുക' : 'Select Ingredients',
+    3: language === 'ml' ? 'റിവ്യൂ & പ്രൊഡക്ഷൻ' : 'Review & Start',
   };
 
   return (
@@ -585,7 +583,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               {runToEdit ? (language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch') : t.startProduction}
             </h3>
             <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
-              Step {step} of 4 • {stepTitles[step]}
+              Step {step} of 3 • {stepTitles[step]}
             </p>
           </div>
         </div>
@@ -610,13 +608,17 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   ? 'ബാച്ച് വിജയകരമായി തിരുത്തി!'
                   : 'Production Batch Updated!'
                 : language === 'ml'
-                ? 'ബാച്ച് വിജയകരമായി ചേർത്തു!'
-                : 'Production Batch Saved!'
+                ? 'ബാച്ച് വിജയകരമായി ആരംഭിച്ചു!'
+                : 'Production Batch Started!'
             }
             subMessage={
-              language === 'ml'
-                ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} സ്റ്റോക്കിലേക്ക് ചേർത്തു`
-                : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} updated in stock`
+              runToEdit
+                ? (language === 'ml'
+                  ? `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} രേഖപ്പെടുത്തി`
+                  : `${actualOutputQty} ${selectedProduct?.unit || 'kg'} ${selectedProduct?.name || ''} updated`)
+                : (language === 'ml'
+                  ? `${consumptionItems.length} ചേരുവകൾ സ്റ്റോക്കിൽ നിന്ന് കുറച്ചു`
+                  : `${consumptionItems.length} ingredients deducted from stock`)
             }
           />
         </>
@@ -624,14 +626,13 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
     >
       <div className="space-y-4">
         {/* ======================================================== */}
-        {/* 4-STEP PROGRESS STEPPER HEADER                           */}
+        {/* 3-STEP PROGRESS STEPPER HEADER                           */}
         {/* ======================================================== */}
         <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-[#282323]">
           {[
             { num: 1, label: language === 'ml' ? 'ഉൽപ്പന്നം' : 'Product' },
-            { num: 2, label: language === 'ml' ? 'അളവ്' : 'Quantity' },
-            { num: 3, label: language === 'ml' ? 'ചേരുവകൾ' : 'Ingredients' },
-            { num: 4, label: language === 'ml' ? 'റിവ്യൂ' : 'Review' },
+            { num: 2, label: language === 'ml' ? 'ചേരുവകൾ' : 'Ingredients' },
+            { num: 3, label: language === 'ml' ? 'റിവ്യൂ' : 'Review' },
           ].map((s, idx) => {
             const isCurrent = step === s.num;
             const isPassed = step > s.num;
@@ -675,7 +676,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                     {s.label}
                   </span>
                 </div>
-                {idx < 3 && (
+                {idx < 2 && (
                   <div
                     className={`flex-1 h-0.5 mx-2 rounded-full transition-all ${
                       step > idx + 1 || (runToEdit && idx === 0)
@@ -802,102 +803,9 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         )}
 
         {/* ======================================================== */}
-        {/* STEP 2: MEASURE QUANTITY WITH RULER (DEDICATED MODAL)   */}
+        {/* STEP 2: SELECT INGREDIENTS TO TICK (WITH RULER)          */}
         {/* ======================================================== */}
         {step === 2 && selectedProduct && (
-          <div className="space-y-4">
-            {/* Selected Product Banner */}
-            <div className="p-3 bg-stone-100/70 dark:bg-[#252020]/70 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-stone-200/60 dark:bg-[#2e2828]/60 flex items-center justify-center shrink-0">
-                  <img
-                    src="/epso-icon-grey.png"
-                    alt={selectedProduct.name}
-                    className="w-6 h-6 object-contain opacity-60 dark:opacity-50 select-none pointer-events-none"
-                  />
-                </div>
-                <div>
-                  <h4 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
-                    {selectedProduct.name}
-                  </h4>
-                  <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam">
-                    {activeRecipe
-                      ? `ഫോർമുല v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} ബേസ്)`
-                      : 'മാനുവൽ പ്രൊഡക്ഷൻ (No recipe formula)'}
-                  </p>
-                </div>
-              </div>
-
-              {!runToEdit && (
-                <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
-                  {language === 'ml' ? 'മാറ്റുക' : 'Change'}
-                </Button>
-              )}
-            </div>
-
-            {/* Dedicated Measurement Ruler for Output Quantity - Flat, borderless, shadowless */}
-            <div className="w-full py-1">
-              <MeasurementRulerSelector
-                title={language === 'ml' ? 'ഉൽപ്പാദന അളവ് നിശ്ചയിക്കുക' : 'Set Production Quantity'}
-                subtitle={language === 'ml' ? `യൂണിറ്റ്: ${selectedProduct.unit}` : `Unit: ${selectedProduct.unit}`}
-                unit={selectedProduct.unit}
-                value={plannedQty}
-                presets={[5, 10, 25, 50, 100, 250]}
-                min={0}
-                max={250}
-                step={0.5}
-                onChange={handlePlannedQtyChange}
-              />
-            </div>
-
-            {/* Error box if no ingredients are set for selected product */}
-            {!hasRecipeIngredients && (
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
-                <TbAlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
-                <span className="font-bold">
-                  {language === 'ml'
-                    ? 'ഈ ഉൽപ്പന്നത്തിന് ചേരുവകൾ (Recipe) ചേർത്തിട്ടില്ല. Admin-ൽ റെസിപ്പി നൽകിയ ശേഷം മാത്രം ഉൽപ്പാദനം സാധ്യമാകൂ.'
-                    : 'No ingredients are set for this product. Please set up a recipe in Admin first.'}
-                </span>
-              </div>
-            )}
-
-            {/* Step 2 Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  if (runToEdit) {
-                    onClose();
-                  } else {
-                    setStep(1);
-                  }
-                }}
-                icon={runToEdit ? undefined : <TbChevronLeft className="w-4 h-4" />}
-              >
-                {runToEdit ? (language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel') : (language === 'ml' ? 'പിന്നോട്ട്' : 'Back')}
-              </Button>
-
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (!hasRecipeIngredients) return;
-                  setStep(3);
-                }}
-                disabled={!hasRecipeIngredients}
-                icon={<TbChevronRight className="w-4 h-4" />}
-                className="font-bold px-6"
-              >
-                {language === 'ml' ? 'ചേരുവകൾ' : 'Ingredients'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ======================================================== */}
-        {/* STEP 3: SELECT INGREDIENTS TO TICK (WITH RULER)          */}
-        {/* ======================================================== */}
-        {step === 3 && selectedProduct && (
           activeRulerItem ? (
             /* DIRECT IN-MODAL MEASUREMENT RULER (NO PORTAL, NO LEVITATION, NO BORDERS, NO SHADOWS) */
             <div className="space-y-2 animate-in fade-in duration-150">
@@ -928,6 +836,47 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Selected Product Banner */}
+              <div className="p-3 bg-stone-100/70 dark:bg-[#252020]/70 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-stone-200/60 dark:bg-[#2e2828]/60 flex items-center justify-center shrink-0">
+                    <img
+                      src="/epso-icon-grey.png"
+                      alt={selectedProduct.name}
+                      className="w-6 h-6 object-contain opacity-60 dark:opacity-50 select-none pointer-events-none"
+                    />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
+                      {selectedProduct.name}
+                    </h4>
+                    <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam">
+                      {activeRecipe
+                        ? `ഫോർമുല v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} ബേസ്)`
+                        : 'മാനുവൽ പ്രൊഡക്ഷൻ (No recipe formula)'}
+                    </p>
+                  </div>
+                </div>
+
+                {!runToEdit && (
+                  <Button variant="ghost" size="sm" onClick={() => setStep(1)}>
+                    {language === 'ml' ? 'മാറ്റുക' : 'Change'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Error box if no ingredients are set for selected product */}
+              {!hasRecipeIngredients && (
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                  <TbAlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
+                  <span className="font-bold">
+                    {language === 'ml'
+                      ? 'ഈ ഉൽപ്പന്നത്തിന് ചേരുവകൾ (Recipe) ചേർത്തിട്ടില്ല. Admin-ൽ റെസിപ്പി നൽകിയ ശേഷം മാത്രം ഉൽപ്പാദനം സാധ്യമാകൂ.'
+                      : 'No ingredients are set for this product. Please set up a recipe in Admin first.'}
+                  </span>
+                </div>
+              )}
+
               {/* Recipe Ingredients Selection Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[50vh] overflow-y-auto pr-1">
                 {displayedRecipeIngredients.map((ing) => {
@@ -1050,21 +999,27 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 )}
               </div>
 
-              {/* Step 3 Actions: Back and Review Buttons on BOTTOM */}
+              {/* Step 2 Actions: Back and Review Buttons on BOTTOM */}
               <div className="flex items-center justify-between gap-3 pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
                 <Button
                   variant="ghost"
-                  onClick={() => setStep(2)}
-                  icon={<TbChevronLeft className="w-4 h-4" />}
+                  onClick={() => {
+                    if (runToEdit) {
+                      onClose();
+                    } else {
+                      setStep(1);
+                    }
+                  }}
+                  icon={runToEdit ? undefined : <TbChevronLeft className="w-4 h-4" />}
                 >
-                  {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
+                  {runToEdit ? (language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel') : (language === 'ml' ? 'പിന്നോട്ട്' : 'Back')}
                 </Button>
 
                 <button
                   type="button"
                   onClick={() => {
                     if (!isAnyIngredientOutOfStock && consumptionItems.length > 0) {
-                      setStep(4);
+                      setStep(3);
                     }
                   }}
                   disabled={isAnyIngredientOutOfStock || consumptionItems.length === 0}
@@ -1083,13 +1038,13 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
         )}
 
         {/* ======================================================== */}
-        {/* STEP 4: REVIEW & CONFIRM (DEFAULT MODAL)                 */}
+        {/* STEP 3: REVIEW & CONFIRM (START PRODUCTION)              */}
         {/* ======================================================== */}
-        {step === 4 && selectedProduct && (
+        {step === 3 && selectedProduct && (
           <div className="space-y-3.5">
-            {/* Product Run Summary Card - NO COST / EXPENSE */}
+            {/* Product Run Summary Card */}
             <div className="p-3.5 bg-red-50/60 dark:bg-red-950/30 rounded-2xl border border-red-200 dark:border-red-900/40">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-epso-red dark:text-red-400 font-malayalam">
                     ഉൽപ്പാദന ബാച്ച് സംഗ്രഹം
@@ -1101,18 +1056,22 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                     തിരഞ്ഞെടുത്ത ചേരുവകൾ: {consumptionItems.length}
                   </p>
                 </div>
-                <div className="text-right">
-                  <span className="text-2xl font-black text-epso-red dark:text-amber-400 font-sans">
-                    {actualOutputQty} {selectedProduct.unit}
+                <div className="text-right shrink-0">
+                  <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam block">
+                    {runToEdit && actualOutputQty > 0
+                      ? `${actualOutputQty} ${selectedProduct.unit}`
+                      : (language === 'ml' ? 'തൂക്കം: നിർമ്മാണ ശേഷം' : 'Weigh After Production')}
                   </span>
-                  <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                    ലക്ഷ്യമിടുന്ന ഉൽപ്പാദനം
+                  <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
+                    {runToEdit && actualOutputQty > 0
+                      ? (language === 'ml' ? 'ഉൽപ്പാദിപ്പിച്ചത്' : 'Produced')
+                      : (language === 'ml' ? 'സ്കെയിൽ വഴി രേഖപ്പെടുത്താം' : 'Record via scale button')}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Selected Ingredients Breakdown List - SCROLLS WITHIN FIXED CONTAINER */}
+            {/* Selected Ingredients Breakdown List */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam">
@@ -1120,14 +1079,14 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                 </span>
                 <button
                   type="button"
-                  onClick={() => setStep(3)}
-                  className="text-[11px] text-epso-orange font-bold font-malayalam hover:underline"
+                  onClick={() => setStep(2)}
+                  className="text-[11px] text-epso-orange font-bold font-malayalam hover:underline cursor-pointer"
                 >
                   ചേരുവകളിൽ മാറ്റം വരുത്തുക
                 </button>
               </div>
 
-              {/* Scrollable list within fixed container - does not increase modal length */}
+              {/* Scrollable list within fixed container */}
               <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
                 {consumptionItems.map((item) => {
                   const ing = liveIngredients.find((i) => i.id === item.ingredientId);
@@ -1169,13 +1128,11 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
               </div>
             </div>
 
-
-
-            {/* Step 4 Bottom Action Bar - placed at bottom matching step 2 */}
+            {/* Step 3 Bottom Action Bar */}
             <div className="flex items-center justify-between pt-3 border-t border-charcoal-border/50 dark:border-[#2E2828]/50">
               <Button
                 variant="ghost"
-                onClick={() => setStep(3)}
+                onClick={() => setStep(2)}
                 icon={<TbChevronLeft className="w-4 h-4" />}
               >
                 {language === 'ml' ? 'പിന്നോട്ട്' : 'Back'}
@@ -1192,8 +1149,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                     ? 'മാറ്റങ്ങൾ സേവ് ചെയ്യുക'
                     : 'Save Changes'
                   : language === 'ml'
-                  ? 'സ്ഥിരീകരിക്കുക'
-                  : 'Confirm & Save'}
+                  ? 'പ്രൊഡക്ഷൻ ആരംഭിക്കുക'
+                  : 'Start Production'}
               </Button>
             </div>
           </div>

@@ -10,6 +10,7 @@ import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
 import { StartProductionModal } from '../components/production/StartProductionModal';
 import { DailyOilModal } from '../components/production/DailyOilModal';
 import { BatchPackingModal } from '../components/production/BatchPackingModal';
+import { BatchWeighingModal } from '../components/production/BatchWeighingModal';
 import { BasicIngredientsSelectorModal } from '../components/production/BasicIngredientsSelectorModal';
 import { BasicIngredientMeasurementModal } from '../components/production/BasicIngredientMeasurementModal';
 import { Modal } from '../components/ui/Modal';
@@ -27,6 +28,7 @@ import {
   TbPencil,
   TbToolsKitchen2,
   TbChevronRight,
+  TbScale,
 } from 'react-icons/tb';
 
 // Smooth Rolling Warning Message (transitions vertically every 2.8s without horizontal projection distortion)
@@ -155,6 +157,8 @@ export const ProductionPage: React.FC = () => {
   const [isOpeningNewBatch, setIsOpeningNewBatch] = useState<boolean>(false);
   const [isDailyOilModalOpen, setIsDailyOilModalOpen] = useState<boolean>(false);
   const [batchForPacking, setBatchForPacking] = useState<ProductionRun | null>(null);
+  const [batchForWeighing, setBatchForWeighing] = useState<ProductionRun | null>(null);
+  const [isPostCreationPrompt, setIsPostCreationPrompt] = useState<boolean>(false);
 
   // Basic ingredients tracking state (Salt, Cashew shell, Chippli, Curry leaves)
   const [recordedBasics, setRecordedBasics] = useState<Record<string, string[]>>(() => {
@@ -391,7 +395,7 @@ export const ProductionPage: React.FC = () => {
 
   const filteredRuns = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return runs.filter((r) => {
+    const list = runs.filter((r) => {
       const matchSearch =
         !q ||
         r.runNumber.toLowerCase().includes(q) ||
@@ -418,6 +422,18 @@ export const ProductionPage: React.FC = () => {
 
       // 'all' = Show all production runs
       return true;
+    });
+
+    // Always sort deleted batches (status === 'cancelled') to the very bottom
+    return list.sort((a, b) => {
+      const aDeleted = a.status === 'cancelled' ? 1 : 0;
+      const bDeleted = b.status === 'cancelled' ? 1 : 0;
+      if (aDeleted !== bDeleted) {
+        return aDeleted - bDeleted;
+      }
+      const timeA = new Date(a.createdAt || a.productionDate || 0).getTime();
+      const timeB = new Date(b.createdAt || b.productionDate || 0).getTime();
+      return timeB - timeA;
     });
   }, [runs, searchTerm, activeFilter, isTodayDate, isYesterdayDate]);
 
@@ -880,14 +896,27 @@ export const ProductionPage: React.FC = () => {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <span
-                        className={`text-base font-black ${
-                          isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
-                        }`}
-                      >
-                        {run.actualQuantity} {run.unit}
-                      </span>
-                      <p className="text-[10px] font-semibold text-stone-400">output</p>
+                      {run.actualQuantity > 0 ? (
+                        <>
+                          <span
+                            className={`text-base font-black ${
+                              isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
+                            }`}
+                          >
+                            {run.actualQuantity} {run.unit}
+                          </span>
+                          <p className="text-[10px] font-semibold text-stone-400">output</p>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-end">
+                          <span className="text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-lg font-malayalam">
+                            {language === 'ml' ? 'തൂക്കിയിട്ടില്ല' : 'Unweighed'}
+                          </span>
+                          <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-malayalam mt-0.5">
+                            {language === 'ml' ? 'സ്കെയിൽ വഴി നൽകുക' : 'Set weight via scale'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -939,64 +968,29 @@ export const ProductionPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Actions Bar: Status Badge (Add / Completed / Restocked / Wastage) & Action Buttons */}
-                  <div className="flex items-center justify-between pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 gap-2">
-                    <div className="flex items-center">
-                      {isDeleted ? (
-                        isRestocked ? (
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
+                  {/* Actions Bar: Centered 4 Action Buttons OR Deleted Status Badge */}
+                  <div className="pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 w-full">
+                    {isDeleted ? (
+                      <div className="flex items-center justify-center w-full py-1">
+                        {isRestocked ? (
+                          <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                            <span>{language === 'ml' ? 'ഒഴിവാക്കി (Restocked)' : 'Deleted (Restocked)'}</span>
+                            <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (സ്റ്റോക്ക് പുനഃസ്ഥാപിച്ചു)' : 'Deleted (Restocked)'}</span>
                           </span>
                         ) : (
-                          <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam">
+                          <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                            <span>{language === 'ml' ? 'ഒഴിവാക്കി (Wastage)' : 'Deleted (Wastage)'}</span>
+                            <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (പാഴായി രേഖപ്പെടുത്തി)' : 'Deleted (Wastage)'}</span>
                           </span>
-                        )
-                      ) : isAllPacketsAdded ? (
-                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span>{language === 'ml' ? 'പൂർത്തിയായി' : 'Completed'}</span>
-                        </span>
-                      ) : (
-                        /* Warning yellow button when not all packets are added */
-                        <button
-                          type="button"
-                          onClick={() => setBatchForPacking(run)}
-                          className="text-[11px] font-bold px-2.5 py-1 rounded-full border bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/60 text-yellow-900 dark:text-yellow-200 border-yellow-400 dark:border-yellow-600/80 flex items-center gap-1.5 font-malayalam transition-all cursor-pointer shadow-2xs whitespace-nowrap"
-                          title={
-                            packedTypesCount > 0
-                              ? language === 'ml'
-                                ? 'ബാക്കി പാക്കറ്റുകൾ ചേർക്കുക'
-                                : 'Add remaining packets'
-                              : language === 'ml'
-                              ? 'പാക്കറ്റുകൾ ചേർക്കുക'
-                              : 'Add packets'
-                          }
-                        >
-                          <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" />
-                          <span>
-                            {totalExpectedPackets > 0 && packedTypesCount > 0
-                              ? language === 'ml'
-                                ? `ബാക്കി ചേർക്കുക (${packedTypesCount}/${totalExpectedPackets})`
-                                : `Add remaining (${packedTypesCount}/${totalExpectedPackets})`
-                              : language === 'ml'
-                              ? 'പാക്കറ്റുകൾ ചേർക്കുക'
-                              : 'Add packets'}
-                          </span>
-                        </button>
-                      )}
-                    </div>
-
-
-                    {!isDeleted && (
-                      <div className="flex items-center gap-3 sm:gap-3.5">
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 sm:gap-2.5 w-full">
                         {/* 1. Add Packet Icon Box - Warning Yellow when not all packets added */}
                         <button
                           type="button"
                           onClick={() => setBatchForPacking(run)}
-                          className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs ${
+                          className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
                             isWarningYellow
                               ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
                               : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50'
@@ -1021,26 +1015,70 @@ export const ProductionPage: React.FC = () => {
                           )}
                         </button>
 
-                        {/* 2. Edit Batch Icon Box - opens multi-step wizard from step 2 to 4 */}
+                        {/* 2. Weigh Produced KG (Weighing Scale) & Set Production Quantity Display */}
+                        {(() => {
+                          const isProducedMissing = !run.actualQuantity || run.actualQuantity <= 0;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsPostCreationPrompt(false);
+                                setBatchForWeighing(run);
+                              }}
+                              className={`relative h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl flex items-center gap-2 font-bold text-xs transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
+                                isProducedMissing
+                                  ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-900 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
+                                  : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50'
+                              }`}
+                              title={language === 'ml' ? 'തൂക്കം നൽകുക (Set Production Quantity)' : 'Set Production Quantity'}
+                              aria-label={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
+                            >
+                              <TbScale className="w-5 h-5 stroke-[2.2] text-orange-600 dark:text-orange-400 shrink-0" />
+                              <span className="font-mono text-sm font-extrabold whitespace-nowrap">
+                                {run.actualQuantity > 0 ? `${run.actualQuantity} ${run.unit}` : (language === 'ml' ? '+ തൂക്കം നൽകുക' : '+ Set Qty')}
+                              </span>
+                              {isProducedMissing && (
+                                <span
+                                  className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
+                                  title={language === 'ml' ? 'ഉത്പാദന അളവ് നൽകിയിട്ടില്ല' : 'Production quantity not entered'}
+                                >
+                                  !
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })()}
+
+                        {/* 3. Edit Batch Icon Box - opens multi-step wizard */}
                         <button
                           type="button"
                           onClick={() => handleEditBatch(run)}
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
                           title={language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch'}
                           aria-label="Edit Batch"
                         >
                           <TbPencil className="w-5 h-5 stroke-[2.2]" />
                         </button>
 
-                        {/* 3. Delete Batch Icon Box (With Restock vs Wastage Prompt) - Only shown if NOT completed */}
-                        {!hasPackedPackets && (
+                        {/* 4. Delete Batch Icon Box: Grey & disabled if batch is completed, red & clickable otherwise */}
+                        {isAllPacketsAdded || hasPackedPackets ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-600 border border-stone-200 dark:border-stone-800 flex items-center justify-center cursor-not-allowed select-none shrink-0"
+                            title={language === 'ml' ? 'പൂർത്തിയായ ബാച്ച് ഒഴിവാക്കാനാകില്ല' : 'Completed batch cannot be deleted'}
+                            aria-label="Delete Batch Disabled"
+                          >
+                            <TbTrash className="w-5 h-5 stroke-[2.2]" />
+                          </button>
+                        ) : (
                           <button
                             type="button"
                             onClick={() => {
                               setRestockChoice('yes');
                               setRunToDelete(run);
                             }}
-                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs"
+                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
                             title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
                             aria-label="Delete Batch"
                           >
@@ -1078,6 +1116,7 @@ export const ProductionPage: React.FC = () => {
               }
               return [savedRun, ...prev];
             });
+
           }
           setIsStartProductionOpen(false);
           setRunToEdit(null);
@@ -1279,6 +1318,28 @@ export const ProductionPage: React.FC = () => {
         onClose={() => setBatchForPacking(null)}
         onSuccess={() => {
           triggerRefresh();
+        }}
+      />
+
+      {/* Batch Weighing Scale Modal (Produced KG) */}
+      <BatchWeighingModal
+        isOpen={!!batchForWeighing}
+        batch={batchForWeighing}
+        isPostCreationPrompt={isPostCreationPrompt}
+        onClose={() => {
+          setBatchForWeighing(null);
+          setIsPostCreationPrompt(false);
+        }}
+        onSuccess={(updated) => {
+          if (updated) {
+            setRuns((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+          }
+          triggerRefresh();
+        }}
+        onOpenPacking={(b) => {
+          setBatchForWeighing(null);
+          setIsPostCreationPrompt(false);
+          setBatchForPacking(b);
         }}
       />
 

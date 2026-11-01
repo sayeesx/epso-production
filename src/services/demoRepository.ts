@@ -1221,5 +1221,7 @@ export class DemoRepository implements IEpsoRepository {
   }
 
   async deletePackingRecordsForRun(_runId: string, _runNumber?: string): Promise<void> {}
+
+  invalidateCache(_key?: string): void {}
 }
 

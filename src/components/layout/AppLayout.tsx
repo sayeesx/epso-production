@@ -86,13 +86,13 @@ export const AppLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-canvas dark:bg-canvas-dark text-charcoal dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
+    <div className="min-h-screen min-h-[100dvh] bg-canvas dark:bg-canvas-dark text-charcoal dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
       <NavigationProgress />
       <ToastContainer />
 
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
         <Sidebar />
-        <main className="flex-1 p-4 sm:p-6 pb-24 md:pb-8 w-full max-w-full overflow-x-hidden">
+        <main className="flex-1 p-3.5 sm:p-6 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-8 w-full max-w-full overflow-x-hidden">
           <Outlet />
         </main>
       </div>
