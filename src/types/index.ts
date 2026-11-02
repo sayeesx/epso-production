@@ -160,6 +160,11 @@ export interface DailyClosing {
   oilPurchases: number; // kg
   oilClosingBalance: number; // kg
   oilConsumed: number; // kg
+  totalOilUsedKg?: number;
+  saltUsedKg?: number;
+  cashewShellUsedKg?: number;
+  chippliPowderUsedKg?: number;
+  curryLeavesUsedKg?: number;
   oilCostPerKg: number; // ₹
   oilTotalExpense: number; // ₹
   productionWages: number; // ₹

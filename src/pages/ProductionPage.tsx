@@ -13,6 +13,7 @@ import { BatchPackingModal } from '../components/production/BatchPackingModal';
 import { BatchWeighingModal } from '../components/production/BatchWeighingModal';
 import { BasicIngredientsSelectorModal } from '../components/production/BasicIngredientsSelectorModal';
 import { BasicIngredientMeasurementModal } from '../components/production/BasicIngredientMeasurementModal';
+import { BatchDetailModal } from '../components/production/BatchDetailModal';
 import { Modal } from '../components/ui/Modal';
 import { Product, Recipe, Ingredient, ProductionRun, PackingRecord, DailyClosing } from '../types';
 import {
@@ -159,6 +160,7 @@ export const ProductionPage: React.FC = () => {
   const [batchForPacking, setBatchForPacking] = useState<ProductionRun | null>(null);
   const [batchForWeighing, setBatchForWeighing] = useState<ProductionRun | null>(null);
   const [isPostCreationPrompt, setIsPostCreationPrompt] = useState<boolean>(false);
+  const [selectedBatchForDetail, setSelectedBatchForDetail] = useState<ProductionRun | null>(null);
 
   // Basic ingredients tracking state (Salt, Cashew shell, Chippli, Curry leaves)
   const [recordedBasics, setRecordedBasics] = useState<Record<string, string[]>>(() => {
@@ -870,238 +872,311 @@ export const ProductionPage: React.FC = () => {
 
               const isWarningYellow = !isAllPacketsAdded;
               const batchOrderNumber = batchNumberMap.get(run.id) ?? 1;
+              const hasProducedWeight = Boolean(run.actualQuantity && run.actualQuantity > 0);
+              const isBatchCompleted = hasProducedWeight && (totalExpectedPackets > 0 ? isAllPacketsAdded : hasPackedPackets);
 
               return (
                 <Card
                   key={run.id}
-                  padding="md"
-                  className={`transition-all select-none space-y-3 press-apple ${
+                  padding="none"
+                  onClick={() => setSelectedBatchForDetail(run)}
+                  className={`transition-all select-none overflow-hidden cursor-pointer press-apple ${
                     isDeleted
                       ? 'bg-stone-100/70 dark:bg-[#181515] !border-stone-200 dark:!border-[#282323] opacity-75'
-                      : '!border-orange-500/40 dark:!border-orange-500/45 hover:!border-orange-500 dark:hover:!border-orange-400 shadow-2xs'
+                      : '!border-orange-500/40 dark:!border-orange-500/45 hover:!border-orange-500 dark:hover:!border-orange-400 shadow-2xs hover:shadow-md'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 tabular-nums shadow-xs ${
-                          isDeleted
-                            ? 'bg-stone-200/80 dark:bg-[#282323] text-stone-400 dark:text-stone-500 line-through'
-                            : isAllPacketsAdded
-                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-yellow-100 dark:bg-yellow-950/60 text-yellow-800 dark:text-yellow-300 ring-2 ring-yellow-400/40'
-                        }`}
-                        title={`Batch #${batchOrderNumber}`}
-                      >
-                        {batchOrderNumber}
-                      </div>
-                      <div>
-                        <h4
-                          className={`text-sm sm:text-base font-extrabold leading-tight font-malayalam ${
-                            isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
-                          }`}
-                        >
-                          {run.productName}
-                        </h4>
-                        <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-1">
-                          {formatBatchDate(run.productionDate)}
-                          {!isKitchenStaffDefault(run.operatorName) ? ` • ${run.operatorName}` : ''}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      {run.actualQuantity > 0 ? (
+                  {/* Status Banner on Top of Card: Full Width, Orange Background, White Text, Integrated into Card */}
+                  <div className="w-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 dark:from-orange-700 dark:via-orange-600 dark:to-amber-600 text-white font-extrabold text-xs px-4 py-2 sm:px-5 sm:py-2.5 flex items-center justify-between tracking-wide shadow-2xs">
+                    <div className="flex items-center gap-2 font-malayalam">
+                      {isDeleted ? (
                         <>
-                          <span
-                            className={`text-base font-black ${
-                              isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
-                            }`}
-                          >
-                            {run.actualQuantity} {run.unit}
+                          <TbAlertCircle className="w-4 h-4 text-white/90 shrink-0" />
+                          <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (Cancelled)' : 'Batch Cancelled'}</span>
+                        </>
+                      ) : isBatchCompleted ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <TbCheck className="w-3 h-3 stroke-[3.5]" />
                           </span>
-                          <p className="text-[10px] font-semibold text-stone-400">output</p>
+                          <span className="font-extrabold">{language === 'ml' ? 'ബാച്ച് പൂർത്തിയായി (Completed)' : 'Completed'}</span>
+                        </>
+                      ) : hasProducedWeight && !isAllPacketsAdded ? (
+                        <>
+                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0 animate-pulse" />
+                          <span className="font-extrabold">{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക (Add Packets)' : 'Add Packets'}</span>
+                        </>
+                      ) : hasPackedPackets && !hasProducedWeight ? (
+                        <>
+                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0 animate-pulse" />
+                          <span className="font-extrabold">{language === 'ml' ? 'തൂക്കം നൽകുക (Set Produced Weight)' : 'Set Produced Weight'}</span>
                         </>
                       ) : (
-                        <div className="flex flex-col items-end">
-                          <span className="text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-lg font-malayalam">
-                            {language === 'ml' ? 'തൂക്കിയിട്ടില്ല' : 'Unweighed'}
-                          </span>
-                          <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-malayalam mt-0.5">
-                            {language === 'ml' ? 'സ്കെയിൽ വഴി നൽകുക' : 'Set weight via scale'}
-                          </p>
-                        </div>
+                        <>
+                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0" />
+                          <span className="font-extrabold">{language === 'ml' ? 'ബാച്ച് ആരംഭിച്ചു (Batch Started)' : 'Batch Started'}</span>
+                        </>
                       )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {!isBatchCompleted && !isDeleted && (
+                        <span className="text-[10px] bg-black/25 px-2 py-0.5 rounded-full font-bold font-mono">
+                          {hasProducedWeight ? (language === 'ml' ? 'പാക്കറ്റ് ബാക്കി' : 'Packets Pending') : (language === 'ml' ? 'തൂക്കം ബാക്കി' : 'Weight Pending')}
+                        </span>
+                      )}
+                      <span className="text-[11px] font-mono font-extrabold bg-white/20 px-2 py-0.5 rounded-full">
+                        #{batchOrderNumber}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Deletion Info if deleted */}
-                  {isDeleted && (
-                    <div className="text-xs text-stone-500 dark:text-stone-400 bg-stone-200/50 dark:bg-[#141212] p-2.5 rounded-lg border border-charcoal-border/50 dark:border-[#2E2828] flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-malayalam">
-                        <TbAlertCircle className={`w-4 h-4 shrink-0 ${isRestocked ? 'text-emerald-500' : 'text-amber-500'}`} />
-                        <span>
-                          {language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി:' : 'Batch Deleted:'}{' '}
-                          <strong className="font-semibold text-stone-700 dark:text-stone-300">
-                            {isRestocked
-                              ? (language === 'ml' ? 'സ്റ്റോക്ക് തിരികെ ചേർത്തു (Restocked)' : 'Ingredients Restocked')
-                              : (language === 'ml' ? 'വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തി (Wastage)' : 'Marked as Wastage')}
-                          </strong>
-                        </span>
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Notes if recorded and not deleted */}
-                  {!isDeleted && run.notes && (
-                    <p className="text-xs text-stone-500 dark:text-stone-400 italic">"{run.notes}"</p>
-                  )}
-
-                  {/* Packed packets summary for this batch */}
-                  {!isDeleted && batchPackings.length > 0 && (
-                    <div className="bg-stone-50 dark:bg-[#141212] rounded-xl p-2.5 text-xs border border-charcoal-border/70 dark:border-[#2E2828] space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-stone-300">
-                        <span className="flex items-center gap-1.5">
-                          <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
-                          {language === 'ml' ? 'പാക്ക് ചെയ്തവ' : 'Packed Quantities'}:
-                        </span>
-                        <span className="text-stone-500 font-normal">
-                          {batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0)} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts total'}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {groupedBatchPackings.map((pkg) => (
-                          <span
-                            key={pkg.packetSize}
-                            className="inline-flex items-center gap-1 bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 border border-charcoal-border/60 dark:border-[#2E2828] px-2 py-0.5 rounded-md font-semibold text-[11px]"
-                          >
-                            <span className="font-bold text-epso-red">{pkg.packetSize}:</span>
-                            <span>{pkg.packetsPacked} pkts</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Actions Bar: Centered 4 Action Buttons OR Deleted Status Badge */}
-                  <div className="pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 w-full">
-                    {isDeleted ? (
-                      <div className="flex items-center justify-center w-full py-1">
-                        {isRestocked ? (
-                          <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                            <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (സ്റ്റോക്ക് പുനഃസ്ഥാപിച്ചു)' : 'Deleted (Restocked)'}</span>
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                            <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (പാഴായി രേഖപ്പെടുത്തി)' : 'Deleted (Wastage)'}</span>
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-2 sm:gap-2.5 w-full">
-                        {/* 1. Add Packet Icon Box - Warning Yellow when not all packets added */}
-                        <button
-                          type="button"
-                          onClick={() => setBatchForPacking(run)}
-                          className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
-                            isWarningYellow
-                              ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
-                              : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50'
+                  {/* Card Content Body */}
+                  <div className="p-4 sm:p-5 pt-3 sm:pt-3 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center font-black text-xl sm:text-2xl shrink-0 tabular-nums shadow-xs ${
+                            isDeleted
+                              ? 'bg-stone-200/80 dark:bg-[#282323] text-stone-400 dark:text-stone-500 line-through'
+                              : isAllPacketsAdded
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-yellow-100 dark:bg-yellow-950/60 text-yellow-800 dark:text-yellow-300 ring-2 ring-yellow-400/40'
                           }`}
-                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
-                          aria-label={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                          title={`Batch #${batchOrderNumber}`}
                         >
-                          <TbPackage className="w-5 h-5 stroke-[2.2]" />
-                          {isWarningYellow && (
+                          {batchOrderNumber}
+                        </div>
+                        <div>
+                          <h4
+                            className={`text-sm sm:text-base font-extrabold leading-tight font-malayalam ${
+                              isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
+                            }`}
+                          >
+                            {run.productName}
+                          </h4>
+                          <p className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 mt-1">
+                            {formatBatchDate(run.productionDate)}
+                            {!isKitchenStaffDefault(run.operatorName) ? ` • ${run.operatorName}` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        {run.actualQuantity > 0 ? (
+                          <>
                             <span
-                              className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
-                              title={
-                                totalExpectedPackets > 0
-                                  ? `${packedTypesCount} of ${totalExpectedPackets} packet types added`
-                                  : 'Packets not completed'
-                              }
-                            >
-                              {totalExpectedPackets > 0 && packedTypesCount > 0
-                                ? `${packedTypesCount}/${totalExpectedPackets}`
-                                : '!'}
-                            </span>
-                          )}
-                        </button>
-
-                        {/* 2. Weigh Produced KG (Weighing Scale) & Set Production Quantity Display */}
-                        {(() => {
-                          const isProducedMissing = !run.actualQuantity || run.actualQuantity <= 0;
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsPostCreationPrompt(false);
-                                setBatchForWeighing(run);
-                              }}
-                              className={`relative h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl flex items-center gap-2 font-bold text-xs transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
-                                isProducedMissing
-                                  ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-900 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
-                                  : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50'
+                              className={`text-base font-black ${
+                                isDeleted ? 'text-stone-400 dark:text-stone-500 line-through' : 'text-stone-900 dark:text-white'
                               }`}
-                              title={language === 'ml' ? 'തൂക്കം നൽകുക (Set Production Quantity)' : 'Set Production Quantity'}
-                              aria-label={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
                             >
-                              <TbScale className="w-5 h-5 stroke-[2.2] text-orange-600 dark:text-orange-400 shrink-0" />
-                              <span className="font-mono text-sm font-extrabold whitespace-nowrap">
-                                {run.actualQuantity > 0 ? `${run.actualQuantity} ${run.unit}` : (language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Qty')}
-                              </span>
-                              {isProducedMissing && (
-                                <span
-                                  className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
-                                  title={language === 'ml' ? 'ഉത്പാദന അളവ് നൽകിയിട്ടില്ല' : 'Production quantity not entered'}
-                                >
-                                  !
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })()}
-
-                        {/* 3. Edit Batch Icon Box - opens multi-step wizard */}
-                        <button
-                          type="button"
-                          onClick={() => handleEditBatch(run)}
-                          className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
-                          title={language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch'}
-                          aria-label="Edit Batch"
-                        >
-                          <TbPencil className="w-5 h-5 stroke-[2.2]" />
-                        </button>
-
-                        {/* 4. Delete Batch Icon Box: Grey & disabled if batch is completed, red & clickable otherwise */}
-                        {isAllPacketsAdded || hasPackedPackets ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-600 border border-stone-200 dark:border-stone-800 flex items-center justify-center cursor-not-allowed select-none shrink-0"
-                            title={language === 'ml' ? 'പൂർത്തിയായ ബാച്ച് ഒഴിവാക്കാനാകില്ല' : 'Completed batch cannot be deleted'}
-                            aria-label="Delete Batch Disabled"
-                          >
-                            <TbTrash className="w-5 h-5 stroke-[2.2]" />
-                          </button>
+                              {run.actualQuantity} {run.unit}
+                            </span>
+                            <p className="text-[10px] font-semibold text-stone-400">output</p>
+                          </>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRestockChoice('yes');
-                              setRunToDelete(run);
-                            }}
-                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
-                            title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
-                            aria-label="Delete Batch"
-                          >
-                            <TbTrash className="w-5 h-5 stroke-[2.2]" />
-                          </button>
+                          <div className="flex flex-col items-end">
+                            <span className="text-[11px] font-extrabold text-amber-700 dark:text-amber-300 bg-amber-100/80 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-lg font-malayalam">
+                              {language === 'ml' ? 'തൂക്കിയിട്ടില്ല' : 'Unweighed'}
+                            </span>
+                            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-malayalam mt-0.5">
+                              {language === 'ml' ? 'സ്കെയിൽ വഴി നൽകുക' : 'Set weight via scale'}
+                            </p>
+                          </div>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Deletion Info if deleted */}
+                    {isDeleted && (
+                      <div className="text-xs text-stone-500 dark:text-stone-400 bg-stone-200/50 dark:bg-[#141212] p-2.5 rounded-lg border border-charcoal-border/50 dark:border-[#2E2828] flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-malayalam">
+                          <TbAlertCircle className={`w-4 h-4 shrink-0 ${isRestocked ? 'text-emerald-500' : 'text-amber-500'}`} />
+                          <span>
+                            {language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി:' : 'Batch Deleted:'}{' '}
+                            <strong className="font-semibold text-stone-700 dark:text-stone-300">
+                              {isRestocked
+                                ? (language === 'ml' ? 'സ്റ്റോക്ക് തിരികെ ചേർത്തു (Restocked)' : 'Ingredients Restocked')
+                                : (language === 'ml' ? 'വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തി (Wastage)' : 'Marked as Wastage')}
+                            </strong>
+                          </span>
+                        </span>
                       </div>
                     )}
+
+                    {/* Notes if recorded and not deleted */}
+                    {!isDeleted && run.notes && (
+                      <p className="text-xs text-stone-500 dark:text-stone-400 italic">"{run.notes}"</p>
+                    )}
+
+                    {/* Packed packets summary for this batch */}
+                    {!isDeleted && batchPackings.length > 0 && (
+                      <div className="bg-stone-50 dark:bg-[#141212] rounded-xl p-2.5 text-xs border border-charcoal-border/70 dark:border-[#2E2828] space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-stone-300">
+                          <span className="flex items-center gap-1.5">
+                            <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
+                            {language === 'ml' ? 'പാക്ക് ചെയ്തവ' : 'Packed Quantities'}:
+                          </span>
+                          <span className="text-stone-500 font-normal">
+                            {batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0)} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts total'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {groupedBatchPackings.map((pkg) => (
+                            <span
+                              key={pkg.packetSize}
+                              className="inline-flex items-center gap-1 bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 border border-charcoal-border/60 dark:border-[#2E2828] px-2 py-0.5 rounded-md font-semibold text-[11px]"
+                            >
+                              <span className="font-bold text-epso-red">{pkg.packetSize}:</span>
+                              <span>{pkg.packetsPacked} pkts</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions Bar: Centered 4 Action Buttons OR Deleted Status Badge */}
+                    <div className="pt-2 border-t border-charcoal-border/40 dark:border-[#2E2828]/60 w-full">
+                      {isDeleted ? (
+                        <div className="flex items-center justify-center w-full py-1">
+                          {isRestocked ? (
+                            <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-malayalam">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (സ്റ്റോക്ക് പുനഃസ്ഥാപിച്ചു)' : 'Deleted (Restocked)'}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold px-3 py-1 rounded-full border bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800/60 flex items-center gap-1.5 font-malayalam">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                              <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (പാഴായി രേഖപ്പെടുത്തി)' : 'Deleted (Wastage)'}</span>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2 sm:gap-2.5 w-full">
+                          {/* 1. Add Packet Icon Box - Warning Yellow when not all packets added */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBatchForPacking(run);
+                            }}
+                            className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
+                              isWarningYellow
+                                ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
+                                : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50'
+                            }`}
+                            title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                            aria-label={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                          >
+                            <TbPackage className="w-5 h-5 stroke-[2.2]" />
+                            {isWarningYellow && (
+                              <span
+                                className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
+                                title={
+                                  totalExpectedPackets > 0
+                                    ? `${packedTypesCount} of ${totalExpectedPackets} packet types added`
+                                    : 'Packets not completed'
+                                }
+                              >
+                                {totalExpectedPackets > 0 && packedTypesCount > 0
+                                  ? `${packedTypesCount}/${totalExpectedPackets}`
+                                  : '!'}
+                              </span>
+                            )}
+                          </button>
+
+                          {/* 2. Weigh Produced KG (Weighing Scale) & Set Production Quantity Display */}
+                          {(() => {
+                            const isProducedMissing = !run.actualQuantity || run.actualQuantity <= 0;
+                            return (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsPostCreationPrompt(false);
+                                  setBatchForWeighing(run);
+                                }}
+                                className={`relative h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl flex items-center gap-2 font-bold text-xs transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
+                                  isProducedMissing
+                                    ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-900 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
+                                    : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50'
+                                }`}
+                                title={language === 'ml' ? 'തൂക്കം നൽകുക (Set Production Quantity)' : 'Set Production Quantity'}
+                                aria-label={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
+                              >
+                                <TbScale className="w-5 h-5 stroke-[2.2] text-orange-600 dark:text-orange-400 shrink-0" />
+                                <span className="font-mono text-sm font-extrabold whitespace-nowrap">
+                                  {run.actualQuantity > 0 ? `${run.actualQuantity} ${run.unit}` : (language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Qty')}
+                                </span>
+                                {isProducedMissing && (
+                                  <span
+                                    className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
+                                    title={language === 'ml' ? 'ഉത്പാദന അളവ് നൽകിയിട്ടില്ല' : 'Production quantity not entered'}
+                                  >
+                                    !
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })()}
+
+                          {/* 3. Edit Batch Icon Box - Disabled and greyed out after recording produced weight */}
+                          {hasProducedWeight ? (
+                            <button
+                              type="button"
+                              disabled
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-600 border border-stone-200 dark:border-stone-800 flex items-center justify-center cursor-not-allowed select-none shrink-0"
+                              title={language === 'ml' ? 'തൂക്കം രേഖപ്പെടുത്തിയതിനാൽ തിരുത്താനാകില്ല' : 'Cannot edit after recording produced weight'}
+                              aria-label="Edit Batch Disabled"
+                            >
+                              <TbPencil className="w-5 h-5 stroke-[2.2]" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditBatch(run);
+                              }}
+                              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
+                              title={language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch'}
+                              aria-label="Edit Batch"
+                            >
+                              <TbPencil className="w-5 h-5 stroke-[2.2]" />
+                            </button>
+                          )}
+
+                          {/* 4. Delete Batch Icon Box: Grey & disabled if batch is completed, red & clickable otherwise */}
+                          {isAllPacketsAdded || hasPackedPackets ? (
+                            <button
+                              type="button"
+                              disabled
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-600 border border-stone-200 dark:border-stone-800 flex items-center justify-center cursor-not-allowed select-none shrink-0"
+                              title={language === 'ml' ? 'പൂർത്തിയായ ബാച്ച് ഒഴിവാക്കാനാകില്ല' : 'Completed batch cannot be deleted'}
+                              aria-label="Delete Batch Disabled"
+                            >
+                              <TbTrash className="w-5 h-5 stroke-[2.2]" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRestockChoice('yes');
+                                setRunToDelete(run);
+                              }}
+                              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
+                              title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
+                              aria-label="Delete Batch"
+                            >
+                              <TbTrash className="w-5 h-5 stroke-[2.2]" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Card>
               );
@@ -1392,6 +1467,37 @@ export const ProductionPage: React.FC = () => {
           triggerRefresh();
         }}
       />
+
+      {/* Batch Details Modal (view ingredients, packets, basic calculations, close button) */}
+      <BatchDetailModal
+        isOpen={Boolean(selectedBatchForDetail)}
+        onClose={() => setSelectedBatchForDetail(null)}
+        batch={selectedBatchForDetail}
+        batchOrderNumber={selectedBatchForDetail ? (batchNumberMap.get(selectedBatchForDetail.id) ?? 1) : 1}
+        packingRecords={packingRecords}
+        dailyClosing={
+          selectedBatchForDetail
+            ? isTodayDate(selectedBatchForDetail.productionDate)
+              ? todayOilClosing
+              : isYesterdayDate(selectedBatchForDetail.productionDate)
+              ? yesterdayOilClosing
+              : null
+            : null
+        }
+        totalDailyProductionKg={
+          selectedBatchForDetail
+            ? runs
+                .filter((r) => r.productionDate === selectedBatchForDetail.productionDate && r.status !== 'cancelled')
+                .reduce((sum, r) => sum + (r.actualQuantity || r.plannedQuantity || 0), 0)
+            : 0
+        }
+        recipe={recipes.find(
+          (r) =>
+            r.id === selectedBatchForDetail?.recipeId ||
+            r.productId === selectedBatchForDetail?.productId
+        )}
+      />
     </div>
   );
 };
+
