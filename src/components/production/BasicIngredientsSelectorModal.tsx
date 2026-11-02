@@ -35,7 +35,7 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
     {
       key: 'oil',
       matchNames: ['ഓയിൽ', 'oil'],
-      labelMl: 'ഓയിൽ (Daily Oil)',
+      labelMl: 'ഓയിൽ',
       labelEn: 'Daily Oil Usage',
       subMl: 'ഉപയോഗവും ബാക്കിയും രേഖപ്പെടുത്തുക',
       subEn: 'Consumed & Leftover Oil',
@@ -47,7 +47,7 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
     {
       key: 'salt',
       matchNames: ['ഉപ്പ്', 'salt'],
-      labelMl: 'ഉപ്പ് (Salt)',
+      labelMl: 'ഉപ്പ്',
       labelEn: 'Salt',
       subMl: 'റൂളർ: 25 kg വരെ അളക്കാം',
       subEn: 'Ruler: Up to 25 kg',
@@ -59,7 +59,7 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
     {
       key: 'cashew_shell',
       matchNames: ['അണ്ടി തോട്', 'cashew'],
-      labelMl: 'അണ്ടി തോട് (Cashew Shell)',
+      labelMl: 'അണ്ടി തോട്',
       labelEn: 'Cashew Shell',
       subMl: 'റൂളർ: 25 kg വരെ അളക്കാം',
       subEn: 'Ruler: Up to 25 kg',
@@ -71,7 +71,7 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
     {
       key: 'chippli_powder',
       matchNames: ['ചിപ്പ്ളി പൊടി', 'chippli'],
-      labelMl: 'ചിപ്പ്ളി പൊടി (Chilli Powder)',
+      labelMl: 'ചിപ്പ്ളി പൊടി',
       labelEn: 'Chippli Powder',
       subMl: 'റൂളർ: 25 kg വരെ അളക്കാം',
       subEn: 'Ruler: Up to 25 kg',
@@ -83,7 +83,7 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
     {
       key: 'curry_leaves',
       matchNames: ['കറിവേപ്പില', 'കറിവേപ്പി', 'curry leaves'],
-      labelMl: 'കറിവേപ്പില (Curry Leaves)',
+      labelMl: 'കറിവേപ്പില',
       labelEn: 'Curry Leaves',
       subMl: 'റൂളർ: 25 kg വരെ അളക്കാം',
       subEn: 'Ruler: Up to 25 kg',

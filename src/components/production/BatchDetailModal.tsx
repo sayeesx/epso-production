@@ -144,9 +144,6 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
             <p className="text-[11px] text-stone-500 dark:text-stone-400 font-semibold flex items-center gap-1.5 mt-0.5">
               <TbCalendar className="w-3.5 h-3.5 text-stone-400 shrink-0" />
               <span>{batch.productionDate}</span>
-              <span className="text-stone-300 dark:text-stone-700">•</span>
-              <TbReceipt2 className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-              <span>{batch.runNumber}</span>
               {batch.operatorName && (
                 <>
                   <span className="text-stone-300 dark:text-stone-700">•</span>
@@ -161,7 +158,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
       footer={
         <div className="flex items-center justify-end w-full">
           <Button variant="secondary" onClick={onClose} className="w-full sm:w-auto font-bold">
-            {language === 'ml' ? 'അടയ്ക്കുക (Close)' : 'Close'}
+            {language === 'ml' ? 'അടയ്ക്കുക' : 'Close'}
           </Button>
         </div>
       }
@@ -175,7 +172,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
             </div>
             <div>
               <span className="text-[10px] uppercase font-black tracking-wider text-orange-700 dark:text-orange-400">
-                {language === 'ml' ? 'ഉത്പാദന അളവ് (Produced Weight)' : 'Produced Output Weight'}
+                {language === 'ml' ? 'ഉത്പാദന അളവ്' : 'Produced Output Weight'}
               </span>
               <div className="text-lg sm:text-xl font-black text-stone-900 dark:text-white font-mono leading-tight">
                 {batch.actualQuantity > 0 ? (
@@ -187,7 +184,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
                   </>
                 ) : (
                   <span className="text-sm text-amber-600 dark:text-amber-400 font-bold font-malayalam">
-                    {language === 'ml' ? 'തൂക്കിയിട്ടില്ല (Unweighed)' : 'Unweighed'}
+                    {language === 'ml' ? 'തൂക്കിയിട്ടില്ല' : 'Unweighed'}
                   </span>
                 )}
               </div>
@@ -222,7 +219,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
           <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 font-bold text-xs">
             <span className="flex items-center gap-1.5 font-malayalam">
               <TbToolsKitchen2 className="w-4 h-4 text-epso-orange" />
-              <span>{language === 'ml' ? 'ചേർത്ത ചേരുവകൾ (Ingredients Added)' : 'Ingredients Added'}</span>
+              <span>{language === 'ml' ? 'ചേർത്ത ചേരുവകൾ' : 'Ingredients Added'}</span>
             </span>
             <span className="text-[11px] text-stone-400">
               {consumedIngredientsList.length} {language === 'ml' ? 'ചേരുവകൾ' : 'items'}
@@ -279,7 +276,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
           <div className="flex items-center justify-between text-stone-700 dark:text-stone-300 font-bold text-xs">
             <span className="flex items-center gap-1.5 font-malayalam">
               <TbPackage className="w-4 h-4 text-epso-orange" />
-              <span>{language === 'ml' ? 'പാക്ക് ചെയ്ത പാക്കറ്റുകൾ (Packets Added)' : 'Packets Added'}</span>
+              <span>{language === 'ml' ? 'പാക്ക് ചെയ്ത പാക്കറ്റുകൾ' : 'Packets Added'}</span>
             </span>
             <span className="text-[11px] text-stone-400 font-mono">
               {totalPackets} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts'}
@@ -320,7 +317,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
               ))
             ) : (
               <div className="p-4 text-center text-stone-400 italic">
-                {language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തിട്ടില്ല (No packets added yet)' : 'No packets packed yet for this batch'}
+                {language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തിട്ടില്ല' : 'No packets packed yet for this batch'}
               </div>
             )}
           </div>
@@ -333,7 +330,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
               <TbDroplet className="w-4 h-4 text-amber-500" />
               <span>
                 {language === 'ml'
-                  ? 'കണക്കാക്കിയ ബേസിക് ചേരുവകൾ (Basic Ingredients Calculated)'
+                  ? 'കണക്കാക്കിയ ബേസിക് ചേരുവകൾ'
                   : 'Basic Ingredients Calculated'}
               </span>
             </span>
@@ -357,7 +354,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
                     </span>
                     <div>
                       <span className="font-bold text-stone-900 dark:text-white font-malayalam block leading-none">
-                        {language === 'ml' ? 'ഓയിൽ (Oil)' : 'Daily Oil'}
+                        {language === 'ml' ? 'ഓയിൽ' : 'Daily Oil'}
                       </span>
                       <span className="text-[10px] text-stone-400 font-mono">
                         {language === 'ml' ? 'ദിവസേന ആകെ:' : 'Day Total:'} {calculatedBasics.oilDailyTotal} kg
@@ -377,7 +374,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
                     </span>
                     <div>
                       <span className="font-bold text-stone-900 dark:text-white font-malayalam block leading-none">
-                        {language === 'ml' ? 'ഉപ്പ് (Salt)' : 'Salt'}
+                        {language === 'ml' ? 'ഉപ്പ്' : 'Salt'}
                       </span>
                       <span className="text-[10px] text-stone-400 font-mono">
                         {language === 'ml' ? 'ദിവസേന ആകെ:' : 'Day Total:'} {calculatedBasics.saltDailyTotal} kg
@@ -397,7 +394,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
                     </span>
                     <div>
                       <span className="font-bold text-stone-900 dark:text-white font-malayalam block leading-none">
-                        {language === 'ml' ? 'അണ്ടി തോട് (Cashew Shell)' : 'Cashew Shell'}
+                        {language === 'ml' ? 'അണ്ടി തോട്' : 'Cashew Shell'}
                       </span>
                       <span className="text-[10px] text-stone-400 font-mono">
                         {language === 'ml' ? 'ദിവസേന ആകെ:' : 'Day Total:'} {calculatedBasics.cashewDailyTotal} kg
@@ -417,7 +414,7 @@ export const BatchDetailModal: React.FC<BatchDetailModalProps> = ({
                     </span>
                     <div>
                       <span className="font-bold text-stone-900 dark:text-white font-malayalam block leading-none">
-                        {language === 'ml' ? 'ചിപ്പ്ളി പൊടി (Chippli)' : 'Chippli Powder'}
+                        {language === 'ml' ? 'ചിപ്പ്ളി പൊടി' : 'Chippli Powder'}
                       </span>
                       <span className="text-[10px] text-stone-400 font-mono">
                         {language === 'ml' ? 'ദിവസേന ആകെ:' : 'Day Total:'} {calculatedBasics.chippliDailyTotal} kg

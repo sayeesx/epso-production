@@ -132,8 +132,8 @@ export const BatchWeighingModal: React.FC<BatchWeighingModalProps> = ({
                 ? 'ഉൽപ്പാദിപ്പിച്ച തൂക്കം രേഖപ്പെടുത്തുക'
                 : 'Record Produced Weight'}
             </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
-              {batch.productName} • {batch.runNumber}
+            <p className="text-xs text-stone-500 dark:text-stone-400 font-medium font-malayalam">
+              {batch.productName} • {batch.productionDate}
             </p>
           </div>
         </div>

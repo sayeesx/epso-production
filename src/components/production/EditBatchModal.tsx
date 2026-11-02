@@ -120,7 +120,7 @@ export const EditBatchModal: React.FC<EditBatchModalProps> = ({
           </span>
           <div>
             <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white leading-tight font-malayalam">
-              {language === 'ml' ? `ബാച്ച് തിരുത്തുക (#${run.runNumber})` : `Edit Batch (#${run.runNumber})`}
+              {language === 'ml' ? 'ബാച്ച് തിരുത്തുക' : 'Edit Batch'}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 font-medium font-malayalam">
               {run.productName}
@@ -140,7 +140,7 @@ export const EditBatchModal: React.FC<EditBatchModalProps> = ({
         <div className="p-3.5 bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border dark:border-[#2E2828] space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider font-malayalam">
-              {language === 'ml' ? 'ഉൽപ്പാദന അളവ് (Output Quantity)' : 'Output Quantity'} ({run.unit})
+              {language === 'ml' ? 'ഉൽപ്പാദന അളവ്' : 'Output Quantity'} ({run.unit})
             </label>
             <span className="text-xs text-stone-400 font-mono">
               Orig: {run.actualQuantity} {run.unit}
@@ -228,7 +228,7 @@ export const EditBatchModal: React.FC<EditBatchModalProps> = ({
         {ingredients.length > 0 && (
           <div className="space-y-2 pt-1">
             <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider font-malayalam block">
-              {language === 'ml' ? 'ഉപയോഗിച്ച ചേരുവകൾ (Ingredients Consumed)' : 'Ingredients Consumed'}
+              {language === 'ml' ? 'ഉപയോഗിച്ച ചേരുവകൾ' : 'Ingredients Consumed'}
             </label>
 
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">

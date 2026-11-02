@@ -57,10 +57,10 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end landscape:items-center sm:items-center justify-center p-0 landscape:p-3 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-end landscape:items-center sm:items-center justify-center p-0 landscape:p-3 sm:p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/70 dark:bg-black/85"
         onClick={onClose}
       />
 
@@ -68,7 +68,7 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={`relative w-full ${maxWidths[effectiveMaxWidth]} bg-white dark:bg-[#1E1B1B] text-charcoal dark:text-stone-100 border border-charcoal-border dark:border-[#2E2828] rounded-t-3xl landscape:rounded-2xl sm:rounded-2xl ${
           expanded ? 'h-[94dvh] landscape:h-[88dvh] sm:h-[88dvh] max-h-[94dvh]' : 'max-h-[90dvh] landscape:max-h-[88dvh]'
-        } flex flex-col z-10 overflow-hidden transform transition-all duration-300 animate-in slide-in-from-bottom sm:zoom-in-95`}
+        } flex flex-col z-10 overflow-hidden`}
       >
         {/* Mobile handle indicator */}
         <div className="w-12 h-1 bg-stone-300 dark:bg-stone-700 rounded-full mx-auto mt-2.5 landscape:hidden sm:hidden" />

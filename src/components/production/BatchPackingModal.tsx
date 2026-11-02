@@ -344,7 +344,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                 {batch.productName}
               </h4>
               <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-sans">
-                {batch.actualQuantity} {batch.unit} output • #{batch.runNumber}
+                {batch.actualQuantity} {batch.unit} output • {batch.productionDate}
               </p>
             </div>
           </div>

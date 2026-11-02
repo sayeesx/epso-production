@@ -175,11 +175,11 @@ export const ProductsPage: React.FC = () => {
                     {prod.isActive ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                         <TbCheck className="w-3.5 h-3.5" />
-                        <span>{language === 'ml' ? 'സജീവം (Active)' : 'Active'}</span>
+                        <span>{language === 'ml' ? 'സജീവം' : 'Active'}</span>
                       </span>
                     ) : (
                       <span className="text-[11px] font-semibold text-stone-400 dark:text-stone-500">
-                        {language === 'ml' ? 'നിർജ്ജീവം (Inactive)' : 'Inactive'}
+                        {language === 'ml' ? 'നിർജ്ജീവം' : 'Inactive'}
                       </span>
                     )}
                   </div>

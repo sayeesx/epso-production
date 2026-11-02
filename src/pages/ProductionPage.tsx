@@ -573,41 +573,31 @@ export const ProductionPage: React.FC = () => {
 
 
 
-  const handleOpenNewBatch = async () => {
-    try {
-      setIsOpeningNewBatch(true);
-      // Proactively fetch latest recipes, products, and ingredients from Supabase
-      const [freshRecipes, freshProducts, freshIngredients] = await Promise.all([
-        repo.listRecipes(),
-        repo.listProducts(false),
-        repo.listIngredients(false),
-      ]);
+  const handleOpenNewBatch = () => {
+    setIsStartProductionOpen(true);
+    // Background refresh without blocking modal opening
+    Promise.all([
+      repo.listRecipes(),
+      repo.listProducts(false),
+      repo.listIngredients(false),
+    ]).then(([freshRecipes, freshProducts, freshIngredients]) => {
       if (freshRecipes && freshRecipes.length > 0) setRecipes(freshRecipes);
       if (freshProducts && freshProducts.length > 0) setProducts(freshProducts);
       if (freshIngredients && freshIngredients.length > 0) setIngredients(freshIngredients);
-      setIsStartProductionOpen(true);
-    } catch (err) {
-      console.error('Failed to pre-fetch recipes before opening batch modal', err);
-      setIsStartProductionOpen(true);
-    } finally {
-      setIsOpeningNewBatch(false);
-    }
+    }).catch((err) => console.error('Failed to pre-fetch recipes:', err));
   };
 
-  const handleEditBatch = async (run: ProductionRun) => {
-    try {
-      const [freshRecipes, freshProducts, freshIngredients] = await Promise.all([
-        repo.listRecipes(),
-        repo.listProducts(false),
-        repo.listIngredients(false),
-      ]);
+  const handleEditBatch = (run: ProductionRun) => {
+    setRunToEdit(run);
+    Promise.all([
+      repo.listRecipes(),
+      repo.listProducts(false),
+      repo.listIngredients(false),
+    ]).then(([freshRecipes, freshProducts, freshIngredients]) => {
       if (freshRecipes && freshRecipes.length > 0) setRecipes(freshRecipes);
       if (freshProducts && freshProducts.length > 0) setProducts(freshProducts);
       if (freshIngredients && freshIngredients.length > 0) setIngredients(freshIngredients);
-    } catch (err) {
-      console.error('Failed to pre-fetch recipes before editing batch', err);
-    }
-    setRunToEdit(run);
+    }).catch((err) => console.error('Failed to pre-fetch recipes:', err));
   };
 
   return (
@@ -630,7 +620,7 @@ export const ProductionPage: React.FC = () => {
               setIsBasicSelectorOpen(true);
             }}
             className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
-            title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക (ഓയിൽ, ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില)' : 'Add basic ingredients (Oil, Salt, Cashew shell, Chippli, Curry leaves)'}
+            title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക' : 'Add Basic Ingredients'}
           >
             <TbToolsKitchen2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
@@ -888,46 +878,43 @@ export const ProductionPage: React.FC = () => {
                 >
                   {/* Status Banner on Top of Card: Full Width, Orange Background, White Text, Integrated into Card */}
                   <div className="w-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 dark:from-orange-700 dark:via-orange-600 dark:to-amber-600 text-white font-extrabold text-xs px-4 py-2 sm:px-5 sm:py-2.5 flex items-center justify-between tracking-wide shadow-2xs">
-                    <div className="flex items-center gap-2 font-malayalam">
+                    <div className="flex items-center gap-2 font-malayalam whitespace-nowrap min-w-0">
                       {isDeleted ? (
                         <>
                           <TbAlertCircle className="w-4 h-4 text-white/90 shrink-0" />
-                          <span>{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി (Cancelled)' : 'Batch Cancelled'}</span>
+                          <span className="whitespace-nowrap">{language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി' : 'Batch Cancelled'}</span>
                         </>
                       ) : isBatchCompleted ? (
                         <>
                           <span className="w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-xs">
                             <TbCheck className="w-3 h-3 stroke-[3.5]" />
                           </span>
-                          <span className="font-extrabold">{language === 'ml' ? 'ബാച്ച് പൂർത്തിയായി (Completed)' : 'Completed'}</span>
+                          <span className="font-extrabold whitespace-nowrap">{language === 'ml' ? 'ബാച്ച് പൂർത്തിയായി' : 'Completed'}</span>
                         </>
                       ) : hasProducedWeight && !isAllPacketsAdded ? (
                         <>
-                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0 animate-pulse" />
-                          <span className="font-extrabold">{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക (Add Packets)' : 'Add Packets'}</span>
+                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0" />
+                          <span className="font-extrabold whitespace-nowrap">{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
                         </>
                       ) : hasPackedPackets && !hasProducedWeight ? (
                         <>
-                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0 animate-pulse" />
-                          <span className="font-extrabold">{language === 'ml' ? 'തൂക്കം നൽകുക (Set Produced Weight)' : 'Set Produced Weight'}</span>
+                          <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0" />
+                          <span className="font-extrabold whitespace-nowrap">{language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Produced Weight'}</span>
                         </>
                       ) : (
                         <>
                           <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0" />
-                          <span className="font-extrabold">{language === 'ml' ? 'ബാച്ച് ആരംഭിച്ചു (Batch Started)' : 'Batch Started'}</span>
+                          <span className="font-extrabold whitespace-nowrap">{language === 'ml' ? 'ബാച്ച് ആരംഭിച്ചു' : 'Batch Started'}</span>
                         </>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       {!isBatchCompleted && !isDeleted && (
-                        <span className="text-[10px] bg-black/25 px-2 py-0.5 rounded-full font-bold font-mono">
+                        <span className="text-[10px] bg-black/25 px-2.5 py-0.5 rounded-full font-bold font-mono whitespace-nowrap shrink-0">
                           {hasProducedWeight ? (language === 'ml' ? 'പാക്കറ്റ് ബാക്കി' : 'Packets Pending') : (language === 'ml' ? 'തൂക്കം ബാക്കി' : 'Weight Pending')}
                         </span>
                       )}
-                      <span className="text-[11px] font-mono font-extrabold bg-white/20 px-2 py-0.5 rounded-full">
-                        #{batchOrderNumber}
-                      </span>
                     </div>
                   </div>
 
@@ -996,8 +983,8 @@ export const ProductionPage: React.FC = () => {
                             {language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കി:' : 'Batch Deleted:'}{' '}
                             <strong className="font-semibold text-stone-700 dark:text-stone-300">
                               {isRestocked
-                                ? (language === 'ml' ? 'സ്റ്റോക്ക് തിരികെ ചേർത്തു (Restocked)' : 'Ingredients Restocked')
-                                : (language === 'ml' ? 'വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തി (Wastage)' : 'Marked as Wastage')}
+                                ? (language === 'ml' ? 'സ്റ്റോക്ക് തിരികെ ചേർത്തു' : 'Ingredients Restocked')
+                                : (language === 'ml' ? 'വേസ്റ്റേജ് ആയി രേഖപ്പെടുത്തി' : 'Marked as Wastage')}
                             </strong>
                           </span>
                         </span>
@@ -1101,7 +1088,7 @@ export const ProductionPage: React.FC = () => {
                                     ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-900 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
                                     : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50'
                                 }`}
-                                title={language === 'ml' ? 'തൂക്കം നൽകുക (Set Production Quantity)' : 'Set Production Quantity'}
+                                title={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
                                 aria-label={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
                               >
                                 <TbScale className="w-5 h-5 stroke-[2.2] text-orange-600 dark:text-orange-400 shrink-0" />
@@ -1275,7 +1262,7 @@ export const ProductionPage: React.FC = () => {
             <div className="space-y-2">
               <label className="text-xs font-black text-stone-900 dark:text-white font-malayalam uppercase tracking-wider block">
                 {language === 'ml'
-                  ? 'ചേരുവകൾ (Ingredients) വീണ്ടും സ്റ്റോക്കിലേക്ക് ചേർക്കണോ?'
+                  ? 'ചേരുവകൾ വീണ്ടും സ്റ്റോക്കിലേക്ക് ചേർക്കണോ?'
                   : 'Do you wish to restock the ingredients?'}
               </label>
 

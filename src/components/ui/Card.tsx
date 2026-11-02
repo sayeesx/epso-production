@@ -23,7 +23,7 @@ export const Card: React.FC<CardProps> = ({
   return (
     <div
       className={`bg-white dark:bg-[#1E1B1B] text-charcoal dark:text-stone-100 rounded-2xl ${bordered ? 'border border-charcoal-border/70 dark:border-[#2E2828]' : ''
-        } ${paddings[padding]} transition-colors duration-200 apple-card ${className}`}
+        } ${paddings[padding]} apple-card ${className}`}
       {...props}
     >
       {children}

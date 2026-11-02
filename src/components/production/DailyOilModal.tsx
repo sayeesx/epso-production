@@ -390,7 +390,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                 <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider">
-                  {language === 'ml' ? 'ഉപയോഗിച്ച ഓയിൽ (Used Oil)' : 'Used Oil (Consumed)'} *
+                  {language === 'ml' ? 'ഉപയോഗിച്ച ഓയിൽ' : 'Used Oil (Consumed)'} *
                 </label>
               </div>
               <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
@@ -521,7 +521,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                 <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider truncate">
-                  {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ (Leftover Oil)' : 'Leftover Oil (Remaining)'}
+                  {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ' : 'Leftover Oil (Remaining)'}
                 </label>
               </div>
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50 whitespace-nowrap shrink-0">
