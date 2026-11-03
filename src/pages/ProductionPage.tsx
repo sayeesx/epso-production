@@ -847,23 +847,12 @@ export const ProductionPage: React.FC = () => {
               const totalPacketsPacked = batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0);
               const hasPackedPackets = totalPacketsPacked > 0;
 
-              // Unique packet sizes that have been packed for this batch:
-              const packedSizesSet = new Set(
-                groupedBatchPackings.filter((p) => p.packetsPacked > 0).map((p) => p.packetSize)
-              );
-              const packedTypesCount = totalExpectedPackets > 0
-                ? assignedPackets.filter((p) => packedSizesSet.has(p.packetName)).length
-                : (hasPackedPackets ? 1 : 0);
-
-              // ONLY set completed when all assigned packets are added:
-              const isAllPacketsAdded = totalExpectedPackets > 0
-                ? packedTypesCount >= totalExpectedPackets
-                : false;
-
-              const isWarningYellow = !isAllPacketsAdded;
+              // Adding packets is compulsory (cook can pick any packets, not fixed to recipes):
+              const isAllPacketsAdded = hasPackedPackets;
+              const isWarningYellow = !hasPackedPackets;
               const batchOrderNumber = batchNumberMap.get(run.id) ?? 1;
               const hasProducedWeight = Boolean(run.actualQuantity && run.actualQuantity > 0);
-              const isBatchCompleted = hasProducedWeight && (totalExpectedPackets > 0 ? isAllPacketsAdded : hasPackedPackets);
+              const isBatchCompleted = hasProducedWeight && hasPackedPackets;
 
               return (
                 <Card
@@ -1040,7 +1029,7 @@ export const ProductionPage: React.FC = () => {
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-2 sm:gap-2.5 w-full">
-                          {/* 1. Add Packet Icon Box - Warning Yellow when not all packets added */}
+                          {/* 1. Add Packet Icon Box - Warning Yellow when no packets added (compulsory) */}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1052,22 +1041,31 @@ export const ProductionPage: React.FC = () => {
                                 ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
                                 : 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50'
                             }`}
-                            title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                            title={
+                              isWarningYellow
+                                ? language === 'ml'
+                                  ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ് (Add Packets)'
+                                  : 'Adding packets is compulsory'
+                                : language === 'ml'
+                                ? `${totalPacketsPacked} പാക്കറ്റുകൾ ചേർത്തു`
+                                : `${totalPacketsPacked} packets added`
+                            }
                             aria-label={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
                           >
                             <TbPackage className="w-5 h-5 stroke-[2.2]" />
-                            {isWarningYellow && (
+                            {isWarningYellow ? (
                               <span
                                 className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
-                                title={
-                                  totalExpectedPackets > 0
-                                    ? `${packedTypesCount} of ${totalExpectedPackets} packet types added`
-                                    : 'Packets not completed'
-                                }
+                                title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ്' : 'Adding packets is compulsory'}
                               >
-                                {totalExpectedPackets > 0 && packedTypesCount > 0
-                                  ? `${packedTypesCount}/${totalExpectedPackets}`
-                                  : '!'}
+                                !
+                              </span>
+                            ) : (
+                              <span
+                                className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-emerald-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none font-mono"
+                                title={`${totalPacketsPacked} packets added`}
+                              >
+                                {totalPacketsPacked}
                               </span>
                             )}
                           </button>

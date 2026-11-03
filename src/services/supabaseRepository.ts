@@ -1761,6 +1761,22 @@ export class SupabaseRepository implements IEpsoRepository {
       }
     }
 
+    if (unitCost <= 0) {
+      try {
+        const { data: pt } = await client
+          .from('packet_types')
+          .select('cost_per_packet, bundle_cost, bundle_quantity')
+          .eq('name', packetSize)
+          .limit(1)
+          .maybeSingle();
+        if (pt) {
+          unitCost = Number(pt.cost_per_packet) || (Number(pt.bundle_cost) / Math.max(1, Number(pt.bundle_quantity))) || 0;
+        }
+      } catch (e) {
+        console.warn('Could not query packet_types cost for', packetSize, e);
+      }
+    }
+
     const packagingCost = roundCurrency(packetsPacked * unitCost);
     const packingLabourCost = roundCurrency(packetsPacked * labourRate);
     const totalPackingCost = roundCurrency(packagingCost + packingLabourCost);

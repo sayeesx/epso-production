@@ -35,6 +35,7 @@ export interface IEpsoRepository {
     quantityDelta: number;
     reason: string;
     operatorName: string;
+    coverUnitCost?: number;
   }): Promise<{ ingredient: Ingredient; movement: StockMovement }>;
 
   // Recipes (BOM)
@@ -62,6 +63,7 @@ export interface IEpsoRepository {
     actualQuantity: number;
     unit: string;
     operatorName: string;
+    coverUnitCost?: number;
     notes?: string;
     ingredientsConsumed: Array<{
       ingredientId: string;
@@ -90,6 +92,7 @@ export interface IEpsoRepository {
     runId: string;
     reason: string;
     operatorName: string;
+    coverUnitCost?: number;
   }): Promise<boolean>;
   deleteProductionRun(
     params:
@@ -97,6 +100,7 @@ export interface IEpsoRepository {
         runId: string;
         restock: boolean;
         operatorName: string;
+    coverUnitCost?: number;
         reason?: string;
       }
       | string
@@ -154,6 +158,7 @@ export interface IEpsoRepository {
     packetSize: string;
     packetsPacked: number;
     operatorName: string;
+    coverUnitCost?: number;
     notes?: string;
   }): Promise<PackingRecord>;
   listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]>;
