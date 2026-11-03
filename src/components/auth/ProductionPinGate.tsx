@@ -15,7 +15,7 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
   const [shake, setShake] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
   const [targetPin, setTargetPin] = useState<string>(() => {
-    return localStorage.getItem('epso_production_pin') || '1234';
+    return localStorage.getItem('epso_production_pin') || '5678';
   });
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -135,7 +135,7 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
     }
 
     if (!authoritativePin) {
-      authoritativePin = localStorage.getItem('epso_production_pin') || '1234';
+      authoritativePin = localStorage.getItem('epso_production_pin') || '5678';
     }
 
     // 2. Validate strictly against the latest authoritative PIN
