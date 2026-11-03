@@ -8,6 +8,7 @@ import {
   computeBatchMetrics,
   calculateWeightedAverageCost,
   calculateContinuousOilExpense,
+  calculateDailyOilUsage,
   allocateDailySharedExpenses,
   calculateFinalProductCosting,
 } from '../services/costing';
@@ -140,6 +141,50 @@ describe('Epso Precision Calculation Engine Tests', () => {
       expect(oilConsumedKg).toBe(0);
       expect(oilTotalExpense).toBe(0);
     });
+
+    it('calculates oil stock using user formula: Final = Previous - Used + Leftover', () => {
+      // User specifications:
+      // - Previous available oil stock: 20 kg
+      // - Oil used during production: 5 kg
+      // - Leftover oil entered by the cook: 2 kg
+      // - Final available oil stock: 17 kg (20 - 5 + 2 = 17)
+      // - Net oil consumed: 3 kg
+      // - Oil cost: 150 INR/kg -> total expense = 450 INR
+      const res = calculateDailyOilUsage(20, 5, 2, 150);
+
+      expect(res.previousAvailableStockKg).toBe(20);
+      expect(res.oilUsedKg).toBe(5);
+      expect(res.leftoverOilKg).toBe(2);
+      expect(res.finalOilStockKg).toBe(17);
+      expect(res.netOilConsumedKg).toBe(3);
+      expect(res.oilTotalExpense).toBe(450);
+
+      // Next day carry-forward:
+      // 17 kg becomes the next day's previous available stock
+      const day2 = calculateDailyOilUsage(res.finalOilStockKg, 4, 1, 150);
+      expect(day2.previousAvailableStockKg).toBe(17);
+      expect(day2.finalOilStockKg).toBe(14); // 17 - 4 + 1 = 14 kg
+      expect(day2.netOilConsumedKg).toBe(3); // 4 - 1 = 3 kg
+      expect(day2.oilTotalExpense).toBe(450);
+    });
+
+    it('clamps leftover oil if cook enters more than used oil', () => {
+      // If used = 5 kg and cook erroneously enters leftover = 6 kg,
+      // leftover is clamped to used (5 kg), net consumed = 0, final stock = 20 kg
+      const res = calculateDailyOilUsage(20, 5, 6, 150);
+      expect(res.leftoverOilKg).toBe(5);
+      expect(res.netOilConsumedKg).toBe(0);
+      expect(res.finalOilStockKg).toBe(20);
+      expect(res.oilTotalExpense).toBe(0);
+    });
+
+    it('handles zero used and zero leftover without modifying stock', () => {
+      const res = calculateDailyOilUsage(20, 0, 0, 150);
+      expect(res.finalOilStockKg).toBe(20);
+      expect(res.netOilConsumedKg).toBe(0);
+      expect(res.oilTotalExpense).toBe(0);
+    });
+
   });
 
   // 4. SHARED EXPENSES & WAGES ALLOCATION

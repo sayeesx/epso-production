@@ -49,6 +49,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
   const [oilStock, setOilStock] = useState<number | null>(null);
   const [oilUnit, setOilUnit] = useState<string>('kg');
+  const [oilCost, setOilCost] = useState<number>(150);
 
   // Ruler track ref for used oil
   const usedRulerRef = useRef<HTMLDivElement>(null);
@@ -68,61 +69,66 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
 
   const maxAllowedOil = oilStock !== null ? Math.max(0, oilStock) : USED_MAX;
 
-  // Load existing data if recorded for target date
+  // Load live ingredient stock & existing closing together for target date
   useEffect(() => {
     if (isOpen) {
       setShowSuccessAnim(false);
       setIsSubmitting(false);
       setIsLoadingExisting(true);
       let isMounted = true;
-      repo.getDailyClosing(targetDate).then((existing) => {
+
+      Promise.all([
+        repo.getDailyClosing(targetDate),
+        repo.listIngredients(false),
+      ]).then(([existing, ings]) => {
         if (!isMounted) return;
-        const currentLimit = oilStock !== null ? Math.max(0, oilStock) : USED_MAX;
+
+        const oil = ings.find((i) =>
+          i.name.toLowerCase().includes('oil') ||
+          i.name.includes('ഓയിൽ')
+        );
+
+        const liveStock = oil ? (Number(oil.currentStock) || 0) : 0;
+        const unit = oil?.unit || 'kg';
+        const cost = Number(oil?.avgCostPerUnit) || 150;
+        setOilUnit(unit);
+        setOilCost(cost);
+
         if (existing) {
-          const u = existing.oilConsumed > 0 ? Number(existing.oilConsumed) : Math.min(15, currentLimit);
-          const l = existing.oilClosingBalance > 0 ? Number(existing.oilClosingBalance) : Math.min(10, u);
-          const safeU = Math.min(currentLimit, Math.max(0, u));
+          // If a closing already exists on targetDate, the available stock before that closing was:
+          // liveStock + previously deducted net oil
+          const prevConsumed = Number(existing.oilConsumed) || 0;
+          const baselineAvailable = Number((liveStock + prevConsumed).toFixed(3));
+          setOilStock(baselineAvailable);
+
+          const u = existing.totalOilUsedKg !== undefined
+            ? Number(existing.totalOilUsedKg)
+            : (existing.oilConsumed > 0 ? Number(existing.oilConsumed) : 0);
+          const l = existing.oilLeftoverKg !== undefined
+            ? Number(existing.oilLeftoverKg)
+            : (existing.oilClosingBalance > 0 && existing.oilClosingBalance !== baselineAvailable
+                ? Number(existing.oilClosingBalance)
+                : 0);
+
+          const limit = baselineAvailable > 0 ? baselineAvailable : USED_MAX;
+          const safeU = Math.min(limit, Math.max(0, u));
           const safeL = Math.min(safeU, Math.max(0, l));
           setUsedOil(safeU);
           setLeftoverOil(safeL);
           setUsedInputStr(String(safeU));
           setLeftoverInputStr(String(safeL));
         } else {
-          const defUsed = Math.min(15, currentLimit);
-          const defLeftover = Math.min(10, defUsed);
-          setUsedOil(defUsed);
-          setLeftoverOil(defLeftover);
-          setUsedInputStr(String(defUsed));
-          setLeftoverInputStr(String(defLeftover));
+          setOilStock(liveStock);
+          setUsedOil(0);
+          setLeftoverOil(0);
+          setUsedInputStr('0');
+          setLeftoverInputStr('0');
         }
         setIsLoadingExisting(false);
-      }).catch(() => {
+      }).catch((err) => {
+        console.error('Failed to load oil data', err);
         if (isMounted) setIsLoadingExisting(false);
       });
-
-      // Fetch live oil ingredient stock
-      repo.listIngredients(false).then((ings) => {
-        if (!isMounted) return;
-        const oil = ings.find((i) =>
-          i.name.toLowerCase().includes('oil') ||
-          i.name.includes('ഓയിൽ')
-        );
-        if (oil) {
-          const stock = Number(oil.currentStock) || 0;
-          setOilStock(stock);
-          setOilUnit(oil.unit || 'kg');
-          setUsedOil((prev) => {
-            const clamped = Math.min(stock, prev);
-            setUsedInputStr(String(clamped));
-            return clamped;
-          });
-          setLeftoverOil((prev) => {
-            const clamped = Math.min(stock, prev);
-            setLeftoverInputStr(String(clamped));
-            return clamped;
-          });
-        }
-      }).catch(() => {});
 
       return () => {
         isMounted = false;
@@ -301,14 +307,17 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     try {
       setIsSubmitting(true);
       const safeLeftover = Math.min(usedOil, Math.max(0, leftoverOil));
-      const opening = usedOil + safeLeftover;
+      const available = oilStock !== null ? Math.max(0, oilStock) : 0;
+      const finalStock = Math.max(0, Number((available - usedOil + safeLeftover).toFixed(3)));
 
       await repo.saveDailyClosing({
         productionDate: targetDate,
-        oilOpeningBalance: opening,
+        oilOpeningBalance: available,
         oilPurchases: 0,
-        oilClosingBalance: safeLeftover,
-        oilCostPerKg: 150,
+        oilClosingBalance: finalStock,
+        oilUsedKg: usedOil,
+        oilLeftoverKg: safeLeftover,
+        oilCostPerKg: oilCost,
         productionWages: 0,
         notes: undefined,
         closedBy: staffName || 'Kitchen Staff',
@@ -326,10 +335,12 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const handleSuccessAnimComplete = () => {
     setShowSuccessAnim(false);
     const safeLeftover = Math.min(usedOil, Math.max(0, leftoverOil));
+    const available = oilStock !== null ? Math.max(0, oilStock) : 0;
+    const finalStock = Math.max(0, Number((available - usedOil + safeLeftover).toFixed(1)));
     addToast(
       language === 'ml'
-        ? `${targetDate === yesterdayStr ? 'ഇന്നലത്തെ' : 'ഇന്നത്തെ'} ഓയിൽ (${usedOil}kg ഉപയോഗം, ${safeLeftover}kg ബാക്കി) രേഖപ്പെടുത്തി`
-        : `Recorded oil: ${usedOil} kg used, ${safeLeftover} kg leftover`,
+        ? `${targetDate === yesterdayStr ? 'ഇന്നലത്തെ' : 'ഇന്നത്തെ'} ഓയിൽ (${usedOil}kg ഉപയോഗം, ${safeLeftover}kg ബാക്കി, അവസാന സ്റ്റോക്ക്: ${finalStock}kg) രേഖപ്പെടുത്തി`
+        : `Recorded oil: ${usedOil} kg used, ${safeLeftover} kg leftover, final stock: ${finalStock} kg`,
       'success'
     );
     triggerRefresh();
@@ -384,6 +395,70 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="flex flex-col min-h-full">
         <div className="space-y-4 pb-4">
+          {/* Live Stock Calculation Preview Card */}
+          {oilStock !== null && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 dark:bg-amber-950/20 dark:border-amber-900/50 space-y-2 select-none">
+              <div className="flex items-center justify-between text-xs font-bold text-amber-950 dark:text-amber-200">
+                <span className="flex items-center gap-1.5">
+                  <TbDroplet className="w-4 h-4 text-amber-500" />
+                  {language === 'ml' ? 'സ്റ്റോക്ക് കണക്കുകൂട്ടൽ' : 'Stock Calculation Preview'}
+                </span>
+                <span className="text-[11px] font-mono font-black text-amber-700 dark:text-amber-400">
+                  {oilStock.toFixed(1)} - {usedOil.toFixed(1)} + {Math.min(usedOil, Math.max(0, leftoverOil)).toFixed(1)} = {Math.max(0, Number((oilStock - usedOil + Math.min(usedOil, Math.max(0, leftoverOil))).toFixed(1)))} {oilUnit}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-1.5 text-center pt-1 border-t border-amber-500/20">
+                <div className="bg-white/90 dark:bg-[#1E1B1B]/90 p-1.5 rounded-xl border border-amber-200/50 dark:border-amber-900/30">
+                  <div className="text-[10px] text-stone-500 dark:text-stone-400 font-medium truncate">
+                    {language === 'ml' ? 'ലഭ്യമായത്' : 'Available'}
+                  </div>
+                  <div className="text-xs sm:text-sm font-black text-stone-900 dark:text-white tabular-nums">
+                    {oilStock.toFixed(1)} <span className="text-[9px] font-semibold">{oilUnit}</span>
+                  </div>
+                </div>
+
+                <div className="bg-white/90 dark:bg-[#1E1B1B]/90 p-1.5 rounded-xl border border-amber-200/50 dark:border-amber-900/30">
+                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate">
+                    {language === 'ml' ? 'ഉപയോഗിച്ചത്' : 'Used'}
+                  </div>
+                  <div className="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400 tabular-nums">
+                    - {usedOil.toFixed(1)}
+                  </div>
+                </div>
+
+                <div className="bg-white/90 dark:bg-[#1E1B1B]/90 p-1.5 rounded-xl border border-emerald-200/50 dark:border-emerald-900/30">
+                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
+                    {language === 'ml' ? 'ബാക്കി' : 'Leftover'}
+                  </div>
+                  <div className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    + {Math.min(usedOil, Math.max(0, leftoverOil)).toFixed(1)}
+                  </div>
+                </div>
+
+                <div className="bg-amber-600 dark:bg-amber-700 text-white p-1.5 rounded-xl shadow-sm">
+                  <div className="text-[10px] text-amber-100 font-medium truncate">
+                    {language === 'ml' ? 'അവസാന സ്റ്റോക്ക്' : 'Final Stock'}
+                  </div>
+                  <div className="text-xs sm:text-sm font-black tabular-nums">
+                    {Math.max(0, Number((oilStock - usedOil + Math.min(usedOil, Math.max(0, leftoverOil))).toFixed(1)))} <span className="text-[9px] font-semibold">{oilUnit}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-stone-600 dark:text-stone-300 font-medium px-0.5">
+                <span>
+                  {language === 'ml' ? 'നെറ്റ് ഉപഭോഗം:' : 'Net Consumed:'}{' '}
+                  <strong className="text-amber-700 dark:text-amber-400">
+                    {Math.max(0, Number((usedOil - Math.min(usedOil, Math.max(0, leftoverOil))).toFixed(1)))} {oilUnit}
+                  </strong>
+                </span>
+                <span className="text-[10px] text-stone-400 dark:text-stone-500">
+                  {language === 'ml' ? 'നാളത്തെ ലഭ്യമായ സ്റ്റോക്ക്' : 'Carried forward to tomorrow'}
+                </span>
+              </div>
+            </div>
+          )}
           {/* 1. USED OIL: MEASURED BY HORIZONTAL RULER */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-3">
             <div className="flex items-center justify-between">

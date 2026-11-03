@@ -131,9 +131,11 @@ export interface IEpsoRepository {
   listDailyClosings(limit?: number): Promise<DailyClosing[]>;
   saveDailyClosing(data: {
     productionDate: string;
-    oilOpeningBalance: number;
-    oilPurchases: number;
-    oilClosingBalance: number;
+    oilOpeningBalance?: number;
+    oilPurchases?: number;
+    oilClosingBalance?: number;
+    oilUsedKg?: number;
+    oilLeftoverKg?: number;
     oilCostPerKg: number;
     productionWages: number;
     notes?: string;

@@ -161,6 +161,7 @@ export interface DailyClosing {
   oilClosingBalance: number; // kg
   oilConsumed: number; // kg
   totalOilUsedKg?: number;
+  oilLeftoverKg?: number;
   saltUsedKg?: number;
   cashewShellUsedKg?: number;
   chippliPowderUsedKg?: number;

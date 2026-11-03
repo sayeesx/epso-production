@@ -15,6 +15,7 @@ import {
   PackingRecord,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_INGREDIENTS, INITIAL_RECIPES } from './demoSeedData';
+import { calculateDailyOilUsage, roundCurrency, roundStock } from './costing';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'epso_storage_products_v2',
@@ -1101,23 +1102,49 @@ export class DemoRepository implements IEpsoRepository {
 
   async saveDailyClosing(params: {
     productionDate: string;
-    oilOpeningBalance: number;
-    oilPurchases: number;
-    oilClosingBalance: number;
+    oilOpeningBalance?: number;
+    oilPurchases?: number;
+    oilClosingBalance?: number;
+    oilUsedKg?: number;
+    oilLeftoverKg?: number;
     oilCostPerKg: number;
     productionWages: number;
     notes?: string;
     closedBy: string;
   }): Promise<DailyClosing> {
-    const consumed = Math.max(0, params.oilOpeningBalance + params.oilPurchases - params.oilClosingBalance);
-    const expense = consumed * params.oilCostPerKg;
+    const ings = await this.listIngredients(false);
+    const oil = ings.find((i) => i.name.toLowerCase().includes('oil') || i.name.includes('ഓയിൽ'));
+    const prevStock = oil ? oil.currentStock : (params.oilOpeningBalance ?? 20);
+
+    let used = 0;
+    let leftover = 0;
+    if (params.oilUsedKg !== undefined) {
+      used = Math.max(0, roundStock(params.oilUsedKg));
+      leftover = Math.max(0, Math.min(used, roundStock(params.oilLeftoverKg ?? 0)));
+    } else {
+      used = Math.max(0, roundStock((params.oilOpeningBalance ?? 0) - (params.oilClosingBalance ?? 0)));
+      leftover = Math.max(0, roundStock(params.oilClosingBalance ?? 0));
+    }
+
+    const {
+      netOilConsumedKg: consumed,
+      finalOilStockKg: finalStock,
+      oilTotalExpense: expense,
+    } = calculateDailyOilUsage(prevStock, used, leftover, params.oilCostPerKg);
+
+    if (oil) {
+      await this.updateIngredient(oil.id, { currentStock: finalStock });
+    }
+
     return {
       id: `closing-${Date.now()}`,
       productionDate: params.productionDate,
-      oilOpeningBalance: params.oilOpeningBalance,
-      oilPurchases: params.oilPurchases,
-      oilClosingBalance: params.oilClosingBalance,
+      oilOpeningBalance: prevStock,
+      oilPurchases: params.oilPurchases || 0,
+      oilClosingBalance: finalStock,
       oilConsumed: consumed,
+      totalOilUsedKg: used,
+      oilLeftoverKg: leftover,
       oilCostPerKg: params.oilCostPerKg,
       oilTotalExpense: expense,
       productionWages: params.productionWages,

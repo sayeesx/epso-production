@@ -19,6 +19,7 @@ import { supabase, isSupabaseConfigured } from './supabaseClient';
 import {
   allocateDailySharedExpenses,
   calculateContinuousOilExpense,
+  calculateDailyOilUsage,
   roundCurrency,
   roundStock,
 } from './costing';
@@ -1224,6 +1225,16 @@ export class SupabaseRepository implements IEpsoRepository {
 
     if (error || !data) return null;
 
+    let totalOilUsedKg: number | undefined = undefined;
+    let oilLeftoverKg: number | undefined = undefined;
+    if (data.notes) {
+      try {
+        const meta = JSON.parse(data.notes);
+        if (typeof meta.oilUsedKg === 'number') totalOilUsedKg = meta.oilUsedKg;
+        if (typeof meta.leftoverOilKg === 'number') oilLeftoverKg = meta.leftoverOilKg;
+      } catch {}
+    }
+
     return {
       id: data.id,
       productionDate: data.production_date,
@@ -1231,6 +1242,8 @@ export class SupabaseRepository implements IEpsoRepository {
       oilPurchases: Number(data.oil_purchases) || 0,
       oilClosingBalance: Number(data.oil_closing_balance) || 0,
       oilConsumed: Number(data.oil_consumed) || 0,
+      totalOilUsedKg,
+      oilLeftoverKg,
       oilCostPerKg: Number(data.oil_cost_per_kg) || 0,
       oilTotalExpense: Number(data.oil_total_expense) || 0,
       productionWages: Number(data.production_wages) || 0,
@@ -1257,24 +1270,37 @@ export class SupabaseRepository implements IEpsoRepository {
 
         if (error) throw new Error(error.message);
 
-        return (data || []).map((d: any) => ({
-          id: d.id,
-          productionDate: d.production_date,
-          oilOpeningBalance: Number(d.oil_opening_balance) || 0,
-          oilPurchases: Number(d.oil_purchases) || 0,
-          oilClosingBalance: Number(d.oil_closing_balance) || 0,
-          oilConsumed: Number(d.oil_consumed) || 0,
-          oilCostPerKg: Number(d.oil_cost_per_kg) || 0,
-          oilTotalExpense: Number(d.oil_total_expense) || 0,
-          productionWages: Number(d.production_wages) || 0,
-          totalSharedExpense: Number(d.total_shared_expense) || 0,
-          totalProductionKg: Number(d.total_production_kg) || 0,
-          status: d.status,
-          notes: d.notes || undefined,
-          closedBy: d.closed_by || 'Admin',
-          createdAt: d.created_at,
-          updatedAt: d.updated_at,
-        }));
+        return (data || []).map((d: any) => {
+          let totalOilUsedKg: number | undefined = undefined;
+          let oilLeftoverKg: number | undefined = undefined;
+          if (d.notes) {
+            try {
+              const meta = JSON.parse(d.notes);
+              if (typeof meta.oilUsedKg === 'number') totalOilUsedKg = meta.oilUsedKg;
+              if (typeof meta.leftoverOilKg === 'number') oilLeftoverKg = meta.leftoverOilKg;
+            } catch {}
+          }
+          return {
+            id: d.id,
+            productionDate: d.production_date,
+            oilOpeningBalance: Number(d.oil_opening_balance) || 0,
+            oilPurchases: Number(d.oil_purchases) || 0,
+            oilClosingBalance: Number(d.oil_closing_balance) || 0,
+            oilConsumed: Number(d.oil_consumed) || 0,
+            totalOilUsedKg,
+            oilLeftoverKg,
+            oilCostPerKg: Number(d.oil_cost_per_kg) || 0,
+            oilTotalExpense: Number(d.oil_total_expense) || 0,
+            productionWages: Number(d.production_wages) || 0,
+            totalSharedExpense: Number(d.total_shared_expense) || 0,
+            totalProductionKg: Number(d.total_production_kg) || 0,
+            status: d.status,
+            notes: d.notes || undefined,
+            closedBy: d.closed_by || 'Admin',
+            createdAt: d.created_at,
+            updatedAt: d.updated_at,
+          };
+        });
       },
       { ttl: 2 * 60 * 1000 }
     );
@@ -1282,34 +1308,84 @@ export class SupabaseRepository implements IEpsoRepository {
 
   async saveDailyClosing(params: {
     productionDate: string;
-    oilOpeningBalance: number;
-    oilPurchases: number;
-    oilClosingBalance: number;
-    oilCostPerKg: number;
-    productionWages: number;
+    oilOpeningBalance?: number;
+    oilPurchases?: number;
+    oilClosingBalance?: number;
+    oilUsedKg?: number;
+    oilLeftoverKg?: number;
+    oilCostPerKg?: number;
+    productionWages?: number;
     notes?: string;
-    closedBy: string;
+    closedBy?: string;
   }): Promise<DailyClosing> {
     const client = this.checkClient();
     const {
       productionDate,
-      oilOpeningBalance,
-      oilPurchases,
-      oilClosingBalance,
-      oilCostPerKg,
-      productionWages,
+      oilPurchases = 0,
       notes = '',
-      closedBy,
+      closedBy = 'Kitchen Staff',
     } = params;
 
-    const { oilConsumedKg, oilTotalExpense } = calculateContinuousOilExpense(
-      oilOpeningBalance,
-      oilPurchases,
-      oilClosingBalance,
-      oilCostPerKg
+    // 1. Fetch current oil ingredient from inventory
+    const { data: oilIng, error: oilErr } = await client
+      .from('ingredients')
+      .select('id, name, unit, current_stock, avg_cost_per_unit')
+      .or("name.eq.ഓയിൽ,name.ilike.%oil%")
+      .limit(1)
+      .maybeSingle();
+
+    if (oilErr) {
+      console.warn('Could not query oil ingredient:', oilErr);
+    }
+
+    // 2. Check for an existing closing for this production date
+    const { data: existingClosing } = await client
+      .from('daily_closings')
+      .select('id, oil_consumed, oil_opening_balance, oil_closing_balance, notes')
+      .eq('production_date', productionDate)
+      .maybeSingle();
+
+    // 3. Determine previous available stock:
+    // If editing/re-saving for this date, reverse the previously deducted net consumption
+    // so neither used oil nor leftover oil is counted twice.
+    const prevNetDeducted = existingClosing ? (Number(existingClosing.oil_consumed) || 0) : 0;
+    const currentStockInDb = oilIng ? (Number(oilIng.current_stock) || 0) : 0;
+    const previousAvailableStock = existingClosing
+      ? roundStock(currentStockInDb + prevNetDeducted)
+      : (currentStockInDb > 0 ? currentStockInDb : (params.oilOpeningBalance ?? 0));
+
+    // 4. Determine oil used and leftover oil
+    let oilUsed = 0;
+    let leftoverOil = 0;
+
+    if (params.oilUsedKg !== undefined) {
+      oilUsed = Math.max(0, roundStock(params.oilUsedKg));
+      leftoverOil = Math.max(0, Math.min(oilUsed, roundStock(params.oilLeftoverKg ?? 0)));
+    } else if (params.oilOpeningBalance !== undefined && params.oilClosingBalance !== undefined) {
+      // Legacy fallback
+      oilUsed = Math.max(0, roundStock(params.oilOpeningBalance - params.oilClosingBalance));
+      leftoverOil = Math.max(0, roundStock(params.oilClosingBalance));
+    }
+
+    // 5. Backend Inventory Calculation:
+    // Final Oil Stock = Previous Available Stock - Oil Used + Leftover Oil
+    // Net Oil Consumed = Oil Used - Leftover Oil
+    const oilUnitCost = params.oilCostPerKg ?? (Number(oilIng?.avg_cost_per_unit) || 150);
+    const {
+      netOilConsumedKg: oilConsumedKg,
+      finalOilStockKg: finalOilStock,
+      oilTotalExpense,
+    } = calculateDailyOilUsage(
+      previousAvailableStock,
+      oilUsed,
+      leftoverOil,
+      oilUnitCost
     );
+
+    const productionWages = params.productionWages || 0;
     const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages);
 
+    // 6. Fetch completed production runs on that date
     const { data: runs, error: runsErr } = await client
       .from('production_runs')
       .select('id, product_id, actual_quantity, total_ingredient_cost, products(name)')
@@ -1320,19 +1396,28 @@ export class SupabaseRepository implements IEpsoRepository {
 
     const totalProductionKg = (runs || []).reduce((sum: number, r: any) => sum + (Number(r.actual_quantity) || 0), 0);
 
+    // Metadata preserving exact cook inputs
+    const metaPayload = {
+      oilUsedKg: oilUsed,
+      leftoverOilKg: leftoverOil,
+      previousAvailableStock,
+      finalOilStock,
+      userNotes: notes || '',
+    };
+
     const closingPayload = {
       production_date: productionDate,
-      oil_opening_balance: oilOpeningBalance,
+      oil_opening_balance: previousAvailableStock,
       oil_purchases: oilPurchases,
-      oil_closing_balance: oilClosingBalance,
+      oil_closing_balance: finalOilStock,
       oil_consumed: oilConsumedKg,
-      oil_cost_per_kg: oilCostPerKg,
+      oil_cost_per_kg: oilUnitCost,
       oil_total_expense: oilTotalExpense,
       production_wages: productionWages,
       total_shared_expense: totalSharedExpense,
       total_production_kg: totalProductionKg,
       status: 'closed',
-      notes: notes || null,
+      notes: JSON.stringify(metaPayload),
       closed_by: closedBy,
       updated_at: new Date().toISOString(),
     };
@@ -1346,7 +1431,7 @@ export class SupabaseRepository implements IEpsoRepository {
     if (closingErr) throw new Error(closingErr.message);
     const closingId = upsertedClosing.id;
 
-    // Group runs by product
+    // Group runs by product for cost allocation
     const productMap: Record<string, { productId: string; productName: string; totalProductionKg: number; batchCount: number; ingredientCost: number }> = {};
     for (const r of runs || []) {
       const pId = r.product_id;
@@ -1368,7 +1453,7 @@ export class SupabaseRepository implements IEpsoRepository {
       productMap[pId].ingredientCost += ingCost;
     }
 
-    // Query basic ingredients adjustments recorded on this date (e.g. Salt, Cashew shell, Chippli, Curry leaves)
+    // Query basic ingredients adjustments recorded on this date (Salt, Cashew shell, Chippli, Curry leaves)
     let dailyBasicIngredientsExpense = 0;
     try {
       const { data: basicMovements } = await client
@@ -1417,41 +1502,40 @@ export class SupabaseRepository implements IEpsoRepository {
       await client.from('daily_cost_allocations').insert(allocationsPayload);
     }
 
-    // Update common oil inventory
-    const { data: oilIng } = await client
-      .from('ingredients')
-      .select('id, current_stock')
-      .or("name.eq.ഓയിൽ,name.ilike.%oil%")
-      .limit(1)
-      .maybeSingle();
-
+    // 7. Update common oil inventory in ingredients table to final calculated stock
     if (oilIng) {
       await client
         .from('ingredients')
         .update({
-          current_stock: oilClosingBalance,
-          avg_cost_per_unit: oilCostPerKg,
+          current_stock: finalOilStock,
+          avg_cost_per_unit: oilUnitCost,
           updated_at: new Date().toISOString(),
         })
         .eq('id', oilIng.id);
 
-      if (oilConsumedKg > 0) {
-        await client.from('stock_movements').insert({
-          item_id: oilIng.id,
-          item_type: 'ingredient',
-          item_name: 'ഓയിൽ',
-          movement_type: 'production_consumption',
-          quantity: -oilConsumedKg,
-          unit: 'kg',
-          previous_balance: oilOpeningBalance + oilPurchases,
-          new_balance: oilClosingBalance,
-          cost_per_unit: oilCostPerKg,
-          reference: `Daily Closing ${productionDate}`,
-          operator_name: closedBy,
-          reason: 'Daily shared factory oil consumption & loss',
-          created_at: new Date().toISOString(),
-        });
-      }
+      // Clean up previous stock movement for this daily closing to avoid duplicate logs on edit/re-save
+      await client
+        .from('stock_movements')
+        .delete()
+        .eq('item_id', oilIng.id)
+        .eq('reference', `Daily Closing ${productionDate}`);
+
+      // Record synchronized stock movement ledger entry
+      await client.from('stock_movements').insert({
+        item_id: oilIng.id,
+        item_type: 'ingredient',
+        item_name: oilIng.name || 'ഓയിൽ',
+        movement_type: 'production_consumption',
+        quantity: -oilConsumedKg,
+        unit: oilIng.unit || 'kg',
+        previous_balance: previousAvailableStock,
+        new_balance: finalOilStock,
+        cost_per_unit: oilUnitCost,
+        reference: `Daily Closing ${productionDate}`,
+        operator_name: closedBy,
+        reason: `Daily oil usage: ${oilUsed} kg used - ${leftoverOil} kg leftover = ${oilConsumedKg} kg net consumed`,
+        created_at: new Date().toISOString(),
+      });
     }
 
     dbCache.invalidate('daily_closing');
@@ -1464,6 +1548,8 @@ export class SupabaseRepository implements IEpsoRepository {
       oilPurchases: Number(upsertedClosing.oil_purchases),
       oilClosingBalance: Number(upsertedClosing.oil_closing_balance),
       oilConsumed: Number(upsertedClosing.oil_consumed),
+      totalOilUsedKg: oilUsed,
+      oilLeftoverKg: leftoverOil,
       oilCostPerKg: Number(upsertedClosing.oil_cost_per_kg),
       oilTotalExpense: Number(upsertedClosing.oil_total_expense),
       productionWages: Number(upsertedClosing.production_wages),
