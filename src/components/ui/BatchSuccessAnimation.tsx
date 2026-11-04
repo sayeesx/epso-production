@@ -52,7 +52,7 @@ export const BatchSuccessAnimation: React.FC<BatchSuccessAnimationProps> = ({
 
   return (
     <div
-      className={`absolute inset-0 z-50 bg-white dark:bg-white text-stone-900 rounded-t-3xl sm:rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center gap-4 transition-opacity duration-300 pointer-events-auto ${
+      className={`absolute inset-0 z-50 bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-stone-100 rounded-t-3xl sm:rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center gap-4 transition-opacity duration-300 pointer-events-auto ${
         fadeOut ? 'opacity-0' : 'opacity-100'
       }`}
     >
@@ -115,13 +115,13 @@ export const BatchSuccessAnimation: React.FC<BatchSuccessAnimationProps> = ({
         ))}
       </div>
 
-      {/* Text inside White Modal */}
+      {/* Text inside Modal */}
       <div className="text-center batch-success-text px-2 max-w-sm">
-        <p className="text-xl sm:text-2xl font-black text-stone-900 font-malayalam tracking-tight leading-snug">
+        <p className="text-xl sm:text-2xl font-black text-stone-900 dark:text-stone-100 font-malayalam tracking-tight leading-snug">
           {message}
         </p>
         {subMessage && (
-          <p className="text-xs sm:text-sm font-bold text-stone-500 mt-1.5">
+          <p className="text-xs sm:text-sm font-bold text-stone-500 dark:text-stone-400 mt-1.5">
             {subMessage}
           </p>
         )}
