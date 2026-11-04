@@ -6,7 +6,9 @@ import { Button } from '../ui/Button';
 import {
   TbDroplet,
   TbCheck,
-  TbAlertCircle,
+  TbFlame,
+  TbPlus,
+  TbMinus,
 } from 'react-icons/tb';
 import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
 
@@ -39,11 +41,11 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
   const targetDate = initialDate || todayStr;
 
-  // Measured oil states (max 250 kg)
-  const [usedOil, setUsedOil] = useState<number>(15);
-  const [leftoverOil, setLeftoverOil] = useState<number>(10);
-  const [usedInputStr, setUsedInputStr] = useState<string>('15');
-  const [leftoverInputStr, setLeftoverInputStr] = useState<string>('10');
+  // Measured oil states (poured oil & balance remaining oil)
+  const [pouredOil, setPouredOil] = useState<number>(0);
+  const [remainingOil, setRemainingOil] = useState<number>(0);
+  const [pouredInputStr, setPouredInputStr] = useState<string>('0');
+  const [remainingInputStr, setRemainingInputStr] = useState<string>('0');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
@@ -51,23 +53,18 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const [oilUnit, setOilUnit] = useState<string>('kg');
   const [oilCost, setOilCost] = useState<number>(150);
 
-  // Ruler track ref for used oil
-  const usedRulerRef = useRef<HTMLDivElement>(null);
-  const isUsedScrollingRef = useRef<boolean>(false);
-  const isManualTypingUsed = useRef<boolean>(false);
-  const isManualTypingLeftover = useRef<boolean>(false);
+  // Ruler track ref for poured oil
+  const pouredRulerRef = useRef<HTMLDivElement>(null);
+  const isPouredScrollingRef = useRef<boolean>(false);
+  const isManualTypingPoured = useRef<boolean>(false);
 
-  // Progress ruler ref for leftover oil
-  const leftoverTrackRef = useRef<HTMLDivElement>(null);
-  const isDraggingLeftover = useRef<boolean>(false);
+  // Ruler constants for poured oil (0 to max allowed oil, 0.1kg/L steps)
+  const POURED_MIN = 0;
+  const POURED_MAX = 250;
+  const POURED_STEP = 0.1;
+  const TICK_WIDTH = 32;
 
-  // Ruler constants for used oil (0 to max allowed oil, 0.1kg/L steps)
-  const USED_MIN = 0;
-  const USED_MAX = 250;
-  const USED_STEP = 0.1;
-  const TICK_WIDTH = 32; // px per 0.1 step to fit 0, 0.1, 0.2 ... cleanly
-
-  const maxAllowedOil = oilStock !== null ? Math.max(0, oilStock) : USED_MAX;
+  const maxAllowedOil = oilStock !== null ? Math.max(0, oilStock) : POURED_MAX;
 
   // Load live ingredient stock & existing closing together for target date
   useEffect(() => {
@@ -95,34 +92,30 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         setOilCost(cost);
 
         if (existing) {
-          // If a closing already exists on targetDate, the available stock before that closing was:
-          // liveStock + previously deducted net oil
           const prevConsumed = Number(existing.oilConsumed) || 0;
           const baselineAvailable = Number((liveStock + prevConsumed).toFixed(3));
           setOilStock(baselineAvailable);
 
-          const u = existing.totalOilUsedKg !== undefined
+          const p = existing.totalOilUsedKg !== undefined
             ? Number(existing.totalOilUsedKg)
             : (existing.oilConsumed > 0 ? Number(existing.oilConsumed) : 0);
-          const l = existing.oilLeftoverKg !== undefined
+          const r = existing.oilLeftoverKg !== undefined
             ? Number(existing.oilLeftoverKg)
-            : (existing.oilClosingBalance > 0 && existing.oilClosingBalance !== baselineAvailable
-                ? Number(existing.oilClosingBalance)
-                : 0);
+            : 0;
 
-          const limit = baselineAvailable > 0 ? baselineAvailable : USED_MAX;
-          const safeU = Math.min(limit, Math.max(0, u));
-          const safeL = Math.min(safeU, Math.max(0, l));
-          setUsedOil(safeU);
-          setLeftoverOil(safeL);
-          setUsedInputStr(String(safeU));
-          setLeftoverInputStr(String(safeL));
+          const limit = baselineAvailable > 0 ? baselineAvailable : POURED_MAX;
+          const safeP = Math.min(limit, Math.max(0, p));
+          const safeR = Math.min(safeP, Math.max(0, r));
+          setPouredOil(safeP);
+          setRemainingOil(safeR);
+          setPouredInputStr(String(safeP));
+          setRemainingInputStr(String(safeR));
         } else {
           setOilStock(liveStock);
-          setUsedOil(0);
-          setLeftoverOil(0);
-          setUsedInputStr('0');
-          setLeftoverInputStr('0');
+          setPouredOil(0);
+          setRemainingOil(0);
+          setPouredInputStr('0');
+          setRemainingInputStr('0');
         }
         setIsLoadingExisting(false);
       }).catch((err) => {
@@ -136,169 +129,107 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     }
   }, [isOpen, repo, targetDate]);
 
-  // Center ruler on used oil change
-  const scrollUsedRulerTo = useCallback((val: number) => {
-    if (!usedRulerRef.current) return;
-    const clampedVal = Math.min(maxAllowedOil, Math.max(USED_MIN, val));
-    const ticksFromMin = (clampedVal - USED_MIN) / USED_STEP;
+  // Center ruler on poured oil change
+  const scrollPouredRulerTo = useCallback((val: number) => {
+    if (!pouredRulerRef.current) return;
+    const clampedVal = Math.min(maxAllowedOil, Math.max(POURED_MIN, val));
+    const ticksFromMin = (clampedVal - POURED_MIN) / POURED_STEP;
     const scrollTarget = ticksFromMin * TICK_WIDTH;
-    isUsedScrollingRef.current = true;
-    usedRulerRef.current.scrollTo({
+    isPouredScrollingRef.current = true;
+    pouredRulerRef.current.scrollTo({
       left: scrollTarget,
       behavior: 'auto',
     });
     setTimeout(() => {
-      isUsedScrollingRef.current = false;
+      isPouredScrollingRef.current = false;
     }, 100);
   }, [maxAllowedOil]);
 
   useEffect(() => {
     if (isOpen && !isLoadingExisting) {
       setTimeout(() => {
-        scrollUsedRulerTo(usedOil);
+        scrollPouredRulerTo(pouredOil);
       }, 150);
     }
-  }, [isOpen, isLoadingExisting, scrollUsedRulerTo, usedOil]);
+  }, [isOpen, isLoadingExisting, scrollPouredRulerTo, pouredOil]);
 
-  // Handle ruler scroll
-  const handleUsedRulerScroll = () => {
-    if (!usedRulerRef.current || isUsedScrollingRef.current || isManualTypingUsed.current) return;
-    const scrollLeft = usedRulerRef.current.scrollLeft;
+  // Handle ruler scroll for poured oil
+  const handlePouredRulerScroll = () => {
+    if (!pouredRulerRef.current || isPouredScrollingRef.current || isManualTypingPoured.current) return;
+    const scrollLeft = pouredRulerRef.current.scrollLeft;
     const tickIndex = Math.round(scrollLeft / TICK_WIDTH);
-    const calculatedVal = Number((USED_MIN + tickIndex * USED_STEP).toFixed(1));
-    const clamped = Math.max(USED_MIN, Math.min(maxAllowedOil, calculatedVal));
-    setUsedOil(clamped);
-    setUsedInputStr(String(clamped));
-    // Leftover cannot be more than used oil
-    if (leftoverOil > clamped) {
-      setLeftoverOil(clamped);
-      setLeftoverInputStr(String(clamped));
+    const calculatedVal = Number((POURED_MIN + tickIndex * POURED_STEP).toFixed(1));
+    const clamped = Math.max(POURED_MIN, Math.min(maxAllowedOil, calculatedVal));
+    setPouredOil(clamped);
+    setPouredInputStr(String(clamped));
+    // Remaining cannot exceed poured oil
+    if (remainingOil > clamped) {
+      setRemainingOil(clamped);
+      setRemainingInputStr(String(clamped));
     }
   };
 
-  const adjustUsedOil = (delta: number) => {
-    isManualTypingUsed.current = false;
-    const next = Math.min(maxAllowedOil, Math.max(0, Number((usedOil + delta).toFixed(1))));
-    setUsedOil(next);
-    setUsedInputStr(String(next));
-    scrollUsedRulerTo(next);
-    if (leftoverOil > next) {
-      setLeftoverOil(next);
-      setLeftoverInputStr(String(next));
-    }
+  // Adjust remaining oil with step buttons (no slider)
+  const adjustRemainingOil = (delta: number) => {
+    const next = Math.min(pouredOil, Math.max(0, Number((remainingOil + delta).toFixed(1))));
+    setRemainingOil(next);
+    setRemainingInputStr(String(next));
   };
 
-
-  const adjustLeftoverOil = (delta: number) => {
-    isManualTypingLeftover.current = false;
-    const next = Math.min(usedOil, Math.max(0, Number((leftoverOil + delta).toFixed(1))));
-    setLeftoverOil(next);
-    setLeftoverInputStr(String(next));
-  };
-
-  // Leftover Progress Ruler calculation (max scale is usedOil)
-  const maxLeftoverScale = useMemo(() => {
-    return Math.max(0.1, usedOil);
-  }, [usedOil]);
-
-  // Keep leftover oil strictly clamped to current usedOil
+  // Keep remaining oil strictly clamped to current pouredOil
   useEffect(() => {
-    if (leftoverOil > usedOil) {
-      setLeftoverOil(usedOil);
-      setLeftoverInputStr(String(usedOil));
+    if (remainingOil > pouredOil) {
+      setRemainingOil(pouredOil);
+      setRemainingInputStr(String(pouredOil));
     }
-  }, [usedOil, leftoverOil]);
+  }, [pouredOil, remainingOil]);
 
-  const leftoverPercentage = useMemo(() => {
-    if (maxLeftoverScale <= 0) return 0;
-    return Math.min(100, Math.max(0, (leftoverOil / maxLeftoverScale) * 100));
-  }, [leftoverOil, maxLeftoverScale]);
-
-  const updateLeftoverFromClientX = useCallback((clientX: number) => {
-    if (!leftoverTrackRef.current) return;
-    const rect = leftoverTrackRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const rawVal = ratio * Math.max(0.1, usedOil);
-    // Snap to 0.5 kg, clamp to max usedOil
-    const snapped = Math.round(rawVal * 2) / 2;
-    const clamped = Math.min(usedOil, Math.max(0, snapped));
-    setLeftoverOil(clamped);
-    setLeftoverInputStr(String(clamped));
-  }, [usedOil]);
-
-  const handleLeftoverMouseDown = (e: React.MouseEvent) => {
-    isDraggingLeftover.current = true;
-    updateLeftoverFromClientX(e.clientX);
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (isDraggingLeftover.current) {
-        updateLeftoverFromClientX(moveEvent.clientX);
-      }
-    };
-    const onMouseUp = () => {
-      isDraggingLeftover.current = false;
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  };
-
-  const handleLeftoverTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length > 0) {
-      updateLeftoverFromClientX(e.touches[0].clientX);
-    }
-  };
-
-  const handleLeftoverTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length > 0) {
-      updateLeftoverFromClientX(e.touches[0].clientX);
-    }
-  };
-
-  // Manual input commit for Used Oil
-  const handleUsedInputCommit = () => {
-    const parsed = parseFloat(usedInputStr);
+  // Manual input commit for Poured Oil
+  const handlePouredInputCommit = () => {
+    const parsed = parseFloat(pouredInputStr);
     const safe = isNaN(parsed) ? 0 : Math.min(maxAllowedOil, Math.max(0, parsed));
     const clean = Number(safe.toFixed(1));
-    setUsedOil(clean);
-    setUsedInputStr(String(clean));
-    scrollUsedRulerTo(clean);
-    if (leftoverOil > clean) {
-      setLeftoverOil(clean);
-      setLeftoverInputStr(String(clean));
+    setPouredOil(clean);
+    setPouredInputStr(String(clean));
+    scrollPouredRulerTo(clean);
+    if (remainingOil > clean) {
+      setRemainingOil(clean);
+      setRemainingInputStr(String(clean));
     }
   };
 
-
-  // Manual input commit for Leftover Oil
-  const handleLeftoverInputCommit = () => {
-    const parsed = parseFloat(leftoverInputStr);
-    const safe = isNaN(parsed) ? 0 : Math.min(usedOil, Math.max(0, parsed));
+  // Manual input commit for Remaining Oil
+  const handleRemainingInputCommit = () => {
+    const parsed = parseFloat(remainingInputStr);
+    const safe = isNaN(parsed) ? 0 : Math.min(pouredOil, Math.max(0, parsed));
     const clean = Number(safe.toFixed(1));
-    setLeftoverOil(clean);
-    setLeftoverInputStr(String(clean));
+    setRemainingOil(clean);
+    setRemainingInputStr(String(clean));
   };
+
+  // Net oil calculated: Poured minus Balance
+  const netConsumedOil = Math.max(0, Number((pouredOil - remainingOil).toFixed(1)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    handleUsedInputCommit();
-    handleLeftoverInputCommit();
+    handlePouredInputCommit();
+    handleRemainingInputCommit();
 
-    if (usedOil <= 0) {
+    if (pouredOil <= 0) {
       addToast(
         language === 'ml'
-          ? 'ഉപയോഗിച്ച ഓയിലിന്റെ അളവ് നൽകുക'
-          : 'Please enter a valid quantity for used oil',
+          ? 'ദയവായി ഇന്ന് ഒഴിച്ച ഓയിലിന്റെ അളവ് നൽകുക'
+          : 'Please enter a valid quantity for poured oil',
         'warning'
       );
       return;
     }
 
-    if (oilStock !== null && usedOil > oilStock) {
+    if (oilStock !== null && pouredOil > oilStock) {
       addToast(
         language === 'ml'
-          ? `ബാക്കി ${oilStock} ${oilUnit} മാത്രമേ ഉള്ളൂ..`
-          : `Only ${oilStock} ${oilUnit} remaining..`,
+          ? `സ്റ്റോക്കിൽ ${oilStock} ${oilUnit} മാത്രമേ ബാക്കിയുള്ളൂ..`
+          : `Only ${oilStock} ${oilUnit} remaining in stock..`,
         'warning'
       );
       return;
@@ -306,21 +237,24 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
 
     try {
       setIsSubmitting(true);
-      const safeLeftover = Math.min(usedOil, Math.max(0, leftoverOil));
+      const safeRemaining = Math.min(pouredOil, Math.max(0, remainingOil));
       const available = oilStock !== null ? Math.max(0, oilStock) : 0;
-      const finalStock = Math.max(0, Number((available - usedOil + safeLeftover).toFixed(3)));
+      
+      // Net consumed = Poured - Remaining
+      // Final stock in store = Available - Net consumed (Remaining oil stays in original stock)
+      const finalStock = Math.max(0, Number((available - pouredOil + safeRemaining).toFixed(3)));
 
       await repo.saveDailyClosing({
         productionDate: targetDate,
         oilOpeningBalance: available,
         oilPurchases: 0,
         oilClosingBalance: finalStock,
-        oilUsedKg: usedOil,
-        oilLeftoverKg: safeLeftover,
+        oilUsedKg: pouredOil,
+        oilLeftoverKg: safeRemaining,
         oilCostPerKg: oilCost,
         productionWages: 0,
         notes: undefined,
-        closedBy: staffName || 'Kitchen Staff',
+        closedBy: staffName || 'പ്രൊഡക്ഷൻ ടീം (Kitchen Staff)',
       });
 
       setShowSuccessAnim(true);
@@ -334,13 +268,13 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
 
   const handleSuccessAnimComplete = () => {
     setShowSuccessAnim(false);
-    const safeLeftover = Math.min(usedOil, Math.max(0, leftoverOil));
+    const safeRemaining = Math.min(pouredOil, Math.max(0, remainingOil));
     const available = oilStock !== null ? Math.max(0, oilStock) : 0;
-    const finalStock = Math.max(0, Number((available - usedOil + safeLeftover).toFixed(1)));
+    const finalStock = Math.max(0, Number((available - pouredOil + safeRemaining).toFixed(1)));
     addToast(
       language === 'ml'
-        ? `${targetDate === yesterdayStr ? 'ഇന്നലത്തെ' : 'ഇന്നത്തെ'} ഓയിൽ (${usedOil}kg ഉപയോഗം, ${safeLeftover}kg ബാക്കി, അവസാന സ്റ്റോക്ക്: ${finalStock}kg) രേഖപ്പെടുത്തി`
-        : `Recorded oil: ${usedOil} kg used, ${safeLeftover} kg leftover, final stock: ${finalStock} kg`,
+        ? `ഓയിൽ രേഖപ്പെടുത്തി: ${pouredOil}kg ഒഴിച്ചു • ${safeRemaining}kg ബാക്കി (ഉപയോഗം: ${netConsumedOil}kg)`
+        : `Oil recorded: ${pouredOil}kg poured, ${safeRemaining}kg balance (Net used: ${netConsumedOil}kg)`,
       'success'
     );
     triggerRefresh();
@@ -348,7 +282,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     onClose();
   };
 
-  const totalUsedTicks = Math.max(1, Math.round((maxAllowedOil - USED_MIN) / USED_STEP));
+  const totalPouredTicks = Math.max(1, Math.round((maxAllowedOil - POURED_MIN) / POURED_STEP));
 
   return (
     <Modal
@@ -366,8 +300,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
           <div>
             <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white leading-tight">
               {targetDate === yesterdayStr
-                ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ രേഖപ്പെടുത്തുക' : "Record Yesterday's Oil Usage")
-                : (language === 'ml' ? 'ദിവസേനയുള്ള ഓയിൽ രേഖപ്പെടുത്തുക' : 'Record Daily Oil Usage')}
+                ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ കണക്ക്' : "Yesterday's Oil Record")
+                : (language === 'ml' ? 'ഇന്നത്തെ ഓയിൽ കണക്ക്' : "Today's Oil Record")}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
               {targetDate}
@@ -383,151 +317,106 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
           message={
             targetDate === yesterdayStr
               ? (language === 'ml' ? 'ഇന്നലത്തെ ഓയിൽ രേഖപ്പെടുത്തി!' : 'Yesterday Oil Recorded!')
-              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തി!' : 'Oil Usage Recorded!')
+              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തി!' : 'Oil Recorded!')
           }
           subMessage={
             language === 'ml'
-              ? `${usedOil} ${oilUnit || 'kg'} ഉപയോഗം • ${Math.min(usedOil, Math.max(0, leftoverOil))} ${oilUnit || 'kg'} ബാക്കി`
-              : `${usedOil} ${oilUnit || 'kg'} used • ${Math.min(usedOil, Math.max(0, leftoverOil))} ${oilUnit || 'kg'} leftover`
+              ? `${pouredOil} ${oilUnit} ഒഴിച്ചു • ${Math.min(pouredOil, Math.max(0, remainingOil))} ${oilUnit} ബാക്കി • യഥാർത്ഥ ഉപയോഗം: ${netConsumedOil} ${oilUnit}`
+              : `${pouredOil} ${oilUnit} poured • ${Math.min(pouredOil, Math.max(0, remainingOil))} ${oilUnit} balance • Consumed: ${netConsumedOil} ${oilUnit}`
           }
         />
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col min-h-full">
         <div className="space-y-4 pb-4">
-          {/* Live Stock Calculation Preview Card */}
-          {oilStock !== null && (
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 dark:bg-amber-950/20 dark:border-amber-900/50 space-y-2 select-none">
-              <div className="flex items-center justify-between text-xs font-bold text-amber-950 dark:text-amber-200">
-                <span className="flex items-center gap-1.5">
-                  <TbDroplet className="w-4 h-4 text-amber-500" />
-                  {language === 'ml' ? 'സ്റ്റോക്ക് കണക്കുകൂട്ടൽ' : 'Stock Calculation Preview'}
+          
+          {/* Simple Malayalam Guide Card (No complex formulas, child-friendly) */}
+          <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs space-y-1">
+            <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
+              <span className="flex items-center gap-1.5 font-malayalam">
+                <TbFlame className="w-4 h-4 text-amber-600" />
+                പാചക ഓയിൽ നൽകേണ്ട വിധം:
+              </span>
+              {oilStock !== null && (
+                <span className="font-mono text-amber-700 dark:text-amber-300">
+                  സ്റ്റോക്ക്: {oilStock.toFixed(1)} {oilUnit}
                 </span>
-                <span className="text-[11px] font-mono font-black text-amber-700 dark:text-amber-400">
-                  {oilStock.toFixed(1)} - {usedOil.toFixed(1)} + {Math.min(usedOil, Math.max(0, leftoverOil)).toFixed(1)} = {Math.max(0, Number((oilStock - usedOil + Math.min(usedOil, Math.max(0, leftoverOil))).toFixed(1)))} {oilUnit}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-4 gap-1.5 text-center pt-1 border-t border-amber-500/20">
-                <div className="bg-white/90 dark:bg-[#1E1B1B]/90 p-1.5 rounded-xl border border-amber-200/50 dark:border-amber-900/30">
-                  <div className="text-[10px] text-stone-500 dark:text-stone-400 font-medium truncate">
-                    {language === 'ml' ? 'ലഭ്യമായത്' : 'Available'}
-                  </div>
-                  <div className="text-xs sm:text-sm font-black text-stone-900 dark:text-white tabular-nums">
-                    {oilStock.toFixed(1)} <span className="text-[9px] font-semibold">{oilUnit}</span>
-                  </div>
-                </div>
-
-                <div className="bg-white/90 dark:bg-[#1E1B1B]/90 p-1.5 rounded-xl border border-amber-200/50 dark:border-amber-900/30">
-                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium truncate">
-                    {language === 'ml' ? 'ഉപയോഗിച്ചത്' : 'Used'}
-                  </div>
-                  <div className="text-xs sm:text-sm font-black text-amber-600 dark:text-amber-400 tabular-nums">
-                    - {usedOil.toFixed(1)}
-                  </div>
-                </div>
-
-                <div className="bg-white/90 dark:bg-[#1E1B1B]/90 p-1.5 rounded-xl border border-emerald-200/50 dark:border-emerald-900/30">
-                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
-                    {language === 'ml' ? 'ബാക്കി' : 'Leftover'}
-                  </div>
-                  <div className="text-xs sm:text-sm font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    + {Math.min(usedOil, Math.max(0, leftoverOil)).toFixed(1)}
-                  </div>
-                </div>
-
-                <div className="bg-amber-600 dark:bg-amber-700 text-white p-1.5 rounded-xl shadow-sm">
-                  <div className="text-[10px] text-amber-100 font-medium truncate">
-                    {language === 'ml' ? 'അവസാന സ്റ്റോക്ക്' : 'Final Stock'}
-                  </div>
-                  <div className="text-xs sm:text-sm font-black tabular-nums">
-                    {Math.max(0, Number((oilStock - usedOil + Math.min(usedOil, Math.max(0, leftoverOil))).toFixed(1)))} <span className="text-[9px] font-semibold">{oilUnit}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-stone-600 dark:text-stone-300 font-medium px-0.5">
-                <span>
-                  {language === 'ml' ? 'നെറ്റ് ഉപഭോഗം:' : 'Net Consumed:'}{' '}
-                  <strong className="text-amber-700 dark:text-amber-400">
-                    {Math.max(0, Number((usedOil - Math.min(usedOil, Math.max(0, leftoverOil))).toFixed(1)))} {oilUnit}
-                  </strong>
-                </span>
-                <span className="text-[10px] text-stone-400 dark:text-stone-500">
-                  {language === 'ml' ? 'നാളത്തെ ലഭ്യമായ സ്റ്റോക്ക്' : 'Carried forward to tomorrow'}
-                </span>
-              </div>
+              )}
             </div>
-          )}
-          {/* 1. USED OIL: MEASURED BY HORIZONTAL RULER */}
+            <p className="text-[11px] text-stone-600 dark:text-stone-300 font-malayalam leading-relaxed">
+              1. രാവിലെ ചീനച്ചട്ടിയിൽ <strong>ഒഴിച്ച ഓയിൽ</strong> നൽകുക.<br />
+              2. പണി കഴിഞ്ഞ ശേഷം ചീനച്ചട്ടിയിൽ <strong>ബാക്കി വന്ന ഓയിൽ</strong> നൽകുക. ബാക്കി വന്ന അളവ് മെയിൻ സ്റ്റോക്കിൽ ബാക്കിയായി തന്നെ നിൽക്കും.
+            </p>
+          </div>
+
+          {/* 1. POURED OIL: ചീനച്ചട്ടിയിൽ ഒഴിച്ച ഓയിൽ */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider">
-                  {language === 'ml' ? 'ഉപയോഗിച്ച ഓയിൽ' : 'Used Oil (Consumed)'} *
+                <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider font-malayalam">
+                  {language === 'ml' ? 'ഇന്ന് ഒഴിച്ച ഓയിൽ (Oil Poured)' : 'Oil Poured (Once)'} *
                 </label>
               </div>
               <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                Max {maxAllowedOil} {oilUnit || 'kg'}
+                പരമാവധി {maxAllowedOil} {oilUnit}
               </span>
             </div>
 
             {/* Touchable Value Display */}
-            <div className="flex flex-col items-center justify-center py-1 gap-2">
+            <div className="flex flex-col items-center justify-center py-1 gap-1">
               <div className="flex items-center justify-center">
                 <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={usedInputStr}
+                    value={pouredInputStr}
                     onFocus={() => {
-                      isManualTypingUsed.current = true;
+                      isManualTypingPoured.current = true;
                     }}
                     onChange={(e) => {
-                      isManualTypingUsed.current = true;
+                      isManualTypingPoured.current = true;
                       const val = e.target.value.replace(/[^0-9.]/g, '');
-                      setUsedInputStr(val);
+                      setPouredInputStr(val);
                       const parsed = parseFloat(val);
                       if (!isNaN(parsed) && parsed >= 0) {
                         const clamped = Math.min(maxAllowedOil, parsed);
                         const clean = Number(clamped.toFixed(1));
-                        setUsedOil(clean);
-                        if (leftoverOil > clean) {
-                          setLeftoverOil(clean);
-                          setLeftoverInputStr(String(clean));
+                        setPouredOil(clean);
+                        if (remainingOil > clean) {
+                          setRemainingOil(clean);
+                          setRemainingInputStr(String(clean));
                         }
                       }
                     }}
                     onBlur={() => {
-                      isManualTypingUsed.current = false;
-                      handleUsedInputCommit();
+                      isManualTypingPoured.current = false;
+                      handlePouredInputCommit();
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleUsedInputCommit();
+                        handlePouredInputCommit();
                       }
                     }}
                     className="text-3xl sm:text-4xl font-black text-amber-900 dark:text-amber-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
                   />
                   <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 uppercase select-none">
-                    {oilUnit || 'kg'}
+                    {oilUnit}
                   </span>
                 </div>
               </div>
 
-              {/* Oil remaining always active */}
               {oilStock !== null && (
-                <div className="flex flex-col items-center justify-center text-center my-0.5 select-none">
-                  <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-malayalam">
-                    {oilStock} {oilUnit || 'kg'} {language === 'ml' ? 'ബാക്കി..' : 'remaining..'}
+                <div className="text-center my-0.5 select-none">
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 font-malayalam">
+                    മെയിൻ സ്റ്റോക്ക്: {oilStock} {oilUnit}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Interactive Horizontal Ruler Track with 0, 0.1, 0.2 ... labels */}
+            {/* Interactive Horizontal Ruler Track for Poured Oil */}
             <div className="relative w-full py-2 overflow-hidden flex flex-col items-center select-none bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border/50 dark:border-[#2E2828]">
               {/* Center Orange Marker Needle */}
               <div className="absolute top-0 bottom-4 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full bg-epso-orange">
@@ -536,16 +425,15 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
 
               {/* Scrollable Ruler Track */}
               <div
-                ref={usedRulerRef}
-                onScroll={handleUsedRulerScroll}
+                ref={pouredRulerRef}
+                onScroll={handlePouredRulerScroll}
                 className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-16 relative select-none"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
-                {/* Left padding spacer calibrated so tick 0 center aligns precisely with the center needle */}
                 <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
                 <div className="flex items-end shrink-0">
-                  {Array.from({ length: totalUsedTicks + 1 }).map((_, idx) => {
-                    const val = Number((USED_MIN + idx * USED_STEP).toFixed(1));
+                  {Array.from({ length: totalPouredTicks + 1 }).map((_, idx) => {
+                    const val = Number((POURED_MIN + idx * POURED_STEP).toFixed(1));
                     const isWhole = Math.abs(Math.round(val) - val) < 0.001;
                     const isMajor = isWhole && (Math.round(val) % 5 === 0);
 
@@ -553,12 +441,12 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                       <div
                         key={idx}
                         onClick={() => {
-                          setUsedOil(val);
-                          setUsedInputStr(String(val));
-                          scrollUsedRulerTo(val);
-                          if (leftoverOil > val) {
-                            setLeftoverOil(val);
-                            setLeftoverInputStr(String(val));
+                          setPouredOil(val);
+                          setPouredInputStr(String(val));
+                          scrollPouredRulerTo(val);
+                          if (remainingOil > val) {
+                            setRemainingOil(val);
+                            setRemainingInputStr(String(val));
                           }
                         }}
                         className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-16 pb-1 select-none"
@@ -580,112 +468,111 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                     );
                   })}
                 </div>
-                {/* Right padding spacer calibrated so last tick center aligns precisely with the center needle */}
                 <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
               </div>
 
-              {/* Edge fades */}
               <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
               <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
             </div>
           </div>
 
-          {/* 2. LEFTOVER OIL: MEASURED BY A HORIZONTAL PROGRESS RULER */}
+          {/* 2. REMAINING / BALANCE OIL: ചീനച്ചട്ടിയിൽ ബാക്കി വന്ന ഓയിൽ (NO SLIDER) */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider truncate">
-                  {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ' : 'Leftover Oil (Remaining)'}
+                <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider truncate font-malayalam">
+                  {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ (Remaining Oil)' : 'Balance Oil (Remaining)'}
                 </label>
               </div>
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50 whitespace-nowrap shrink-0">
-                Max: {usedOil.toFixed(1)} kg
+                Max: {pouredOil.toFixed(1)} {oilUnit}
               </span>
             </div>
 
-            {/* Touchable Value Display */}
-            <div className="flex flex-col items-center justify-center py-1 gap-2">
-              <div className="flex items-center justify-center">
-                <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
+            <p className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam">
+              {language === 'ml'
+                ? 'പാചകം കഴിഞ്ഞ ശേഷം ചീനച്ചട്ടിയിൽ ബാക്കിയുള്ള ഓയിൽ ഇവിടെ നൽകുക (ഇത് മെയിൻ സ്റ്റോക്കിൽ ബാക്കിയായി നിൽക്കും)'
+                : 'Enter remaining oil in pan after cooking (remains in original stock)'}
+            </p>
+
+            {/* Clean Numeric Entry with Quick Steppers - SLIDER COMPLETELY REMOVED */}
+            <div className="flex flex-col items-center justify-center py-2 gap-3">
+              <div className="flex items-center justify-center gap-3 w-full">
+                {/* Decrement Buttons */}
+                <button
+                  type="button"
+                  onClick={() => adjustRemainingOil(-1)}
+                  disabled={remainingOil <= 0}
+                  className="px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
+                >
+                  <TbMinus className="w-3.5 h-3.5" /> 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustRemainingOil(-0.5)}
+                  disabled={remainingOil <= 0}
+                  className="px-2.5 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
+                >
+                  <TbMinus className="w-3.5 h-3.5" /> 0.5
+                </button>
+
+                {/* Direct Value Input */}
+                <div className="flex items-center justify-center gap-1.5 px-4 sm:px-6 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={leftoverInputStr}
-                    onFocus={() => {
-                      isManualTypingLeftover.current = true;
-                    }}
+                    value={remainingInputStr}
                     onChange={(e) => {
-                      isManualTypingLeftover.current = true;
                       const val = e.target.value.replace(/[^0-9.]/g, '');
-                      setLeftoverInputStr(val);
+                      setRemainingInputStr(val);
+                      const parsed = parseFloat(val);
+                      if (!isNaN(parsed) && parsed >= 0) {
+                        const clamped = Math.min(pouredOil, parsed);
+                        setRemainingOil(Number(clamped.toFixed(1)));
+                      }
                     }}
-                    onBlur={handleLeftoverInputCommit}
+                    onBlur={handleRemainingInputCommit}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleLeftoverInputCommit();
+                        handleRemainingInputCommit();
                       }
                     }}
-                    className="text-3xl sm:text-4xl font-black text-emerald-900 dark:text-emerald-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
+                    className="text-3xl sm:text-4xl font-black text-emerald-900 dark:text-emerald-200 tabular-nums text-center w-24 bg-transparent focus:outline-none"
                   />
                   <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 uppercase select-none">
-                    kg
+                    {oilUnit}
                   </span>
                 </div>
-              </div>
-              <div className="flex items-center justify-center gap-1.5 flex-wrap text-center">
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-200/50">
-                  Max: {usedOil.toFixed(1)} {oilUnit || 'kg'}
-                </span>
-              </div>
 
-            </div>
-
-            {/* Interactive Horizontal Progress Ruler Track */}
-            <div className="space-y-1.5">
-              <div
-                ref={leftoverTrackRef}
-                onMouseDown={handleLeftoverMouseDown}
-                onTouchStart={handleLeftoverTouchStart}
-                onTouchMove={handleLeftoverTouchMove}
-                className="relative w-full h-12 rounded-2xl bg-stone-100 dark:bg-[#141212] border border-charcoal-border/70 dark:border-[#2E2828] overflow-hidden cursor-ew-resize select-none touch-pan-x"
-              >
-                {/* Liquid Progress Fill */}
-                <div
-                  className="h-full bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 transition-all duration-75 relative rounded-xl"
-                  style={{ width: `${leftoverPercentage}%` }}
+                {/* Increment Buttons */}
+                <button
+                  type="button"
+                  onClick={() => adjustRemainingOil(0.5)}
+                  disabled={remainingOil >= pouredOil}
+                  className="px-2.5 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
                 >
-                  {/* Glowing fluid wave effect */}
-                  <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/40 shadow-[0_0_12px_rgba(255,255,255,0.8)]" />
-                </div>
-
-                {/* Ruler Scale Markings Overlaid - subtle reduced opacity */}
-                <div className="absolute inset-0 flex items-center justify-between px-3 pointer-events-none select-none">
-                  {[0, 25, 50, 75, 100].map((pct) => (
-                    <div key={pct} className="flex flex-col items-center">
-                      <div className="w-[1.5px] h-4 bg-stone-400/15 dark:bg-stone-500/15 rounded-full" />
-                    </div>
-                  ))}
-                </div>
-
-                {/* Floating Thumb Badge inside Progress Bar */}
-                <div
-                  className="absolute top-1/2 -translate-y-1/2 pointer-events-none -translate-x-1/2 transition-all duration-75"
-                  style={{ left: `${Math.min(94, Math.max(6, leftoverPercentage))}%` }}
+                  <TbPlus className="w-3.5 h-3.5" /> 0.5
+                </button>
+                <button
+                  type="button"
+                  onClick={() => adjustRemainingOil(1)}
+                  disabled={remainingOil >= pouredOil}
+                  className="px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
                 >
-                  <div className="px-2 py-0.5 rounded-lg bg-stone-900/90 text-white text-[10px] font-black shadow-md border border-white/20 whitespace-nowrap">
-                    {leftoverOil.toFixed(1)} kg
-                  </div>
-                </div>
+                  <TbPlus className="w-3.5 h-3.5" /> 1
+                </button>
               </div>
 
-              <div className="flex items-center justify-between text-[10px] text-stone-400 font-medium px-1">
-                <span className="whitespace-nowrap">0 kg</span>
-                <span className="font-bold text-stone-500 dark:text-stone-400 whitespace-nowrap">
-                  {leftoverOil.toFixed(1)} / {usedOil.toFixed(1)} kg
+              {/* Real Summary Banner (Simple & Honest) */}
+              <div className="w-full mt-1 p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] flex items-center justify-between text-xs font-malayalam">
+                <span className="text-stone-500 dark:text-stone-400">
+                  ഇന്ന് യഥാർത്ഥത്തിൽ ചെലവായത്:
                 </span>
-                <span className="whitespace-nowrap">{usedOil.toFixed(1)} kg (Max)</span>
+                <span className="font-extrabold text-amber-700 dark:text-amber-400 font-mono text-sm">
+                  {netConsumedOil} {oilUnit}
+                </span>
               </div>
             </div>
           </div>
@@ -699,7 +586,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
             size="md"
             onClick={onClose}
             disabled={isSubmitting}
-            className="font-bold px-4"
+            className="font-bold px-4 font-malayalam"
           >
             {language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}
           </Button>
@@ -709,15 +596,11 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
             size="md"
             isLoading={isSubmitting}
             icon={<TbCheck className="w-5 h-5 stroke-[2.5]" />}
-            className={`font-black px-6 shadow-md ${
-              oilStock !== null && usedOil > oilStock ? 'bg-amber-600 hover:bg-amber-700' : ''
-            }`}
+            className="font-black px-6 shadow-md font-malayalam"
           >
-            {oilStock !== null && usedOil > oilStock
-              ? language === 'ml'
-                ? `ബാക്കി ${oilStock} ${oilUnit} മാത്രമേ ഉള്ളൂ..`
-                : `Only ${oilStock} ${oilUnit} remaining..`
-              : language === 'ml' ? 'ഓയിൽ ചേർക്കുക' : 'Add Oil'}
+            {remainingOil > 0
+              ? (language === 'ml' ? 'കണക്ക് പൂർത്തിയാക്കുക' : 'Complete Daily Oil')
+              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Poured Oil')}
           </Button>
         </div>
       </form>
