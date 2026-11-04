@@ -904,10 +904,17 @@ export const ProductionPage: React.FC = () => {
                           <span className="font-extrabold whitespace-nowrap">{language === 'ml' ? 'ബാച്ച് പൂർത്തിയായി' : 'Completed'}</span>
                         </>
                       ) : hasProducedWeight && !isAllPacketsAdded ? (
-                        <>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBatchForPacking(run);
+                          }}
+                          className="flex items-center gap-1.5 cursor-pointer hover:underline"
+                          title={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കാൻ ക്ലിക്ക് ചെയ്യുക' : 'Click to add packets'}
+                        >
                           <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0" />
                           <span className="font-extrabold whitespace-nowrap">{language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}</span>
-                        </>
+                        </div>
                       ) : hasPackedPackets && !hasProducedWeight ? (
                         <>
                           <TbAlertTriangle className="w-4 h-4 text-amber-100 shrink-0" />
@@ -1008,16 +1015,24 @@ export const ProductionPage: React.FC = () => {
                       <p className="text-xs text-stone-500 dark:text-stone-400 italic">"{run.notes}"</p>
                     )}
 
-                    {/* Packed packets summary for this batch */}
+                    {/* Packed packets summary for this batch - Click to Adjust */}
                     {!isDeleted && batchPackings.length > 0 && (
-                      <div className="bg-stone-50 dark:bg-[#141212] rounded-xl p-2.5 text-xs border border-charcoal-border/70 dark:border-[#2E2828] space-y-1.5">
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBatchForPacking(run);
+                        }}
+                        className="bg-stone-50 dark:bg-[#141212] hover:bg-orange-50/70 dark:hover:bg-[#201a18] rounded-xl p-2.5 text-xs border border-charcoal-border/70 dark:border-[#2E2828] hover:border-orange-400 dark:hover:border-orange-500/60 space-y-1.5 cursor-pointer transition-all group shadow-2xs"
+                        title={language === 'ml' ? 'പാക്കറ്റുകൾ തിരുത്താൻ ക്ലിക്ക് ചെയ്യുക (Adjust Packets)' : 'Click to adjust packets'}
+                      >
                         <div className="flex items-center justify-between text-[11px] font-bold text-stone-700 dark:text-stone-300">
                           <span className="flex items-center gap-1.5">
-                            <TbPackage className="w-3.5 h-3.5 text-epso-orange" />
+                            <TbPackage className="w-3.5 h-3.5 text-epso-orange group-hover:scale-110 transition-transform" />
                             {language === 'ml' ? 'പാക്ക് ചെയ്തവ' : 'Packed Quantities'}:
                           </span>
-                          <span className="text-stone-500 font-normal">
-                            {batchPackings.reduce((sum, p) => sum + (p.packetsPacked || 0), 0)} {language === 'ml' ? 'പാക്കറ്റുകൾ' : 'pkts total'}
+                          <span className="flex items-center gap-1 text-epso-orange dark:text-amber-400 font-extrabold text-[11px]">
+                            <TbPencil className="w-3 h-3 stroke-[2.5]" />
+                            <span>{language === 'ml' ? 'മാറ്റുക / Adjust' : 'Adjust'}</span>
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -1070,10 +1085,14 @@ export const ProductionPage: React.FC = () => {
                                   ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ്'
                                   : 'Adding packets is compulsory'
                                 : language === 'ml'
-                                ? `${totalPacketsPacked} പാക്കറ്റുകൾ ചേർത്തു`
-                                : `${totalPacketsPacked} packets added`
+                                ? `${totalPacketsPacked} പാക്കറ്റുകൾ ചേർത്തു (തിരുത്താൻ ക്ലിക്ക് ചെയ്യുക)`
+                                : `${totalPacketsPacked} packets added (Click to adjust)`
                             }
-                            aria-label={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                            aria-label={
+                              hasPackedPackets
+                                ? (language === 'ml' ? 'പാക്കറ്റുകൾ തിരുത്തുക' : 'Adjust Packets')
+                                : (language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets')
+                            }
                           >
                             <TbPackage className="w-5 h-5 stroke-[2.2]" />
                             {isWarningYellow ? (
@@ -1413,6 +1432,15 @@ export const ProductionPage: React.FC = () => {
         isOpen={!!batchForPacking}
         batch={batchForPacking}
         recipes={recipes}
+        initialPackings={
+          batchForPacking
+            ? packingRecords.filter((p) =>
+                p.productionRunId
+                  ? p.productionRunId === batchForPacking.id
+                  : Boolean(p.notes && p.notes.includes(batchForPacking.runNumber))
+              )
+            : []
+        }
         onClose={() => setBatchForPacking(null)}
         onSuccess={() => {
           triggerRefresh();

@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Modal } from '../ui/Modal';
 import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
-import { ProductionRun, Recipe } from '../../types';
+import { ProductionRun, Recipe, PackingRecord } from '../../types';
 import {
   TbPackage,
   TbCheck,
@@ -19,6 +19,7 @@ interface BatchPackingModalProps {
   onClose: () => void;
   batch: ProductionRun | null;
   recipes?: Recipe[];
+  initialPackings?: PackingRecord[];
   onSuccess?: () => void;
 }
 
@@ -37,6 +38,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   isOpen,
   onClose,
   batch,
+  initialPackings,
   onSuccess,
 }) => {
   const { repo, staffName, addToast, triggerRefresh } = useApp();
@@ -94,13 +96,26 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     });
   }, [repo]);
 
-  // Load existing records for this batch
+  // Track whether we are adjusting already recorded packets
+  const [hasExistingRecords, setHasExistingRecords] = useState<boolean>(false);
+
+  // Load existing records for this batch (instantly from prop if available)
   useEffect(() => {
     if (isOpen && batch) {
       setShowSuccessAnim(false);
       setIsSubmitting(false);
       let isMounted = true;
       const initialMap: Record<string, number> = {};
+
+      if (initialPackings && initialPackings.length > 0) {
+        initialPackings.forEach((r) => {
+          if ((r.packetsPacked || 0) > 0) {
+            initialMap[r.packetSize] = (initialMap[r.packetSize] || 0) + (r.packetsPacked || 0);
+          }
+        });
+        setQuantities({ ...initialMap });
+        setHasExistingRecords(Object.keys(initialMap).length > 0);
+      }
 
       repo.listPackingRecords({ productId: batch.productId, limit: 100 }).then((records) => {
         if (!isMounted) return;
@@ -114,8 +129,12 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           }
         });
         setQuantities({ ...initialMap });
+        setHasExistingRecords(Object.keys(initialMap).length > 0);
       }).catch(() => {
-        if (isMounted) setQuantities({});
+        if (isMounted && (!initialPackings || initialPackings.length === 0)) {
+          setQuantities({});
+          setHasExistingRecords(false);
+        }
       });
 
       setActiveRulerPacket(null);
@@ -123,7 +142,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
         isMounted = false;
       };
     }
-  }, [isOpen, batch, repo]);
+  }, [isOpen, batch, initialPackings, repo]);
 
   if (!batch) return null;
 
@@ -174,18 +193,19 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
   const handleConfirmRulerValue = () => {
     if (!activeRulerPacket) return;
-    if (activeRulerPacket.count > 0) {
-      setQuantities((prev) => ({
-        ...prev,
-        [activeRulerPacket.size]: activeRulerPacket.count,
-      }));
-    } else {
-      setQuantities((prev) => {
-        const copy = { ...prev };
-        delete copy[activeRulerPacket.size];
-        return copy;
-      });
+    if (activeRulerPacket.count <= 0) {
+      addToast(
+        language === 'ml'
+          ? 'പാക്കറ്റുകൾ 0 ആക്കാൻ കഴിയില്ല. കുറഞ്ഞത് 1 പാക്കറ്റ് നൽകുക അല്ലെങ്കിൽ ക്ലിയർ ചെയ്യുക.'
+          : 'Packets cannot be set to 0. Enter at least 1 packet or click Clear.',
+        'warning'
+      );
+      return;
     }
+    setQuantities((prev) => ({
+      ...prev,
+      [activeRulerPacket.size]: activeRulerPacket.count,
+    }));
     setActiveRulerPacket(null);
   };
 
@@ -206,12 +226,12 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
   const handleSubmitAllPackets = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    // Adding packets is compulsory
-    if (configuredPackets.length === 0) {
+    // Packets cannot be set to 0
+    if (configuredPackets.length === 0 || totalPacketsSum <= 0) {
       addToast(
         language === 'ml'
-          ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ്. കുറഞ്ഞത് ഒരു പാക്കറ്റെങ്കിലും ചേർക്കുക.'
-          : 'Adding packets is compulsory. Please add at least one packet.',
+          ? 'പാക്കറ്റുകൾ 0 ആക്കാൻ കഴിയില്ല. കുറഞ്ഞത് ഒരു പാക്കറ്റെങ്കിലും ഉണ്ടായിരിക്കണം.'
+          : 'Packets cannot be set to 0. Please add at least one packet.',
         'warning'
       );
       return;
@@ -255,7 +275,11 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     setShowSuccessAnim(false);
     addToast(
       language === 'ml'
-        ? `${batch.productName} ലേക്ക് ${totalPacketsSum} പാക്കറ്റുകൾ ചേർത്തു`
+        ? hasExistingRecords
+          ? `${batch.productName} ലേക്ക് ${totalPacketsSum} പാക്കറ്റുകൾ ക്രമീകരിച്ചു`
+          : `${batch.productName} ലേക്ക് ${totalPacketsSum} പാക്കറ്റുകൾ ചേർത്തു`
+        : hasExistingRecords
+        ? `Adjusted ${totalPacketsSum} packets for ${batch.productName}`
         : `Recorded ${totalPacketsSum} packets for ${batch.productName}`,
       'success'
     );
@@ -282,10 +306,17 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             </span>
             <div>
               <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white leading-tight font-malayalam">
-                {language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets'}
+                {hasExistingRecords
+                  ? (language === 'ml' ? 'പാക്കറ്റുകൾ ക്രമീകരിക്കുക' : 'Adjust Packets')
+                  : (language === 'ml' ? 'പാക്കറ്റുകൾ ചേർക്കുക' : 'Add Packets')}
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
                 {batch.productName} ({batch.actualQuantity} {batch.unit})
+                {hasExistingRecords && (
+                  <span className="text-epso-orange dark:text-amber-400 font-bold ml-1.5 font-malayalam">
+                    • {language === 'ml' ? 'തിരുത്തൽ' : 'Edit Mode'}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -460,13 +491,13 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             <span>{language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}</span>
           </button>
 
-          {/* SAVE PACKETS BUTTON: Adding packets is compulsory */}
+          {/* SAVE / UPDATE PACKETS BUTTON: Packets can't be set to 0; can be adjusted once set */}
           <button
             type="button"
             onClick={() => handleSubmitAllPackets()}
-            disabled={isSubmitting || !hasAddedPackets}
+            disabled={isSubmitting || !hasAddedPackets || totalPacketsSum <= 0}
             className={`flex-[2] py-3.5 sm:py-4 px-4 rounded-2xl font-black text-sm shadow-md transition-all press-apple cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              !hasAddedPackets
+              !hasAddedPackets || totalPacketsSum <= 0
                 ? 'bg-yellow-400 hover:bg-yellow-500 text-stone-950 border-2 border-yellow-500 shadow-yellow-500/20'
                 : 'bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950'
             }`}
@@ -475,18 +506,16 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               <span>{language === 'ml' ? 'സൂക്ഷിക്കുന്നു...' : 'Saving...'}</span>
             ) : (
               <>
-                {!hasAddedPackets && (
+                {(!hasAddedPackets || totalPacketsSum <= 0) && (
                   <TbAlertCircle className="w-4 h-4 stroke-[2.5] text-stone-950" />
                 )}
                 <TbCheck className="w-5 h-5 stroke-[3]" />
                 <span>
-                  {language === 'ml'
-                    ? hasAddedPackets
-                      ? `സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)`
-                      : 'പാക്കറ്റ് ചേർക്കൽ നിർബന്ധമാണ്'
-                    : hasAddedPackets
-                    ? `Save (${totalPacketsSum} Packets)`
-                    : 'Packets Compulsory'}
+                  {totalPacketsSum <= 0
+                    ? (language === 'ml' ? 'പാക്കറ്റുകൾ 0 ആക്കാൻ കഴിയില്ല' : 'Packets cannot be 0')
+                    : hasExistingRecords
+                    ? (language === 'ml' ? `മാറ്റങ്ങൾ സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)` : `Update (${totalPacketsSum} Packets)`)
+                    : (language === 'ml' ? `സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)` : `Save (${totalPacketsSum} Packets)`)}
                 </span>
               </>
             )}
