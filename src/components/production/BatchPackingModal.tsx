@@ -63,7 +63,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   const rulerRef = useRef<HTMLDivElement>(null);
   const isScrollingRuler = useRef<boolean>(false);
 
-  const MIN_PACKETS = 1;
+  const MIN_PACKETS = 0;
   const MAX_RULER_PACKETS = 2000;
   const STEP_PACKETS = 1;
   const TICK_SPACING = 14;
@@ -177,35 +177,32 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
   const handleRulerStepDelta = (delta: number) => {
     if (!activeRulerPacket) return;
-    const next = Math.max(MIN_PACKETS, activeRulerPacket.count + delta);
+    const next = Math.max(0, activeRulerPacket.count + delta);
     setActiveRulerPacket((prev) => (prev ? { ...prev, count: next } : null));
     scrollRulerTo(next);
   };
 
   const handleDirectCountChange = (valStr: string) => {
     const val = parseInt(valStr, 10);
-    const count = isNaN(val) ? 0 : Math.max(0, val);
+    const count = isNaN(val) ? 0 : Math.max(0, Math.min(MAX_RULER_PACKETS, val));
     setActiveRulerPacket((prev) => (prev ? { ...prev, count } : null));
-    if (count > 0 && count <= MAX_RULER_PACKETS) {
-      scrollRulerTo(count);
-    }
+    scrollRulerTo(count);
   };
 
   const handleConfirmRulerValue = () => {
     if (!activeRulerPacket) return;
-    if (activeRulerPacket.count <= 0) {
-      addToast(
-        language === 'ml'
-          ? 'പാക്കറ്റുകൾ 0 ആക്കാൻ കഴിയില്ല. കുറഞ്ഞത് 1 പാക്കറ്റ് നൽകുക അല്ലെങ്കിൽ ക്ലിയർ ചെയ്യുക.'
-          : 'Packets cannot be set to 0. Enter at least 1 packet or click Clear.',
-        'warning'
-      );
-      return;
+    if (activeRulerPacket.count > 0) {
+      setQuantities((prev) => ({
+        ...prev,
+        [activeRulerPacket.size]: activeRulerPacket.count,
+      }));
+    } else {
+      setQuantities((prev) => {
+        const copy = { ...prev };
+        delete copy[activeRulerPacket.size];
+        return copy;
+      });
     }
-    setQuantities((prev) => ({
-      ...prev,
-      [activeRulerPacket.size]: activeRulerPacket.count,
-    }));
     setActiveRulerPacket(null);
   };
 
@@ -226,16 +223,6 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
   const handleSubmitAllPackets = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    // Packets cannot be set to 0
-    if (configuredPackets.length === 0 || totalPacketsSum <= 0) {
-      addToast(
-        language === 'ml'
-          ? 'പാക്കറ്റുകൾ 0 ആക്കാൻ കഴിയില്ല. കുറഞ്ഞത് ഒരു പാക്കറ്റെങ്കിലും ഉണ്ടായിരിക്കണം.'
-          : 'Packets cannot be set to 0. Please add at least one packet.',
-        'warning'
-      );
-      return;
-    }
 
     try {
       setIsSubmitting(true);
@@ -245,21 +232,23 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
       // 1. Delete previous records for this run to keep calculations & DB strictly accurate
       await repo.deletePackingRecordsForRun(batch.id, batch.runNumber);
 
-      // 2. Insert new confirmed quantities with explicit unit cost for costing accuracy
+      // 2. Insert new confirmed quantities with explicit unit cost for costing accuracy (if > 0)
       for (const [packetSize, count] of configuredPackets) {
-        const pktInfo = displayedPackets.find(
-          (p) => p.name.toLowerCase() === packetSize.toLowerCase()
-        );
-        await repo.recordPacking({
-          packingDate,
-          productId: batch.productId,
-          productionRunId: batch.id,
-          packetSize,
-          packetsPacked: count,
-          operatorName,
-          coverUnitCost: pktInfo?.costPerPacket || 0,
-          notes: `Batch #${batch.runNumber}`,
-        });
+        if (count > 0) {
+          const pktInfo = displayedPackets.find(
+            (p) => p.name.toLowerCase() === packetSize.toLowerCase()
+          );
+          await repo.recordPacking({
+            packingDate,
+            productId: batch.productId,
+            productionRunId: batch.id,
+            packetSize,
+            packetsPacked: count,
+            operatorName,
+            coverUnitCost: pktInfo?.costPerPacket || 0,
+            notes: `Batch #${batch.runNumber}`,
+          });
+        }
       }
 
       setIsSubmitting(false);
@@ -275,9 +264,13 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     setShowSuccessAnim(false);
     addToast(
       language === 'ml'
-        ? hasExistingRecords
+        ? totalPacketsSum === 0
+          ? `${batch.productName} പാക്കറ്റുകൾ 0 ആയി ക്രമീകരിച്ചു`
+          : hasExistingRecords
           ? `${batch.productName} ലേക്ക് ${totalPacketsSum} പാക്കറ്റുകൾ ക്രമീകരിച്ചു`
           : `${batch.productName} ലേക്ക് ${totalPacketsSum} പാക്കറ്റുകൾ ചേർത്തു`
+        : totalPacketsSum === 0
+        ? `Reset packets to 0 for ${batch.productName}`
         : hasExistingRecords
         ? `Adjusted ${totalPacketsSum} packets for ${batch.productName}`
         : `Recorded ${totalPacketsSum} packets for ${batch.productName}`,
@@ -326,11 +319,17 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           <BatchSuccessAnimation
             isVisible={showSuccessAnim}
             onComplete={handleSuccessAnimComplete}
-            message={language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തു!' : 'Packets Added Successfully!'}
+            message={
+              totalPacketsSum === 0
+                ? (language === 'ml' ? 'പാക്കറ്റുകൾ 0 ആയി മാറ്റി' : 'Packets Set to 0')
+                : (language === 'ml' ? 'പാക്കറ്റുകൾ ചേർത്തു!' : 'Packets Added Successfully!')
+            }
             subMessage={
-              language === 'ml'
-                ? `${configuredPackets.length} തരങ്ങളിൽ ${totalPacketsSum} പാക്കറ്റുകൾ രേഖപ്പെടുത്തി`
-                : `${totalPacketsSum} packets recorded across ${configuredPackets.length} packet types`
+              totalPacketsSum === 0
+                ? (language === 'ml' ? 'ഈ ബാച്ചിലെ എല്ലാ പാക്കറ്റുകളും ഒഴിവാക്കി' : 'All packets cleared for this batch')
+                : (language === 'ml'
+                    ? `${configuredPackets.length} തരങ്ങളിൽ ${totalPacketsSum} പാക്കറ്റുകൾ രേഖപ്പെടുത്തി`
+                    : `${totalPacketsSum} packets recorded across ${configuredPackets.length} packet types`)
             }
           />
         }
@@ -491,28 +490,21 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             <span>{language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}</span>
           </button>
 
-          {/* SAVE / UPDATE PACKETS BUTTON: Packets can't be set to 0; can be adjusted once set */}
+          {/* SAVE / UPDATE PACKETS BUTTON: Packets can be set to 0, and adjusted once set */}
           <button
             type="button"
             onClick={() => handleSubmitAllPackets()}
-            disabled={isSubmitting || !hasAddedPackets || totalPacketsSum <= 0}
-            className={`flex-[2] py-3.5 sm:py-4 px-4 rounded-2xl font-black text-sm shadow-md transition-all press-apple cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              !hasAddedPackets || totalPacketsSum <= 0
-                ? 'bg-yellow-400 hover:bg-yellow-500 text-stone-950 border-2 border-yellow-500 shadow-yellow-500/20'
-                : 'bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950'
-            }`}
+            disabled={isSubmitting}
+            className="flex-[2] py-3.5 sm:py-4 px-4 rounded-2xl font-black text-sm shadow-md transition-all press-apple cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950"
           >
             {isSubmitting ? (
               <span>{language === 'ml' ? 'സൂക്ഷിക്കുന്നു...' : 'Saving...'}</span>
             ) : (
               <>
-                {(!hasAddedPackets || totalPacketsSum <= 0) && (
-                  <TbAlertCircle className="w-4 h-4 stroke-[2.5] text-stone-950" />
-                )}
                 <TbCheck className="w-5 h-5 stroke-[3]" />
                 <span>
-                  {totalPacketsSum <= 0
-                    ? (language === 'ml' ? 'പാക്കറ്റുകൾ 0 ആക്കാൻ കഴിയില്ല' : 'Packets cannot be 0')
+                  {totalPacketsSum === 0
+                    ? (language === 'ml' ? 'സൂക്ഷിക്കുക (0 പാക്കറ്റുകൾ)' : 'Save (0 Packets)')
                     : hasExistingRecords
                     ? (language === 'ml' ? `മാറ്റങ്ങൾ സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)` : `Update (${totalPacketsSum} Packets)`)
                     : (language === 'ml' ? `സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)` : `Save (${totalPacketsSum} Packets)`)}
@@ -657,7 +649,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             {/* Quick Presets (Extending to large counts) */}
             <div className="flex items-center justify-center gap-1.5 pt-0.5 flex-wrap">
               <span className="text-[10px] text-stone-400 font-bold mr-1">Quick:</span>
-              {[25, 50, 75, 100, 150, 200, 250, 500, 1000].map((preset) => (
+              {[0, 25, 50, 75, 100, 150, 200, 250, 500, 1000].map((preset) => (
                 <button
                   key={preset}
                   type="button"
