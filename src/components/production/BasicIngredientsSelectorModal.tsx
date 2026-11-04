@@ -11,6 +11,8 @@ import {
   TbPackage,
   TbChevronRight,
   TbToolsKitchen2,
+  TbAlertTriangle,
+  TbCheck,
 } from 'react-icons/tb';
 
 interface BasicIngredientsSelectorModalProps {
@@ -19,6 +21,8 @@ interface BasicIngredientsSelectorModalProps {
   ingredients: Ingredient[];
   onSelectOil: () => void;
   onSelectBasicIngredient: (ingredient: Ingredient) => void;
+  recordedKeys?: string[];
+  isOilRecorded?: boolean;
 }
 
 export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorModalProps> = ({
@@ -27,6 +31,8 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
   ingredients,
   onSelectOil,
   onSelectBasicIngredient,
+  recordedKeys = [],
+  isOilRecorded = false,
 }) => {
   const { language } = useLanguage();
 
@@ -144,6 +150,15 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
             ? `${Number(matchingIngredient.currentStock).toFixed(1)} ${matchingIngredient.unit}`
             : null;
 
+          const isRecorded = item.isOil
+            ? Boolean(isOilRecorded)
+            : (recordedKeys || []).some(
+                (k) =>
+                  k === item.key ||
+                  (item.key === 'chippli_powder' && (k === 'chippli' || k === 'chippli_powder')) ||
+                  (item.key === 'cashew_shell' && (k === 'cashew_shell' || k === 'cashew'))
+              );
+
           const IconComponent = item.icon;
 
           return (
@@ -171,7 +186,11 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
                   });
                 }
               }}
-              className="p-3.5 rounded-2xl border border-stone-200 dark:border-[#2E2828] bg-stone-50/50 dark:bg-[#181414] hover:bg-white dark:hover:bg-[#201C1C] hover:border-amber-400 dark:hover:border-amber-500/50 transition-all press-apple cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
+              className={`p-3.5 rounded-2xl border transition-all press-apple cursor-pointer flex items-center justify-between gap-3 shadow-2xs group ${
+                isRecorded
+                  ? 'border-stone-200 dark:border-[#2E2828] bg-stone-50/50 dark:bg-[#181414] hover:bg-white dark:hover:bg-[#201C1C]'
+                  : 'border-amber-400/70 dark:border-amber-600/60 bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50/70 dark:hover:bg-amber-950/40'
+              }`}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div
@@ -190,9 +209,20 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                {isRecorded ? (
+                  <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 select-none">
+                    <TbCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>{language === 'ml' ? 'ചേർത്തു' : 'Added'}</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/40 select-none">
+                    <TbAlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>{language === 'ml' ? 'ചേർത്തിട്ടില്ല' : 'Not Added'}</span>
+                  </span>
+                )}
                 {stockStr && (
                   <span
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded-lg font-mono ${item.badgeClass}`}
+                    className={`hidden sm:inline-block text-[11px] font-bold px-2 py-0.5 rounded-lg font-mono ${item.badgeClass}`}
                   >
                     {stockStr}
                   </span>

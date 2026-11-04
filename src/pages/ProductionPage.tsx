@@ -343,6 +343,15 @@ export const ProductionPage: React.FC = () => {
   const activeClosing = isYesterday ? yesterdayOilClosing : todayOilClosing;
   const recordedKeysForActiveDate = recordedBasics[activeDate] || [];
 
+  const isOilRecordedForActiveDate = hasRecordedOil(activeClosing) || recordedKeysForActiveDate.includes('oil');
+  const hasPendingBasicsForActiveDate = useMemo(() => {
+    const isSalt = recordedKeysForActiveDate.includes('salt');
+    const isCashew = recordedKeysForActiveDate.includes('cashew_shell');
+    const isChippli = recordedKeysForActiveDate.includes('chippli') || recordedKeysForActiveDate.includes('chippli_powder');
+    const isCurry = recordedKeysForActiveDate.includes('curry_leaves');
+    return !isOilRecordedForActiveDate || !isSalt || !isCashew || !isChippli || !isCurry;
+  }, [isOilRecordedForActiveDate, recordedKeysForActiveDate]);
+
   const missingBasicItems = useMemo(() => {
     const activeDateRuns = runs.filter((r) =>
       isYesterday ? isYesterdayDate(r.productionDate) : isTodayDate(r.productionDate)
@@ -619,11 +628,25 @@ export const ProductionPage: React.FC = () => {
               setOilModalDate(activeFilter === 'yesterday' ? yesterdayStr : todayStr);
               setIsBasicSelectorOpen(true);
             }}
-            className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer"
+            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2.5 rounded-xl transition-all active:scale-95 press-apple cursor-pointer relative ${
+              hasPendingBasicsForActiveDate
+                ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-200 border-2 border-amber-500/60 shadow-xs'
+                : 'bg-stone-500/10 hover:bg-stone-500/20 text-stone-700 dark:text-stone-300 border border-stone-500/20'
+            }`}
             title={language === 'ml' ? 'ബേസിക് ചേരുവകൾ ചേർക്കുക' : 'Add Basic Ingredients'}
           >
-            <TbToolsKitchen2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            {hasPendingBasicsForActiveDate ? (
+              <TbAlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            ) : (
+              <TbToolsKitchen2 className="w-4 h-4 text-stone-600 dark:text-stone-400 shrink-0" />
+            )}
             <span>{language === 'ml' ? 'ബേസിക് ചേർക്കുക' : 'Add Basic'}</span>
+            {hasPendingBasicsForActiveDate && (
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+            )}
           </button>
 
           <button
@@ -1423,6 +1446,12 @@ export const ProductionPage: React.FC = () => {
         isOpen={isBasicSelectorOpen}
         onClose={() => setIsBasicSelectorOpen(false)}
         ingredients={ingredients}
+        recordedKeys={recordedBasics[oilModalDate] || []}
+        isOilRecorded={
+          oilModalDate === yesterdayStr
+            ? hasRecordedOil(yesterdayOilClosing) || (recordedBasics[yesterdayStr] || []).includes('oil')
+            : hasRecordedOil(todayOilClosing) || (recordedBasics[todayStr] || []).includes('oil')
+        }
         onSelectOil={() => {
           setIsDailyOilModalOpen(true);
         }}

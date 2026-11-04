@@ -212,23 +212,23 @@ export const ForceUpdateModal: React.FC = () => {
 
           <h2 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white leading-tight font-malayalam">
             {language === 'ml'
-              ? 'പുതിയ അപ്‌ഡേറ്റ് ലഭ്യമാണ്'
-              : 'New Update Available'}
+              ? 'അപ്‌ഡേറ്റ് നിർബന്ധമാണ്'
+              : 'Update Compulsory'}
           </h2>
         </div>
 
         {/* Compulsory message */}
         <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 font-medium font-malayalam leading-relaxed">
           {language === 'ml'
-            ? 'സിസ്റ്റത്തിൽ പുതിയ മാറ്റങ്ങൾ വിന്യസിച്ചിരിക്കുന്നു. തുടർന്ന് പ്രവർത്തിക്കുന്നതിന് ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക. അപ്‌ഡേറ്റ് നിർബന്ധമാണ്.'
-            : 'A new build has been deployed to production. Please update now to continue. This update is required.'}
+            ? 'സിസ്റ്റത്തിൽ പുതിയ മാറ്റങ്ങൾ വിന്യസിച്ചിരിക്കുന്നു. തുടർന്ന് പ്രവർത്തിക്കാൻ ദയവായി ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക.'
+            : 'A new version has been deployed. Update compulsory.'}
         </p>
 
         {/* Compulsory warning banner */}
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-left text-xs">
           <TbAlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span className="font-malayalam leading-tight">
-            തുടർന്നു പ്രവർത്തിക്കാൻ നിർബന്ധമായും അപ്‌ഡേറ്റ് ചെയ്യേണ്ടതുണ്ട് (Compulsory Update).
+            തുടർന്നു പ്രവർത്തിക്കാൻ അപ്‌ഡേറ്റ് നിർബന്ധമാണ് (Update Compulsory).
           </span>
         </div>
 
@@ -244,8 +244,8 @@ export const ForceUpdateModal: React.FC = () => {
             <TbRefresh className={`w-5 h-5 stroke-[2.5] ${isUpdating ? 'animate-spin' : ''}`} />
             <span>
               {isUpdating
-                ? (language === 'ml' ? 'ക്യാഷ് മായ്‌ച്ച് അപ്‌ഡേറ്റ് ചെയ്യുന്നു...' : 'Updating...')
-                : (language === 'ml' ? 'ക്യാഷ് മായ്‌ച്ച് ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക' : 'Update & Clear Cache')}
+                ? 'Updating...'
+                : 'Update Now'}
             </span>
           </button>
         </div>

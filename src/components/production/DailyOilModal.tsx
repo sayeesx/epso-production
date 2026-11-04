@@ -6,7 +6,6 @@ import { Button } from '../ui/Button';
 import {
   TbDroplet,
   TbCheck,
-  TbFlame,
   TbPencil,
   TbLock,
 } from 'react-icons/tb';
@@ -309,6 +308,33 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         </div>
       }
       size="md"
+      footer={
+        <div className="flex items-center justify-end gap-3 w-full">
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="font-bold px-4 font-malayalam"
+          >
+            {language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}
+          </Button>
+          <Button
+            type="submit"
+            form="dailyOilForm"
+            variant="primary"
+            size="md"
+            isLoading={isSubmitting}
+            icon={<TbCheck className="w-5 h-5 stroke-[2.5]" />}
+            className="font-black px-6 shadow-md font-malayalam"
+          >
+            {remainingOil > 0
+              ? (language === 'ml' ? 'കണക്ക് പൂർത്തിയാക്കുക' : 'Complete Daily Oil')
+              : (language === 'ml' ? 'ഒഴിച്ച ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Poured Oil')}
+          </Button>
+        </div>
+      }
       overlay={
         <BatchSuccessAnimation
           isVisible={showSuccessAnim}
@@ -326,29 +352,8 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         />
       }
     >
-      <form onSubmit={handleSubmit} className="flex flex-col min-h-full">
-        <div className="space-y-4 pb-4">
-          
-          {/* Simple Guide Banner */}
-          <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs space-y-1">
-            <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
-              <span className="flex items-center gap-1.5 font-malayalam">
-                <TbFlame className="w-4 h-4 text-amber-600" />
-                ഓയിൽ കണക്ക് നൽകേണ്ട വിധം:
-              </span>
-              {oilStock !== null && (
-                <span className="font-mono text-amber-700 dark:text-amber-300">
-                  രാവിലത്തെ സ്റ്റോക്ക്: {oilStock.toFixed(1)} {oilUnit}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-stone-600 dark:text-stone-300 font-malayalam leading-relaxed">
-              1. <strong>ഒഴിച്ച ഓയിൽ</strong> നൽകുക. നൽകിയ ശേഷം അത് മാറ്റാൻ പെൻസിൽ ഐക്കൺ (✏️) ക്ലിക്ക് ചെയ്യുക.<br />
-              2. പണി കഴിഞ്ഞ് <strong>ബാക്കി വന്ന ഓയിൽ</strong> നൽകുക. ബാക്കി വന്നത് മെയിൻ സ്റ്റോക്കിലേക്ക് സ്വയം തിരികെ കണക്കാക്കും.
-            </p>
-          </div>
-
-          {/* 1. POURED OIL SECTION */}
+      <form id="dailyOilForm" onSubmit={handleSubmit} className="space-y-4">
+        {/* 1. POURED OIL SECTION */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -636,54 +641,6 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               </div>
             )}
           </div>
-
-          {/* EXACT CALCULATION SUMMARY BANNER AS SPECIFIED BY USER */}
-          <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-2 text-xs font-malayalam">
-            <div className="flex items-center justify-between">
-              <span className="text-stone-600 dark:text-stone-400 font-bold">
-                ആകെ ചെലവായ ഓയിൽ (Net Consumed):
-              </span>
-              <span className="font-mono font-black text-amber-700 dark:text-amber-400 text-sm">
-                {pouredOil.toFixed(1)} - {remainingOil.toFixed(1)} = {netConsumedOil} {oilUnit}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between pt-1.5 border-t border-stone-200/60 dark:border-[#282323]">
-              <span className="text-stone-600 dark:text-stone-400 font-bold">
-                മെയിൻ സ്റ്റോക്കിൽ ബാക്കി വരുന്നത്:
-              </span>
-              <span className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">
-                {morningStock.toFixed(1)} - {netConsumedOil} = {finalMainStock} {oilUnit}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Actions */}
-        <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 p-4 bg-white/95 dark:bg-[#1E1B1B]/95 backdrop-blur-md border-t border-charcoal-border/60 dark:border-[#2E2828] flex items-center justify-end gap-3 z-30 shadow-lg mt-auto">
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="font-bold px-4 font-malayalam"
-          >
-            {language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            isLoading={isSubmitting}
-            icon={<TbCheck className="w-5 h-5 stroke-[2.5]" />}
-            className="font-black px-6 shadow-md font-malayalam"
-          >
-            {remainingOil > 0
-              ? (language === 'ml' ? 'കണക്ക് പൂർത്തിയാക്കുക' : 'Complete Daily Oil')
-              : (language === 'ml' ? 'ഒഴിച്ച ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Poured Oil')}
-          </Button>
-        </div>
       </form>
     </Modal>
   );
