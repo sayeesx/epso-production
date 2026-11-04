@@ -161,7 +161,7 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
       } else {
         addToast(
           language === 'ml'
-            ? 'റെക്കോർഡുകളിൽ ഉള്ളതിനാൽ ചേരുവ നിർജ്ജീവമാക്കി (Deactivated)'
+            ? 'റെക്കോർഡുകളിൽ ഉള്ളതിനാൽ ചേരുവ നിർജ്ജീവമാക്കി'
             : 'Ingredient in production history: marked inactive to protect audit trail',
           'info'
         );
@@ -194,7 +194,7 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Item Name */}
         <Input
-          label={language === 'ml' ? 'ചേരുവയുടെ പേര് (Ingredient Name)' : 'Ingredient Name'}
+          label={language === 'ml' ? 'ചേരുവയുടെ പേര്' : 'Ingredient Name'}
           placeholder={language === 'ml' ? 'ഉദാ: കടല പൊടി 99, വെളിച്ചെണ്ണ...' : 'e.g. Gram Flour 99, Coconut Oil...'}
           required
           value={name}
@@ -204,24 +204,24 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
         {/* Category & Unit */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Select
-            label={language === 'ml' ? 'വിഭാഗം (Category)' : 'Category'}
+            label={language === 'ml' ? 'വിഭാഗം' : 'Category'}
             value={category}
             onChange={(e) => setCategory(e.target.value as IngredientCategory)}
             options={[
               {
                 value: 'basic',
-                label: language === 'ml' ? 'പ്രധാന ചേരുവ (Category A - Basic)' : 'Category A: Basic Raw Materials',
+                label: language === 'ml' ? 'പ്രധാന ചേരുവ' : 'Category A: Basic Raw Materials',
               },
               {
                 value: 'other',
-                label: language === 'ml' ? 'മറ്റു ചേരുവകൾ (Category B - Other)' : 'Category B: Other Seasonings & Pack',
+                label: language === 'ml' ? 'മറ്റു ചേരുവകൾ' : 'Category B: Other Seasonings & Pack',
               },
             ]}
           />
 
           <div>
             <Select
-              label={language === 'ml' ? 'അളവ് യൂണിറ്റ് (Unit)' : 'Measurement Unit'}
+              label={language === 'ml' ? 'അളവ് യൂണിറ്റ്' : 'Measurement Unit'}
               value={isCustomUnit ? 'custom' : unit}
               onChange={(e) => {
                 if (e.target.value === 'custom') {
@@ -236,10 +236,10 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
                 { value: 'g', label: language === 'ml' ? 'ഗ്രാം (g)' : 'Gram (g)' },
                 { value: 'L', label: language === 'ml' ? 'ലിറ്റർ (L)' : 'Liter (L)' },
                 { value: 'ml', label: language === 'ml' ? 'മില്ലിലിറ്റർ (ml)' : 'Milliliter (ml)' },
-                { value: 'pcs', label: language === 'ml' ? 'എണ്ണം (pcs)' : 'Pieces (pcs)' },
-                { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ് (packs)' : 'Packets' },
-                { value: 'rolls', label: language === 'ml' ? 'റോൾ (rolls)' : 'Rolls' },
-                { value: 'custom', label: language === 'ml' ? 'മറ്റൊരു യൂണിറ്റ് (Custom)...' : 'Other unit...' },
+                { value: 'pcs', label: language === 'ml' ? 'എണ്ണം' : 'Pieces' },
+                { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ്' : 'Packets' },
+                { value: 'rolls', label: language === 'ml' ? 'റോൾ' : 'Rolls' },
+                { value: 'custom', label: language === 'ml' ? 'മറ്റൊരു യൂണിറ്റ്...' : 'Other unit...' },
               ]}
             />
             {isCustomUnit && (
@@ -260,7 +260,7 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
           {!ingredientToEdit ? (
             <div>
               <Input
-                label={language === 'ml' ? 'തുടക്ക സ്റ്റോക്ക് (Opening Stock - Optional)' : 'Opening Stock (Optional)'}
+                label={language === 'ml' ? 'തുടക്ക സ്റ്റോക്ക്' : 'Opening Stock (Optional)'}
                 type="number"
                 step="any"
                 min="0"
@@ -286,7 +286,7 @@ export const IngredientFormModal: React.FC<IngredientFormModalProps> = ({
           )}
 
           <Input
-            label={language === 'ml' ? 'കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ് (Min Stock Alert)' : 'Min Stock Alert'}
+            label={language === 'ml' ? 'കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ്' : 'Min Stock Alert'}
             type="number"
             step="any"
             min="0"

@@ -116,8 +116,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       onClose={onClose}
       title={
         productToEdit
-          ? (language === 'ml' ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit Product)' : 'Edit Product')
-          : (language === 'ml' ? 'പുതിയ ഉൽപ്പന്നം ചേർക്കുക (Add Product)' : 'Add New Snack Product')
+          ? (language === 'ml' ? 'ഉൽപ്പന്നം തിരുത്തുക' : 'Edit Product')
+          : (language === 'ml' ? 'പുതിയ ഉൽപ്പന്നം ചേർക്കുക' : 'Add New Snack Product')
       }
       description={
         language === 'ml'
@@ -129,7 +129,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Product Name */}
         <Input
-          label={language === 'ml' ? 'ഉൽപ്പന്നത്തിന്റെ പേര് (Product Name)' : 'Product Name'}
+          label={language === 'ml' ? 'ഉൽപ്പന്നത്തിന്റെ പേര്' : 'Product Name'}
           placeholder={language === 'ml' ? 'ഉദാ: 3kg കിറ്റ് മിക്സ്ചർ, ബനാന ചിപ്സ്...' : 'e.g. Kerala Banana Chips'}
           required
           value={name}
@@ -138,19 +138,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
         <div className="grid grid-cols-2 gap-3">
           <Input
-            label={language === 'ml' ? 'എസ്.കെ.യു കോഡ് (SKU Code)' : 'SKU Code'}
+            label={language === 'ml' ? 'എസ്.കെ.യു കോഡ്' : 'SKU Code'}
             placeholder="e.g. EPSO-BAN-01"
             value={sku}
             onChange={(e) => setSku(e.target.value)}
           />
 
           <Select
-            label={language === 'ml' ? 'സ്റ്റോക്ക് യൂണിറ്റ് (Unit)' : 'Unit of Stock'}
+            label={language === 'ml' ? 'സ്റ്റോക്ക് യൂണിറ്റ്' : 'Unit of Stock'}
             value={unit}
             onChange={(e) => setUnit(e.target.value as UnitType)}
             options={[
-              { value: 'kg', label: language === 'ml' ? 'കിലോഗ്രാം (kg)' : 'Kilograms (kg)' },
-              { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ് (packs)' : 'Packs' },
+              { value: 'kg', label: language === 'ml' ? 'കിലോഗ്രാം' : 'Kilograms' },
+              { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ്' : 'Packs' },
             ]}
           />
         </div>
@@ -158,7 +158,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <Input
-              label={language === 'ml' ? 'മൊത്തവില (Wholesale Price ₹)' : 'Wholesale Selling Price (₹)'}
+              label={language === 'ml' ? 'മൊത്തവില (₹)' : 'Wholesale Selling Price (₹)'}
               type="number"
               value={wholesalePrice}
               readOnly
@@ -170,7 +170,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           </div>
 
           <Input
-            label={language === 'ml' ? 'കൈവശമുള്ള ഫിനിഷ്ഡ് സ്റ്റോക്ക് (Current Stock)' : 'Current Finished Stock'}
+            label={language === 'ml' ? 'കൈവശമുള്ള ഫിനിഷ്ഡ് സ്റ്റോക്ക്' : 'Current Finished Stock'}
             type="number"
             step="0.5"
             min="0"
@@ -181,7 +181,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         </div>
 
         <Input
-          label={language === 'ml' ? 'വിവരണം (Description - Optional)' : 'Product Description (Optional)'}
+          label={language === 'ml' ? 'വിവരണം' : 'Product Description (Optional)'}
           placeholder={language === 'ml' ? 'ഉദാ: ശുദ്ധമായ വെളിച്ചെണ്ണയിൽ വറുത്ത പലഹാരം...' : 'e.g. Crispy snack fried in pure oil'}
           value={description}
           onChange={(e) => setDescription(e.target.value)}

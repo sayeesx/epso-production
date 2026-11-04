@@ -123,7 +123,7 @@ const mlTranslations: Translations = {
   ownerDashboard: 'ഉടമസ്ഥൻ ഡാഷ്‌ബോർഡ്',
   offlineNotice: 'ഇന്റർനെറ്റ് കണക്ഷൻ ലഭ്യമല്ല. ഓഫ്ലൈൻ മോഡ്.',
   onlineNotice: 'ഇന്റർനെറ്റ് കണക്ഷൻ പുനഃസ്ഥാപിച്ചു.',
-  switchLanguage: 'ഭാഷ മാറ്റുക (English)',
+  switchLanguage: 'English',
 
   navProduction: 'പ്രൊഡക്ഷൻ',
   navProducts: 'ഉൽപ്പന്നങ്ങൾ',
@@ -137,7 +137,7 @@ const mlTranslations: Translations = {
   searchProductPlaceholder: 'ഉൽപ്പന്നം തിരയുക...',
   quantityToProduce: 'നിർമ്മിക്കേണ്ട അളവ് (കിലോ / എണ്ണം)',
   unit: 'യൂണിറ്റ്',
-  requiredIngredients: 'ആവശ്യമായ ചേരുവകൾ (Recipe)',
+  requiredIngredients: 'ആവശ്യമായ ചേരുവകൾ',
   actualConsumption: 'ഉപയോഗിച്ച ചേരുവകളുടെ അളവ്',
   stockAvailability: 'സ്റ്റോക്ക് ലഭ്യത',
   inStock: 'സ്റ്റോക്കുണ്ട്',
@@ -229,7 +229,7 @@ const enTranslations: Translations = {
   ownerDashboard: 'Owner Dashboard',
   offlineNotice: 'No internet connection. Running in offline mode.',
   onlineNotice: 'Internet connection restored.',
-  switchLanguage: 'സ്വിച്ച് ചെയ്യുക (മലയാളം)',
+  switchLanguage: 'മലയാളം',
 
   navProduction: 'Production',
   navProducts: 'Products',

@@ -218,7 +218,7 @@ export const EditBatchModal: React.FC<EditBatchModalProps> = ({
 
         {/* Notes */}
         <Input
-          label={language === 'ml' ? 'കുറിപ്പ് (Optional)' : 'Batch Notes (Optional)'}
+          label={language === 'ml' ? 'കുറിപ്പ്' : 'Batch Notes (Optional)'}
           placeholder={language === 'ml' ? 'ഉദാ: വേവിച്ചതിൽ വന്ന മാറ്റങ്ങൾ...' : 'e.g. Changes made, consistency notes...'}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

@@ -62,7 +62,7 @@ export const BatchWeighingModal: React.FC<BatchWeighingModalProps> = ({
     if (finalKg <= 0) {
       addToast(
         language === 'ml'
-          ? 'ശരിയായ തൂക്കം നൽകുക (Please enter valid weight in kg)'
+          ? 'ശരിയായ തൂക്കം നൽകുക'
           : 'Please enter a valid produced weight in kg',
         'warning'
       );
@@ -164,7 +164,7 @@ export const BatchWeighingModal: React.FC<BatchWeighingModalProps> = ({
         {/* Scrollable Scale from Step 2 */}
         <div className="p-4 rounded-3xl bg-stone-50/70 dark:bg-[#141212]/70 border border-stone-200/80 dark:border-[#282323] shadow-xs">
           <MeasurementRulerSelector
-            title={language === 'ml' ? 'ഉൽപ്പാദിപ്പിച്ച അളവ് (Produced Qty)' : 'Production Quantity'}
+            title={language === 'ml' ? 'ഉൽപ്പാദിപ്പിച്ച അളവ്' : 'Production Quantity'}
             subtitle={language === 'ml' ? `ടാർഗെറ്റ്: ${planned} kg` : `Target: ${planned} kg`}
             unit={batch.unit || 'kg'}
             value={producedKg}

@@ -254,7 +254,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
         oilCostPerKg: oilCost,
         productionWages: 0,
         notes: undefined,
-        closedBy: staffName || 'പ്രൊഡക്ഷൻ ടീം (Kitchen Staff)',
+        closedBy: staffName || (language === 'ml' ? 'പ്രൊഡക്ഷൻ ടീം' : 'Kitchen Staff'),
       });
 
       setShowSuccessAnim(true);
@@ -359,7 +359,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                 <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider font-malayalam">
-                  {language === 'ml' ? 'ഇന്ന് ഒഴിച്ച ഓയിൽ (Oil Poured)' : 'Oil Poured (Once)'} *
+                  {language === 'ml' ? 'ഇന്ന് ഒഴിച്ച ഓയിൽ' : 'Oil Poured'} *
                 </label>
               </div>
 
@@ -369,14 +369,14 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                   type="button"
                   onClick={() => setIsPouredConfirmed(false)}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/70 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-bold font-malayalam transition-colors cursor-pointer"
-                  title="ഒഴിച്ച ഓയിൽ മാറ്റുക (Edit Poured Oil)"
+                  title={language === 'ml' ? 'ഒഴിച്ച ഓയിൽ മാറ്റുക' : 'Edit Poured Oil'}
                 >
                   <TbPencil className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300" />
-                  <span>മാറ്റുക (Edit)</span>
+                  <span>{language === 'ml' ? 'മാറ്റുക' : 'Edit'}</span>
                 </button>
               ) : (
                 <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                  പരമാവധി {maxAllowedOil} {oilUnit}
+                  {language === 'ml' ? `പരമാവധി ${maxAllowedOil} ${oilUnit}` : `Max ${maxAllowedOil} ${oilUnit}`}
                 </span>
               )}
             </div>
@@ -526,7 +526,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                       className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs font-malayalam flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <TbCheck className="w-4 h-4" />
-                      <span>ശരി (Confirm)</span>
+                      <span>{language === 'ml' ? 'ശരി' : 'Confirm'}</span>
                     </button>
                   </div>
                 )}
@@ -540,7 +540,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                 <label className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider truncate font-malayalam">
-                  {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ (Remaining Oil)' : 'Balance Oil (Remaining)'}
+                  {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ' : 'Remaining Oil'}
                 </label>
               </div>
 
@@ -550,14 +550,14 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                   type="button"
                   onClick={() => setIsRemainingConfirmed(false)}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs font-bold font-malayalam transition-colors cursor-pointer"
-                  title="ബാക്കി വന്ന ഓയിൽ മാറ്റുക (Edit Remaining Oil)"
+                  title={language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ മാറ്റുക' : 'Edit Remaining Oil'}
                 >
                   <TbPencil className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" />
-                  <span>മാറ്റുക (Edit)</span>
+                  <span>{language === 'ml' ? 'മാറ്റുക' : 'Edit'}</span>
                 </button>
               ) : (
                 <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50 whitespace-nowrap shrink-0">
-                  പരമാവധി: {pouredOil.toFixed(1)} {oilUnit}
+                  {language === 'ml' ? `പരമാവധി: ${pouredOil.toFixed(1)} ${oilUnit}` : `Max: ${pouredOil.toFixed(1)} ${oilUnit}`}
                 </span>
               )}
             </div>
@@ -634,7 +634,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                       className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs font-malayalam flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <TbCheck className="w-4 h-4" />
-                      <span>ശരി (Confirm)</span>
+                      <span>{language === 'ml' ? 'ശരി' : 'Confirm'}</span>
                     </button>
                   </div>
                 )}

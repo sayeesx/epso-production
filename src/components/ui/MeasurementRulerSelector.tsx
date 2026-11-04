@@ -529,12 +529,12 @@ export const MeasurementRulerSelector: React.FC<MeasurementRulerSelectorProps> =
         </button>
       </div>
 
-      <p className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mb-1">
+      <p className="text-[10px] text-stone-400 dark:text-stone-500 font-semibold mb-1 font-malayalam">
         {isZeroStock
-          ? 'സ്റ്റോക്ക് ലഭ്യമല്ല (Stock is 0)'
+          ? (language === 'ml' ? 'സ്റ്റോക്ക് ലഭ്യമല്ല' : 'Out of Stock')
           : isEditing
-          ? 'Enter അമർത്തി സേവ് ചെയ്യുക'
-          : 'റൂളർ നീക്കുകയോ നമ്പറിൽ തൊട്ട് ടൈപ്പ് ചെയ്യുകയോ ചെയ്യാം'}
+          ? (language === 'ml' ? 'Enter അമർത്തി സ്ഥിരീകരിക്കുക' : 'Press Enter to save')
+          : (language === 'ml' ? 'റൂളർ നീക്കുകയോ നമ്പറിൽ തൊട്ട് ടൈപ്പ് ചെയ്യുകയോ ചെയ്യാം' : 'Drag ruler or tap number to type')}
       </p>
 
       {/* Alert when selected measurement exceeds available stock */}

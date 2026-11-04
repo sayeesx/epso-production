@@ -956,8 +956,10 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                     </h4>
                     <p className="text-[11px] text-stone-500 dark:text-stone-400 font-medium font-malayalam">
                       {activeRecipe
-                        ? `ഫോർമുല v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} ബേസ്)`
-                        : 'മാനുവൽ പ്രൊഡക്ഷൻ (No recipe formula)'}
+                        ? (language === 'ml'
+                          ? `ഫോർമുല v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} ബേസ്)`
+                          : `Formula v${activeRecipe.version} (${activeRecipe.baseOutputQuantity} ${activeRecipe.baseOutputUnit} base)`)
+                        : (language === 'ml' ? 'മാനുവൽ പ്രൊഡക്ഷൻ' : 'Manual Production')}
                     </p>
                   </div>
                 </div>
@@ -975,7 +977,7 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                   <TbAlertCircle className="w-4 h-4 shrink-0 text-red-600 dark:text-red-400" />
                   <span className="font-bold">
                     {language === 'ml'
-                      ? 'ഈ ഉൽപ്പന്നത്തിന് ചേരുവകൾ (Recipe) ചേർത്തിട്ടില്ല. Admin-ൽ റെസിപ്പി നൽകിയ ശേഷം മാത്രം ഉൽപ്പാദനം സാധ്യമാകൂ.'
+                      ? 'ഈ ഉൽപ്പന്നത്തിന് ചേരുവകൾ ചേർത്തിട്ടില്ല. Admin-ൽ റെസിപ്പി നൽകിയ ശേഷം മാത്രം ഉൽപ്പാദനം സാധ്യമാകൂ.'
                       : 'No ingredients are set for this product. Please set up a recipe in Admin first.'}
                   </span>
                 </div>
@@ -1052,10 +1054,8 @@ export const StartProductionModal: React.FC<StartProductionModalProps> = ({
                               }`}
                             >
                               {isZeroStock
-                                ? language === 'ml'
-                                  ? 'സ്റ്റോക്കില്ല (0 Stock)'
-                                  : 'Out of Stock'
-                                : `${inStock} ${ing.unit} സ്റ്റോക്ക്`}
+                                ? (language === 'ml' ? 'സ്റ്റോക്കില്ല' : 'Out of Stock')
+                                : `${inStock} ${ing.unit} ${language === 'ml' ? 'സ്റ്റോക്ക്' : 'in stock'}`}
                             </span>
                           </div>
                         </div>

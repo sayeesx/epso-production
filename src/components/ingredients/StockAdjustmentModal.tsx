@@ -68,16 +68,16 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
 
   const reasonPresets = {
     deduct: [
-      language === 'ml' ? 'ഉൽപ്പാദന ആവശ്യങ്ങൾ (Production / Kitchen Usage)' : 'Production / Kitchen Usage',
-      language === 'ml' ? 'കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged / Wastage)' : 'Damaged / Spoiled Material',
-      language === 'ml' ? 'ഈർപ്പം / പൂപ്പൽ കേടുപാട് (Moisture / Storage Damage)' : 'Moisture / Storage Damage',
-      language === 'ml' ? 'ഭൗതിക സ്റ്റോക്ക് കുറവ് തിരുത്തൽ (Stock Audit Shortage)' : 'Physical Stock Audit Shortage',
-      language === 'ml' ? 'സാമ്പിൾ അല്ലെങ്കിൽ ലാബ് ടെസ്റ്റിംഗ് (Lab Sample)' : 'Lab / Tasting Sample',
+      language === 'ml' ? 'ഉൽപ്പാദന ആവശ്യങ്ങൾ' : 'Production / Kitchen Usage',
+      language === 'ml' ? 'കേടുപാടുകൾ / വേസ്റ്റേജ്' : 'Damaged / Spoiled Material',
+      language === 'ml' ? 'ഈർപ്പം / പൂപ്പൽ കേടുപാട്' : 'Moisture / Storage Damage',
+      language === 'ml' ? 'ഭൗതിക സ്റ്റോക്ക് കുറവ് തിരുത്തൽ' : 'Physical Stock Audit Shortage',
+      language === 'ml' ? 'സാമ്പിൾ അല്ലെങ്കിൽ ലാബ് ടെസ്റ്റിംഗ്' : 'Lab / Tasting Sample',
     ],
     add: [
-      language === 'ml' ? 'പുതിയ പർച്ചേസ് ഇൻവാർഡ് (New Purchase Inward)' : 'New Purchase Inward',
-      language === 'ml' ? 'ഓഡിറ്റ് അധികം തിരുത്തൽ (Physical Stock Audit Excess)' : 'Physical Stock Audit Excess',
-      language === 'ml' ? 'മറ്റ് ഇൻവാർഡ് ബാലൻസ് (Direct Stock Inward)' : 'Direct Stock Inward',
+      language === 'ml' ? 'പുതിയ പർച്ചേസ് ഇൻവാർഡ്' : 'New Purchase Inward',
+      language === 'ml' ? 'ഓഡിറ്റ് അധികം തിരുത്തൽ' : 'Physical Stock Audit Excess',
+      language === 'ml' ? 'മറ്റ് ഇൻവാർഡ് ബാലൻസ്' : 'Direct Stock Inward',
     ],
   };
 
@@ -165,8 +165,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       title={
         language === 'ml'
           ? isDeduct
-            ? 'സ്റ്റോക്ക് കുറയ്ക്കുക (Deduct Stock)'
-            : 'സ്റ്റോക്ക് ചേർക്കുക (Add Stock)'
+            ? 'സ്റ്റോക്ക് കുറയ്ക്കുക'
+            : 'സ്റ്റോക്ക് ചേർക്കുക'
           : isDeduct
           ? 'Deduct Material Stock'
           : 'Add Inward Material Stock'
@@ -181,7 +181,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Ingredient Picker */}
         <Select
-          label={language === 'ml' ? 'ചേരുവ തിരഞ്ഞെടുക്കുക (Select Ingredient)' : 'Select Raw Material'}
+          label={language === 'ml' ? 'ചേരുവ തിരഞ്ഞെടുക്കുക' : 'Select Raw Material'}
           value={selectedId}
           onChange={(e) => setSelectedId(e.target.value)}
           options={ingredients.map((i) => ({
@@ -193,7 +193,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
         {/* Direction Toggle: Deduct (-) vs Add (+) */}
         <div>
           <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5 font-malayalam">
-            {language === 'ml' ? 'മാറ്റത്തിന്റെ സ്വഭാവം (Direction)' : 'Adjustment Direction'}
+            {language === 'ml' ? 'മാറ്റത്തിന്റെ സ്വഭാവം' : 'Adjustment Direction'}
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -206,7 +206,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
               }`}
             >
               <TbMinus className="w-4 h-4 stroke-[3]" />
-              <span>{language === 'ml' ? 'കുറയ്ക്കുക (Deduct / Outward)' : 'Deduct (Outward)'}</span>
+              <span>{language === 'ml' ? 'കുറയ്ക്കുക' : 'Deduct (Outward)'}</span>
             </button>
             <button
               type="button"
@@ -218,7 +218,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
               }`}
             >
               <TbPlus className="w-4 h-4 stroke-[3]" />
-              <span>{language === 'ml' ? 'കൂട്ടുക (Add / Inward)' : 'Add (Inward)'}</span>
+              <span>{language === 'ml' ? 'കൂട്ടുക' : 'Add (Inward)'}</span>
             </button>
           </div>
         </div>
@@ -267,8 +267,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
             label={
               language === 'ml'
                 ? isDeduct
-                  ? 'കുറയ്ക്കേണ്ട അളവ് (Quantity to Deduct)'
-                  : 'ചേർക്കേണ്ട അളവ് (Quantity to Add)'
+                  ? 'കുറയ്ക്കേണ്ട അളവ്'
+                  : 'ചേർക്കേണ്ട അളവ്'
                 : isDeduct
                 ? 'Quantity to Deduct'
                 : 'Quantity to Add'
@@ -286,7 +286,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
 
         {/* Reason Selector */}
         <Select
-          label={language === 'ml' ? 'കാരണം (Reason)' : 'Reason'}
+          label={language === 'ml' ? 'കാരണം' : 'Reason'}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           options={(isDeduct ? reasonPresets.deduct : reasonPresets.add).map((r) => ({
@@ -297,7 +297,7 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
 
         {/* Custom Notes */}
         <Input
-          label={language === 'ml' ? 'കൂടുതൽ വിവരങ്ങൾ (Notes - Optional)' : 'Additional Notes (Optional)'}
+          label={language === 'ml' ? 'കൂടുതൽ വിവരങ്ങൾ' : 'Additional Notes (Optional)'}
           placeholder={
             language === 'ml'
               ? 'ഉദാ: പെട്ടി തകരാർ, ഈർപ്പം തട്ടിയത്...'
@@ -347,8 +347,8 @@ export const StockAdjustmentModal: React.FC<StockAdjustmentModalProps> = ({
           >
             {language === 'ml'
               ? isDeduct
-                ? 'കുറയ്ക്കുക (Deduct)'
-                : 'ചേർക്കുക (Add)'
+                ? 'കുറയ്ക്കുക'
+                : 'ചേർക്കുക'
               : isDeduct
               ? 'Record Deduction'
               : 'Record Addition'}

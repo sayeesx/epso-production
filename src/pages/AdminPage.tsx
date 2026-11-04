@@ -287,9 +287,9 @@ const AdminDashboardContent: React.FC = () => {
       {/* Admin Navigation Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs border-b border-charcoal-border/70">
         {[
-          { id: 'overview', label: language === 'ml' ? 'മേൽനോട്ടം (Overview)' : 'Overview', icon: <TbDashboard className="w-4 h-4" /> },
+          { id: 'overview', label: language === 'ml' ? 'മേൽനോട്ടം' : 'Overview', icon: <TbDashboard className="w-4 h-4" /> },
           { id: 'production', label: language === 'ml' ? 'ഉൽപ്പാദന രേഖകൾ' : 'Production Records', icon: <TbChefHat className="w-4 h-4" /> },
-          { id: 'recipes', label: language === 'ml' ? 'പാചകക്കുറിപ്പുകൾ (BOM)' : 'Recipes / BOM', icon: <TbBook className="w-4 h-4" /> },
+          { id: 'recipes', label: language === 'ml' ? 'പാചകക്കുറിപ്പുകൾ' : 'Recipes / BOM', icon: <TbBook className="w-4 h-4" /> },
           { id: 'ledger', label: language === 'ml' ? 'സ്റ്റോക്ക് ലെഡ്ജർ' : 'Stock Movements', icon: <TbHistory className="w-4 h-4" /> },
           { id: 'reports', label: language === 'ml' ? 'റിപ്പോർട്ടുകൾ & CSV' : 'Reports & Export', icon: <TbReportAnalytics className="w-4 h-4" /> },
           { id: 'audit', label: language === 'ml' ? 'ഓഡിറ്റ് ലോഗുകൾ' : 'Audit Logs', icon: <TbShieldCheck className="w-4 h-4" /> },
@@ -400,7 +400,7 @@ const AdminDashboardContent: React.FC = () => {
 
             <Card padding="sm">
               <span className="text-[11px] font-bold text-charcoal-muted block">
-                {language === 'ml' ? 'ചേരുവകൾ (Raw Materials)' : 'Raw Ingredients'}
+                {language === 'ml' ? 'ചേരുവകൾ' : 'Raw Ingredients'}
               </span>
               <div className="mt-1 flex items-baseline gap-1.5">
                 <span className="text-2xl font-black text-charcoal">
@@ -734,7 +734,7 @@ const AdminDashboardContent: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-charcoal">
-                {language === 'ml' ? 'പാചകക്കുറിപ്പുകൾ (Bill of Materials)' : 'Snack Recipe Formulations (BOM)'}
+                {language === 'ml' ? 'പാചകക്കുറിപ്പുകൾ' : 'Snack Recipe Formulations (BOM)'}
               </h2>
               <p className="text-xs text-charcoal-muted">
                 {language === 'ml'
@@ -873,7 +873,7 @@ const AdminDashboardContent: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-charcoal">
-                {language === 'ml' ? 'സ്റ്റോക്ക് ലെഡ്ജർ (Stock Movements)' : 'Auditable Inventory Ledger'}
+                {language === 'ml' ? 'സ്റ്റോക്ക് ലെഡ്ജർ' : 'Auditable Inventory Ledger'}
               </h2>
               <p className="text-xs text-charcoal-muted">
                 {language === 'ml'
@@ -995,14 +995,14 @@ const AdminDashboardContent: React.FC = () => {
                 onClick={exportProductionCsv}
                 icon={<TbFileSpreadsheet className="w-4 h-4" />}
               >
-                {language === 'ml' ? 'ഉൽപ്പാദന റിപ്പോർട്ട് (CSV)' : 'Export Production CSV'}
+                {language === 'ml' ? 'ഉൽപ്പാദന റിപ്പോർട്ട്' : 'Export Production CSV'}
               </Button>
               <Button
                 variant="outline"
                 onClick={exportConsumptionCsv}
                 icon={<TbFileSpreadsheet className="w-4 h-4" />}
               >
-                {language === 'ml' ? 'ചേരുവ റിപ്പോർട്ട് (CSV)' : 'Export Ingredients CSV'}
+                {language === 'ml' ? 'ചേരുവ റിപ്പോർട്ട്' : 'Export Ingredients CSV'}
               </Button>
             </div>
           </div>

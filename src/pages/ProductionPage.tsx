@@ -1067,7 +1067,7 @@ export const ProductionPage: React.FC = () => {
                             title={
                               isWarningYellow
                                 ? language === 'ml'
-                                  ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ് (Add Packets)'
+                                  ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ്'
                                   : 'Adding packets is compulsory'
                                 : language === 'ml'
                                 ? `${totalPacketsPacked} പാക്കറ്റുകൾ ചേർത്തു`

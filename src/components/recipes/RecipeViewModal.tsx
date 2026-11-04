@@ -39,7 +39,7 @@ export const RecipeViewModal: React.FC<RecipeViewModalProps> = ({
             </h2>
             <p className="text-[11px] text-stone-500 dark:text-stone-400">
               {language === 'ml'
-                ? 'ഉൽപ്പാദനത്തിന് ആവശ്യമായ ചേരുവകളുടെ അനുപാതം (Read-only)'
+                ? 'ഉൽപ്പാദനത്തിന് ആവശ്യമായ ചേരുവകളുടെ അനുപാതം'
                 : 'Standard Bill of Materials for production batch'}
             </p>
           </div>

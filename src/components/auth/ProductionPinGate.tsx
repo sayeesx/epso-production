@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { supabase } from '../../services/supabaseClient';
 import { FiSun, FiMoon, FiAlertCircle, FiLock } from 'react-icons/fi';
 
@@ -9,6 +10,7 @@ interface ProductionPinGateProps {
 
 export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }) => {
   const { theme, toggleTheme } = useTheme();
+  const { language } = useLanguage();
 
   const [digits, setDigits] = useState<string[]>(['', '', '', '']);
   const [errorMsg, setErrorMsg] = useState<string>('');
@@ -150,7 +152,7 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
 
     // Incorrect PIN
     setIsVerifying(false);
-    setErrorMsg('തെറ്റായ പാസ്‌കോഡ് (Incorrect PIN)');
+    setErrorMsg(language === 'ml' ? 'തെറ്റായ പാസ്‌കോഡ്' : 'Incorrect PIN');
     setShake(true);
     setTimeout(() => setShake(false), 500);
     setDigits(['', '', '', '']);
@@ -193,10 +195,10 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
         </div>
 
         <h1 className="text-base font-extrabold text-stone-900 dark:text-white font-malayalam text-center leading-snug">
-          പ്രൊഡക്ഷൻ 4 അക്ക പിൻ നൽകുക
+          {language === 'ml' ? 'പ്രൊഡക്ഷൻ 4 അക്ക പിൻ നൽകുക' : 'Enter 4-Digit Production PIN'}
         </h1>
         <p className="text-xs font-medium text-stone-400 dark:text-stone-500 font-sans mt-0.5 mb-6 text-center">
-          Enter 4-digit Production PIN
+          {language === 'ml' ? 'പ്രവർത്തിക്കാൻ പിൻ രേഖപ്പെടുത്തുക' : 'Enter your authorized kitchen access PIN'}
         </p>
 
         {/* 4 Individual OTP Boxes */}
@@ -228,7 +230,7 @@ export const ProductionPinGate: React.FC<ProductionPinGateProps> = ({ onUnlock }
         {isVerifying && (
           <div className="flex items-center gap-2 mt-4 text-xs font-medium text-stone-500 dark:text-stone-400">
             <div className="w-4 h-4 border-2 border-epso-red border-t-transparent rounded-full animate-spin" />
-            <span className="font-malayalam">പരിശോധിക്കുന്നു... (Verifying)</span>
+            <span className="font-malayalam">{language === 'ml' ? 'പരിശോധിക്കുന്നു...' : 'Verifying...'}</span>
           </div>
         )}
 

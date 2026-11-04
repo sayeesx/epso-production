@@ -245,7 +245,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
       title={
         recipeToEdit
           ? (language === 'ml' ? `റെസിപ്പി തിരുത്തുക (v${recipeToEdit.version})` : `Edit Recipe (v${recipeToEdit.version})`)
-          : (language === 'ml' ? 'റെസിപ്പി ചേരുവകൾ ക്രമീകരിക്കുക (Recipe BOM)' : 'Create Recipe Formulation')
+          : (language === 'ml' ? 'റെസിപ്പി ചേരുവകൾ ക്രമീകരിക്കുക' : 'Create Recipe Formulation')
       }
       description={
         language === 'ml'
@@ -256,7 +256,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <Select
-          label={language === 'ml' ? 'ഉൽപ്പന്നം (Product)' : 'Product'}
+          label={language === 'ml' ? 'ഉൽപ്പന്നം' : 'Product'}
           value={productId}
           disabled={Boolean(recipeToEdit)}
           onChange={(e) => setProductId(e.target.value)}
@@ -265,7 +265,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
 
         <div className="grid grid-cols-2 gap-3">
           <Input
-            label={language === 'ml' ? 'സ്റ്റാൻഡേർഡ് ഉൽപ്പാദന അളവ് (Base Output)' : 'Base Batch Output'}
+            label={language === 'ml' ? 'സ്റ്റാൻഡേർഡ് ഉൽപ്പാദന അളവ്' : 'Base Batch Output'}
             type="number"
             step="any"
             min="0.01"
@@ -275,15 +275,15 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
           />
 
           <Select
-            label={language === 'ml' ? 'യൂണിറ്റ് (Unit)' : 'Base Unit'}
+            label={language === 'ml' ? 'യൂണിറ്റ്' : 'Base Unit'}
             value={baseOutputUnit}
             onChange={(e) => setBaseOutputUnit(e.target.value as UnitType)}
             options={[
-              { value: 'kg', label: language === 'ml' ? 'കിലോഗ്രാം (kg)' : 'Kilograms (kg)' },
-              { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ് (packs)' : 'Packs' },
-              { value: 'pcs', label: language === 'ml' ? 'എണ്ണം (pcs)' : 'Pieces (pcs)' },
-              { value: 'g', label: language === 'ml' ? 'ഗ്രാം (g)' : 'Gram (g)' },
-              { value: 'L', label: language === 'ml' ? 'ലിറ്റർ (L)' : 'Liter (L)' },
+              { value: 'kg', label: language === 'ml' ? 'കിലോഗ്രാം' : 'Kilograms' },
+              { value: 'packs', label: language === 'ml' ? 'പാക്കറ്റ്' : 'Packs' },
+              { value: 'pcs', label: language === 'ml' ? 'എണ്ണം' : 'Pieces' },
+              { value: 'g', label: language === 'ml' ? 'ഗ്രാം' : 'Gram' },
+              { value: 'L', label: language === 'ml' ? 'ലിറ്റർ' : 'Liter' },
             ]}
           />
         </div>
@@ -446,7 +446,7 @@ export const RecipeFormModal: React.FC<RecipeFormModalProps> = ({
         </div>
 
         <Input
-          label={language === 'ml' ? 'പ്രത്യേക കുറിപ്പുകൾ (Optional)' : 'Process & Seasoning Notes (Optional)'}
+          label={language === 'ml' ? 'പ്രത്യേക കുറിപ്പുകൾ' : 'Process & Seasoning Notes (Optional)'}
           placeholder={language === 'ml' ? 'ഉദാ: വറുക്കുന്ന താപനില, പ്രത്യേക മസാല അനുപാതം...' : 'e.g. Frying temperature, seasoning ratio'}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

@@ -228,7 +228,9 @@ export const ForceUpdateModal: React.FC = () => {
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-left text-xs">
           <TbAlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span className="font-malayalam leading-tight">
-            തുടർന്നു പ്രവർത്തിക്കാൻ അപ്‌ഡേറ്റ് നിർബന്ധമാണ് (Update Compulsory).
+            {language === 'ml'
+              ? 'തുടർന്നു പ്രവർത്തിക്കാൻ അപ്‌ഡേറ്റ് നിർബന്ധമാണ്.'
+              : 'This update is required to continue.'}
           </span>
         </div>
 

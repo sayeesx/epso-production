@@ -654,7 +654,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                 onClick={handleClearRulerValue}
                 className="py-3 px-4 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-400 font-bold text-xs hover:bg-stone-100 dark:hover:bg-[#282323] cursor-pointer"
               >
-                {language === 'ml' ? 'ഒഴിവാക്കുക (0)' : 'Clear (0)'}
+                {language === 'ml' ? 'ഒഴിവാക്കുക' : 'Clear'}
               </button>
 
               <button

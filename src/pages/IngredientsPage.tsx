@@ -189,7 +189,7 @@ export const IngredientsPage: React.FC = () => {
                   {ing.currentStock <= 0 ? (
                     <span className="text-[11px] font-extrabold text-red-600 dark:text-red-400 flex items-center gap-1">
                       <TbAlertTriangle className="w-3.5 h-3.5" />
-                      <span>{language === 'ml' ? 'സ്റ്റോക്ക് തീർന്നു (0 Stock)' : 'Out of Stock (0)'}</span>
+                      <span>{language === 'ml' ? 'സ്റ്റോക്ക് തീർന്നു' : 'Out of Stock'}</span>
                     </span>
                   ) : isLow ? (
                     <span className="text-[11px] font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">

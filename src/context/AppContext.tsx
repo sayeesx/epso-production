@@ -42,7 +42,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [staffName, setStaffNameState] = useState<string>(() => {
-    return localStorage.getItem(STAFF_NAME_STORAGE_KEY) || 'പ്രൊഡക്ഷൻ ടീം (Kitchen Staff)';
+    return localStorage.getItem(STAFF_NAME_STORAGE_KEY) || 'പ്രൊഡക്ഷൻ ടീം';
   });
 
   const [adminSessionToken, setAdminSessionToken] = useState<string | null>(() => {
