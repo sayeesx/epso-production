@@ -398,6 +398,8 @@ export class SupabaseRepository implements IEpsoRepository {
     quantityDelta: number;
     reason: string;
     operatorName: string;
+    coverUnitCost?: number;
+    movementType?: MovementType;
   }): Promise<{ ingredient: Ingredient; movement: StockMovement }> {
     const ing = await this.getIngredientById(params.ingredientId);
     if (!ing) throw new Error('Ingredient not found');
@@ -408,18 +410,22 @@ export class SupabaseRepository implements IEpsoRepository {
     const updated = await this.updateIngredient(params.ingredientId, { currentStock: newStock });
     const client = this.checkClient();
 
+    const mType = params.movementType || (params.quantityDelta >= 0 ? 'adjustment' : 'wastage');
+    const costPerUnit = params.coverUnitCost ?? ing.avgCostPerUnit ?? 0;
+
     const { data: mov, error } = await client
       .from('stock_movements')
       .insert({
         item_id: ing.id,
         item_type: 'ingredient',
         item_name: ing.name,
-        movement_type: params.quantityDelta >= 0 ? 'adjustment' : 'wastage',
+        movement_type: mType,
         quantity: params.quantityDelta,
         unit: ing.unit,
         previous_balance: ing.currentStock,
         new_balance: newStock,
-        reference: 'Stock Adjustment',
+        cost_per_unit: costPerUnit,
+        reference: mType === 'production_consumption' ? 'Production Consumption' : 'Stock Adjustment',
         operator_name: params.operatorName,
         reason: params.reason,
       })

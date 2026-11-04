@@ -466,4 +466,34 @@ describe('Epso Production & Inventory Management System Tests', () => {
       expect(prod1Summary?.runCount).toBe(1);
     });
   });
+
+  // 13. BASIC INGREDIENT USAGE AS PRODUCTION CONSUMPTION (NOT WASTAGE)
+  describe('Basic Ingredient Stock Movement Type', () => {
+    it('records basic ingredient consumption as production_consumption and not wastage', async () => {
+      const ings = await repo.listIngredients(false);
+      const salt = ings.find((i) => i.name === 'ഉപ്പ്')!;
+      expect(salt).toBeDefined();
+
+      const initialStock = salt.currentStock;
+
+      const result = await repo.adjustStock({
+        ingredientId: salt.id,
+        quantityDelta: -2.5,
+        movementType: 'production_consumption',
+        reason: 'Daily basic ingredient usage (ഉപ്പ്) - 2026-11-04',
+        operatorName: 'Kitchen Staff',
+        coverUnitCost: salt.avgCostPerUnit,
+      });
+
+      expect(result.movement.movementType).toBe('production_consumption');
+      expect(result.movement.movementType).not.toBe('wastage');
+      expect(result.movement.reference).toBe('Production Consumption');
+      expect(result.ingredient.currentStock).toBe(initialStock - 2.5);
+
+      const movements = await repo.getStockMovements({ itemId: salt.id });
+      const lastMov = movements[0];
+      expect(lastMov.movementType).toBe('production_consumption');
+      expect(lastMov.movementType).not.toBe('wastage');
+    });
+  });
 });

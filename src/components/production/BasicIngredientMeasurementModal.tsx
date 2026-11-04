@@ -128,6 +128,8 @@ export const BasicIngredientMeasurementModal: React.FC<BasicIngredientMeasuremen
       await repo.adjustStock({
         ingredientId: ingredient.id,
         quantityDelta: delta,
+        movementType: 'production_consumption',
+        coverUnitCost: ingredient.avgCostPerUnit,
         reason: `Daily basic ingredient usage (${ingredient.name}) - ${targetDate}`,
         operatorName: operator,
       });

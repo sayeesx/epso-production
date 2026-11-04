@@ -36,6 +36,7 @@ export interface IEpsoRepository {
     reason: string;
     operatorName: string;
     coverUnitCost?: number;
+    movementType?: MovementType;
   }): Promise<{ ingredient: Ingredient; movement: StockMovement }>;
 
   // Recipes (BOM)

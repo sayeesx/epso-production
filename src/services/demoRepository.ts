@@ -309,6 +309,8 @@ export class DemoRepository implements IEpsoRepository {
     quantityDelta: number;
     reason: string;
     operatorName: string;
+    coverUnitCost?: number;
+    movementType?: MovementType;
   }): Promise<{ ingredient: Ingredient; movement: StockMovement }> {
     const ing = await this.getIngredientById(params.ingredientId);
     if (!ing) throw new Error('Ingredient not found');
@@ -318,18 +320,20 @@ export class DemoRepository implements IEpsoRepository {
 
     const updated = await this.updateIngredient(params.ingredientId, { currentStock: newStock });
 
+    const mType = params.movementType || (params.quantityDelta >= 0 ? 'adjustment' : 'wastage');
     const movements = this.getItem<StockMovement[]>(STORAGE_KEYS.MOVEMENTS, []);
     const newMovement: StockMovement = {
       id: `mov-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       itemId: ing.id,
       itemType: 'ingredient',
       itemName: ing.name,
-      movementType: params.quantityDelta >= 0 ? 'adjustment' : 'wastage',
+      movementType: mType,
       quantity: params.quantityDelta,
       unit: ing.unit,
       previousBalance: ing.currentStock,
       newBalance: newStock,
-      reference: 'Manual Adjustment',
+      costPerUnit: params.coverUnitCost ?? ing.avgCostPerUnit ?? 0,
+      reference: mType === 'production_consumption' ? 'Production Consumption' : 'Manual Adjustment',
       operatorName: params.operatorName,
       reason: params.reason,
       createdAt: new Date().toISOString(),
