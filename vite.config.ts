@@ -1,27 +1,88 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
-import path from 'path'
-import fs from 'fs'
+import { defineConfig, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+import path from 'path';
+import fs from 'fs';
+import { execSync } from 'child_process';
 
-let appVersion = '1.0.1';
-let appCommit = 'latest';
-try {
-  const vData = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, './public/version.json'), 'utf8'));
-  appVersion = vData.version || '1.0.1';
-  appCommit = vData.commit || 'latest';
-} catch (e) {
-  // fallback
+function getGitCommitHash(): string {
+  if (process.env.VERCEL_GIT_COMMIT_SHA) {
+    return process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7);
+  }
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+  } catch {
+    return '';
+  }
+}
+
+function versionPlugin(): Plugin {
+  const commitHash = getGitCommitHash();
+  const buildTimestamp = Date.now();
+  const buildId = commitHash ? `${commitHash}-${buildTimestamp}` : `${buildTimestamp}`;
+  const versionData = JSON.stringify(
+    {
+      buildId,
+      version: '1.0.5',
+      commit: commitHash || 'latest',
+      builtAt: new Date(buildTimestamp).toISOString(),
+    },
+    null,
+    2
+  );
+
+  return {
+    name: 'version-plugin',
+    config() {
+      return {
+        define: {
+          __APP_BUILD_ID__: JSON.stringify(buildId),
+          __APP_VERSION__: JSON.stringify('1.0.5'),
+          __APP_COMMIT__: JSON.stringify(commitHash || 'latest'),
+        },
+      };
+    },
+    buildStart() {
+      try {
+        const publicDir = path.resolve(import.meta.dirname, 'public');
+        if (!fs.existsSync(publicDir)) {
+          fs.mkdirSync(publicDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(publicDir, 'version.json'), versionData, 'utf-8');
+      } catch (err) {
+        console.warn('Failed to write public/version.json:', err);
+      }
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url && (req.url === '/version.json' || req.url.startsWith('/version.json?'))) {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          res.end(versionData);
+          return;
+        }
+        next();
+      });
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: versionData,
+      });
+    },
+  };
 }
 
 // https://vite.dev/config/
 export default defineConfig({
-  define: {
-    __APP_VERSION__: JSON.stringify(appVersion),
-    __APP_COMMIT__: JSON.stringify(appCommit),
-  },
   plugins: [
     react(),
+    versionPlugin(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'robots.txt'],
@@ -63,7 +124,7 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
               cacheableResponse: {
                 statuses: [0, 200],
@@ -77,7 +138,7 @@ export default defineConfig({
               cacheName: 'gstatic-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
               cacheableResponse: {
                 statuses: [0, 200],
@@ -120,4 +181,4 @@ export default defineConfig({
       },
     },
   },
-})
+});

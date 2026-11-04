@@ -7,8 +7,8 @@ import {
   TbDroplet,
   TbCheck,
   TbFlame,
-  TbPlus,
-  TbMinus,
+  TbPencil,
+  TbLock,
 } from 'react-icons/tb';
 import { BatchSuccessAnimation } from '../ui/BatchSuccessAnimation';
 
@@ -41,11 +41,16 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
   const targetDate = initialDate || todayStr;
 
-  // Measured oil states (poured oil & balance remaining oil)
+  // Measured oil states
   const [pouredOil, setPouredOil] = useState<number>(0);
   const [remainingOil, setRemainingOil] = useState<number>(0);
   const [pouredInputStr, setPouredInputStr] = useState<string>('0');
   const [remainingInputStr, setRemainingInputStr] = useState<string>('0');
+
+  // Confirmation / Unclickable lock states (only editable via pencil icon)
+  const [isPouredConfirmed, setIsPouredConfirmed] = useState<boolean>(false);
+  const [isRemainingConfirmed, setIsRemainingConfirmed] = useState<boolean>(false);
+
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState<boolean>(false);
@@ -58,13 +63,13 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const isPouredScrollingRef = useRef<boolean>(false);
   const isManualTypingPoured = useRef<boolean>(false);
 
-  // Ruler constants for poured oil (0 to max allowed oil, 0.1kg/L steps)
+  // Calibrated, ultra-smooth ruler constants: 1 kg steps with 0.5 kg half-ticks
+  // (Only ~50-100 ticks total = 60 FPS hardware-accelerated smooth scrolling)
   const POURED_MIN = 0;
-  const POURED_MAX = 250;
-  const POURED_STEP = 0.1;
-  const TICK_WIDTH = 32;
+  const POURED_STEP = 1;
+  const TICK_WIDTH = 48; // px per 1 kg step
 
-  const maxAllowedOil = oilStock !== null ? Math.max(0, oilStock) : POURED_MAX;
+  const maxAllowedOil = oilStock !== null ? Math.max(0, oilStock) : 100;
 
   // Load live ingredient stock & existing closing together for target date
   useEffect(() => {
@@ -103,19 +108,26 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
             ? Number(existing.oilLeftoverKg)
             : 0;
 
-          const limit = baselineAvailable > 0 ? baselineAvailable : POURED_MAX;
+          const limit = baselineAvailable > 0 ? baselineAvailable : 100;
           const safeP = Math.min(limit, Math.max(0, p));
           const safeR = Math.min(safeP, Math.max(0, r));
+
           setPouredOil(safeP);
           setRemainingOil(safeR);
           setPouredInputStr(String(safeP));
           setRemainingInputStr(String(safeR));
+
+          // If already entered previously, lock as confirmed with pencil icon
+          setIsPouredConfirmed(safeP > 0);
+          setIsRemainingConfirmed(safeR > 0);
         } else {
           setOilStock(liveStock);
           setPouredOil(0);
           setRemainingOil(0);
           setPouredInputStr('0');
           setRemainingInputStr('0');
+          setIsPouredConfirmed(false);
+          setIsRemainingConfirmed(false);
         }
         setIsLoadingExisting(false);
       }).catch((err) => {
@@ -129,7 +141,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     }
   }, [isOpen, repo, targetDate]);
 
-  // Center ruler on poured oil change
+  // Smooth scroll ruler to poured oil value
   const scrollPouredRulerTo = useCallback((val: number) => {
     if (!pouredRulerRef.current) return;
     const clampedVal = Math.min(maxAllowedOil, Math.max(POURED_MIN, val));
@@ -138,51 +150,35 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     isPouredScrollingRef.current = true;
     pouredRulerRef.current.scrollTo({
       left: scrollTarget,
-      behavior: 'auto',
+      behavior: 'smooth',
     });
     setTimeout(() => {
       isPouredScrollingRef.current = false;
-    }, 100);
+    }, 150);
   }, [maxAllowedOil]);
 
   useEffect(() => {
-    if (isOpen && !isLoadingExisting) {
+    if (isOpen && !isLoadingExisting && !isPouredConfirmed) {
       setTimeout(() => {
         scrollPouredRulerTo(pouredOil);
-      }, 150);
+      }, 100);
     }
-  }, [isOpen, isLoadingExisting, scrollPouredRulerTo, pouredOil]);
+  }, [isOpen, isLoadingExisting, isPouredConfirmed, scrollPouredRulerTo, pouredOil]);
 
   // Handle ruler scroll for poured oil
   const handlePouredRulerScroll = () => {
     if (!pouredRulerRef.current || isPouredScrollingRef.current || isManualTypingPoured.current) return;
     const scrollLeft = pouredRulerRef.current.scrollLeft;
-    const tickIndex = Math.round(scrollLeft / TICK_WIDTH);
-    const calculatedVal = Number((POURED_MIN + tickIndex * POURED_STEP).toFixed(1));
+    const tickIndex = Math.round(scrollLeft / (TICK_WIDTH / 2)); // 0.5kg precision on drag
+    const calculatedVal = Number((POURED_MIN + tickIndex * 0.5).toFixed(1));
     const clamped = Math.max(POURED_MIN, Math.min(maxAllowedOil, calculatedVal));
     setPouredOil(clamped);
     setPouredInputStr(String(clamped));
-    // Remaining cannot exceed poured oil
     if (remainingOil > clamped) {
       setRemainingOil(clamped);
       setRemainingInputStr(String(clamped));
     }
   };
-
-  // Adjust remaining oil with step buttons (no slider)
-  const adjustRemainingOil = (delta: number) => {
-    const next = Math.min(pouredOil, Math.max(0, Number((remainingOil + delta).toFixed(1))));
-    setRemainingOil(next);
-    setRemainingInputStr(String(next));
-  };
-
-  // Keep remaining oil strictly clamped to current pouredOil
-  useEffect(() => {
-    if (remainingOil > pouredOil) {
-      setRemainingOil(pouredOil);
-      setRemainingInputStr(String(pouredOil));
-    }
-  }, [pouredOil, remainingOil]);
 
   // Manual input commit for Poured Oil
   const handlePouredInputCommit = () => {
@@ -207,8 +203,12 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     setRemainingInputStr(String(clean));
   };
 
-  // Net oil calculated: Poured minus Balance
+  // Exact Calculation Workflow:
+  // Net Consumed = Poured - Balance
+  // Final Original Stock = Morning Stock - Net Consumed
   const netConsumedOil = Math.max(0, Number((pouredOil - remainingOil).toFixed(1)));
+  const morningStock = oilStock !== null ? Math.max(0, oilStock) : 0;
+  const finalMainStock = Math.max(0, Number((morningStock - netConsumedOil).toFixed(1)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,9 +240,10 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
       const safeRemaining = Math.min(pouredOil, Math.max(0, remainingOil));
       const available = oilStock !== null ? Math.max(0, oilStock) : 0;
       
-      // Net consumed = Poured - Remaining
+      // Net consumed = Poured - Balance
+      const netConsumed = Math.max(0, Number((pouredOil - safeRemaining).toFixed(3)));
       // Final stock in store = Available - Net consumed (Remaining oil stays in original stock)
-      const finalStock = Math.max(0, Number((available - pouredOil + safeRemaining).toFixed(3)));
+      const finalStock = Math.max(0, Number((available - netConsumed).toFixed(3)));
 
       await repo.saveDailyClosing({
         productionDate: targetDate,
@@ -269,11 +270,9 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
   const handleSuccessAnimComplete = () => {
     setShowSuccessAnim(false);
     const safeRemaining = Math.min(pouredOil, Math.max(0, remainingOil));
-    const available = oilStock !== null ? Math.max(0, oilStock) : 0;
-    const finalStock = Math.max(0, Number((available - pouredOil + safeRemaining).toFixed(1)));
     addToast(
       language === 'ml'
-        ? `ഓയിൽ രേഖപ്പെടുത്തി: ${pouredOil}kg ഒഴിച്ചു • ${safeRemaining}kg ബാക്കി (ഉപയോഗം: ${netConsumedOil}kg)`
+        ? `ഓയിൽ രേഖപ്പെടുത്തി: ${pouredOil}kg ഒഴിച്ചു • ${safeRemaining}kg ബാക്കി (ആകെ ഉപയോഗം: ${netConsumedOil}kg)`
         : `Oil recorded: ${pouredOil}kg poured, ${safeRemaining}kg balance (Net used: ${netConsumedOil}kg)`,
       'success'
     );
@@ -282,7 +281,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
     onClose();
   };
 
-  const totalPouredTicks = Math.max(1, Math.round((maxAllowedOil - POURED_MIN) / POURED_STEP));
+  const totalPouredTicks = Math.max(1, Math.round(maxAllowedOil / POURED_STEP));
 
   return (
     <Modal
@@ -330,26 +329,26 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
       <form onSubmit={handleSubmit} className="flex flex-col min-h-full">
         <div className="space-y-4 pb-4">
           
-          {/* Simple Malayalam Guide Card (No complex formulas, child-friendly) */}
+          {/* Simple Guide Banner */}
           <div className="p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs space-y-1">
             <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-200">
               <span className="flex items-center gap-1.5 font-malayalam">
                 <TbFlame className="w-4 h-4 text-amber-600" />
-                പാചക ഓയിൽ നൽകേണ്ട വിധം:
+                ഓയിൽ കണക്ക് നൽകേണ്ട വിധം:
               </span>
               {oilStock !== null && (
                 <span className="font-mono text-amber-700 dark:text-amber-300">
-                  സ്റ്റോക്ക്: {oilStock.toFixed(1)} {oilUnit}
+                  രാവിലത്തെ സ്റ്റോക്ക്: {oilStock.toFixed(1)} {oilUnit}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-stone-600 dark:text-stone-300 font-malayalam leading-relaxed">
-              1. രാവിലെ ചീനച്ചട്ടിയിൽ <strong>ഒഴിച്ച ഓയിൽ</strong> നൽകുക.<br />
-              2. പണി കഴിഞ്ഞ ശേഷം ചീനച്ചട്ടിയിൽ <strong>ബാക്കി വന്ന ഓയിൽ</strong> നൽകുക. ബാക്കി വന്ന അളവ് മെയിൻ സ്റ്റോക്കിൽ ബാക്കിയായി തന്നെ നിൽക്കും.
+              1. <strong>ഒഴിച്ച ഓയിൽ</strong> നൽകുക. നൽകിയ ശേഷം അത് മാറ്റാൻ പെൻസിൽ ഐക്കൺ (✏️) ക്ലിക്ക് ചെയ്യുക.<br />
+              2. പണി കഴിഞ്ഞ് <strong>ബാക്കി വന്ന ഓയിൽ</strong> നൽകുക. ബാക്കി വന്നത് മെയിൻ സ്റ്റോക്കിലേക്ക് സ്വയം തിരികെ കണക്കാക്കും.
             </p>
           </div>
 
-          {/* 1. POURED OIL: ചീനച്ചട്ടിയിൽ ഒഴിച്ച ഓയിൽ */}
+          {/* 1. POURED OIL SECTION */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-amber-200 dark:border-amber-900/60 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -358,125 +357,179 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                   {language === 'ml' ? 'ഇന്ന് ഒഴിച്ച ഓയിൽ (Oil Poured)' : 'Oil Poured (Once)'} *
                 </label>
               </div>
-              <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
-                പരമാവധി {maxAllowedOil} {oilUnit}
-              </span>
+
+              {/* Locked vs Editable Indicator */}
+              {isPouredConfirmed && pouredOil > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setIsPouredConfirmed(false)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/70 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-bold font-malayalam transition-colors cursor-pointer"
+                  title="ഒഴിച്ച ഓയിൽ മാറ്റുക (Edit Poured Oil)"
+                >
+                  <TbPencil className="w-3.5 h-3.5 text-amber-700 dark:text-amber-300" />
+                  <span>മാറ്റുക (Edit)</span>
+                </button>
+              ) : (
+                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                  പരമാവധി {maxAllowedOil} {oilUnit}
+                </span>
+              )}
             </div>
 
-            {/* Touchable Value Display */}
-            <div className="flex flex-col items-center justify-center py-1 gap-1">
-              <div className="flex items-center justify-center">
-                <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={pouredInputStr}
-                    onFocus={() => {
-                      isManualTypingPoured.current = true;
-                    }}
-                    onChange={(e) => {
-                      isManualTypingPoured.current = true;
-                      const val = e.target.value.replace(/[^0-9.]/g, '');
-                      setPouredInputStr(val);
-                      const parsed = parseFloat(val);
-                      if (!isNaN(parsed) && parsed >= 0) {
-                        const clamped = Math.min(maxAllowedOil, parsed);
-                        const clean = Number(clamped.toFixed(1));
-                        setPouredOil(clean);
-                        if (remainingOil > clean) {
-                          setRemainingOil(clean);
-                          setRemainingInputStr(String(clean));
-                        }
-                      }
-                    }}
-                    onBlur={() => {
-                      isManualTypingPoured.current = false;
-                      handlePouredInputCommit();
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handlePouredInputCommit();
-                      }
-                    }}
-                    className="text-3xl sm:text-4xl font-black text-amber-900 dark:text-amber-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
-                  />
-                  <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 uppercase select-none">
+            {/* If Confirmed/Entered: Show as Unclickable Card with Pencil Edit Icon */}
+            {isPouredConfirmed && pouredOil > 0 ? (
+              <div className="p-4 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-amber-800 dark:text-amber-300 font-malayalam flex items-center gap-1.5">
+                    <TbLock className="w-3.5 h-3.5 text-amber-600" />
+                    ഒഴിച്ച ഓയിൽ സ്ഥിരീകരിച്ചു
+                  </span>
+                  <span className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam block">
+                    മാറ്റം വരുത്താൻ മുകളിലെ 'മാറ്റുക' (✏️) ക്ലിക്ക് ചെയ്യുക
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl sm:text-3xl font-black text-amber-900 dark:text-amber-200 font-mono">
+                    {pouredOil.toFixed(1)}
+                  </span>
+                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase ml-1">
                     {oilUnit}
                   </span>
                 </div>
               </div>
-
-              {oilStock !== null && (
-                <div className="text-center my-0.5 select-none">
-                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 font-malayalam">
-                    മെയിൻ സ്റ്റോക്ക്: {oilStock} {oilUnit}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Interactive Horizontal Ruler Track for Poured Oil */}
-            <div className="relative w-full py-2 overflow-hidden flex flex-col items-center select-none bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border/50 dark:border-[#2E2828]">
-              {/* Center Orange Marker Needle */}
-              <div className="absolute top-0 bottom-4 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full bg-epso-orange">
-                <div className="w-2.5 h-2.5 rounded-full -ml-[4px] -top-1 absolute bg-epso-orange shadow-sm" />
-              </div>
-
-              {/* Scrollable Ruler Track */}
-              <div
-                ref={pouredRulerRef}
-                onScroll={handlePouredRulerScroll}
-                className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-16 relative select-none"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
-                <div className="flex items-end shrink-0">
-                  {Array.from({ length: totalPouredTicks + 1 }).map((_, idx) => {
-                    const val = Number((POURED_MIN + idx * POURED_STEP).toFixed(1));
-                    const isWhole = Math.abs(Math.round(val) - val) < 0.001;
-                    const isMajor = isWhole && (Math.round(val) % 5 === 0);
-
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => {
-                          setPouredOil(val);
-                          setPouredInputStr(String(val));
-                          scrollPouredRulerTo(val);
-                          if (remainingOil > val) {
-                            setRemainingOil(val);
-                            setRemainingInputStr(String(val));
+            ) : (
+              /* Editable State with Smooth Calibrated Ruler */
+              <div className="space-y-3">
+                <div className="flex flex-col items-center justify-center py-1 gap-1">
+                  <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-300 dark:border-amber-800/60 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 transition-all cursor-text">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={pouredInputStr}
+                        onFocus={() => {
+                          isManualTypingPoured.current = true;
+                        }}
+                        onChange={(e) => {
+                          isManualTypingPoured.current = true;
+                          const val = e.target.value.replace(/[^0-9.]/g, '');
+                          setPouredInputStr(val);
+                          const parsed = parseFloat(val);
+                          if (!isNaN(parsed) && parsed >= 0) {
+                            const clamped = Math.min(maxAllowedOil, parsed);
+                            const clean = Number(clamped.toFixed(1));
+                            setPouredOil(clean);
+                            if (remainingOil > clean) {
+                              setRemainingOil(clean);
+                              setRemainingInputStr(String(clean));
+                            }
                           }
                         }}
-                        className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-16 pb-1 select-none"
-                        style={{ width: `${TICK_WIDTH}px` }}
-                      >
-                        <span className="text-[9px] font-bold text-stone-500 dark:text-stone-400 font-mono mb-1 pointer-events-none select-none">
-                          {val === 0 ? '0' : val.toFixed(1)}
-                        </span>
-                        <div
-                          className={`rounded-full transition-colors ${
-                            isMajor
-                              ? 'h-6 bg-amber-600 dark:bg-amber-400 w-[2px]'
-                              : isWhole
-                              ? 'h-5 bg-stone-600/70 dark:bg-stone-300/70 w-[2px]'
-                              : 'h-3.5 bg-stone-400/40 dark:bg-stone-500/30 w-[1.5px]'
-                          }`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
-              </div>
+                        onBlur={() => {
+                          isManualTypingPoured.current = false;
+                          handlePouredInputCommit();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handlePouredInputCommit();
+                            if (pouredOil > 0) setIsPouredConfirmed(true);
+                          }
+                        }}
+                        className="text-3xl sm:text-4xl font-black text-amber-900 dark:text-amber-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
+                      />
+                      <span className="text-base font-extrabold text-amber-600 dark:text-amber-400 uppercase select-none">
+                        {oilUnit}
+                      </span>
+                    </div>
+                  </div>
 
-              <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
-              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
-            </div>
+                  {oilStock !== null && (
+                    <div className="text-center my-0.5 select-none">
+                      <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 font-malayalam">
+                        മെയിൻ സ്റ്റോക്ക്: {oilStock} {oilUnit}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Ultra-Smooth Calibrated Ruler Track (1kg steps, 0.5kg precision) */}
+                <div className="relative w-full py-2 overflow-hidden flex flex-col items-center select-none bg-stone-50 dark:bg-[#141212] rounded-2xl border border-charcoal-border/50 dark:border-[#2E2828]">
+                  {/* Center Orange Marker Needle */}
+                  <div className="absolute top-0 bottom-4 left-1/2 -translate-x-1/2 w-0.5 z-20 pointer-events-none rounded-full bg-epso-orange">
+                    <div className="w-2.5 h-2.5 rounded-full -ml-[4px] -top-1 absolute bg-epso-orange shadow-sm" />
+                  </div>
+
+                  {/* Smooth Scrollable Ruler Track */}
+                  <div
+                    ref={pouredRulerRef}
+                    onScroll={handlePouredRulerScroll}
+                    className="w-full overflow-x-scroll no-scrollbar touch-pan-x flex items-end h-16 relative select-none"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
+                    <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
+                    <div className="flex items-end shrink-0">
+                      {Array.from({ length: totalPouredTicks + 1 }).map((_, idx) => {
+                        const val = POURED_MIN + idx * POURED_STEP;
+                        const isMajor = val % 5 === 0;
+
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setPouredOil(val);
+                              setPouredInputStr(String(val));
+                              scrollPouredRulerTo(val);
+                              if (remainingOil > val) {
+                                setRemainingOil(val);
+                                setRemainingInputStr(String(val));
+                              }
+                            }}
+                            className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-16 pb-1 select-none"
+                            style={{ width: `${TICK_WIDTH}px` }}
+                          >
+                            <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-mono mb-1 pointer-events-none select-none">
+                              {val}
+                            </span>
+                            <div
+                              className={`rounded-full transition-colors ${
+                                isMajor
+                                  ? 'h-6 bg-amber-600 dark:bg-amber-400 w-[2.5px]'
+                                  : 'h-4 bg-stone-400/50 dark:bg-stone-500/40 w-[1.5px]'
+                              }`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="shrink-0" style={{ width: `calc(50% - ${TICK_WIDTH / 2}px)` }} />
+                  </div>
+
+                  <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
+                  <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
+                </div>
+
+                {/* Confirm Button to lock poured oil */}
+                {pouredOil > 0 && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePouredInputCommit();
+                        setIsPouredConfirmed(true);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs font-malayalam flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <TbCheck className="w-4 h-4" />
+                      <span>ശരി (Confirm)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* 2. REMAINING / BALANCE OIL: ചീനച്ചട്ടിയിൽ ബാക്കി വന്ന ഓയിൽ (NO SLIDER) */}
+          {/* 2. REMAINING / BALANCE OIL SECTION (NO SLIDER, NO -1/0.5/+1/0.5) */}
           <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -485,100 +538,128 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
                   {language === 'ml' ? 'ബാക്കി വന്ന ഓയിൽ (Remaining Oil)' : 'Balance Oil (Remaining)'}
                 </label>
               </div>
-              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50 whitespace-nowrap shrink-0">
-                Max: {pouredOil.toFixed(1)} {oilUnit}
-              </span>
+
+              {/* Locked vs Editable Indicator */}
+              {isRemainingConfirmed && remainingOil > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setIsRemainingConfirmed(false)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 text-xs font-bold font-malayalam transition-colors cursor-pointer"
+                  title="ബാക്കി വന്ന ഓയിൽ മാറ്റുക (Edit Remaining Oil)"
+                >
+                  <TbPencil className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" />
+                  <span>മാറ്റുക (Edit)</span>
+                </button>
+              ) : (
+                <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-900/50 whitespace-nowrap shrink-0">
+                  പരമാവധി: {pouredOil.toFixed(1)} {oilUnit}
+                </span>
+              )}
             </div>
 
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam">
-              {language === 'ml'
-                ? 'പാചകം കഴിഞ്ഞ ശേഷം ചീനച്ചട്ടിയിൽ ബാക്കിയുള്ള ഓയിൽ ഇവിടെ നൽകുക (ഇത് മെയിൻ സ്റ്റോക്കിൽ ബാക്കിയായി നിൽക്കും)'
-                : 'Enter remaining oil in pan after cooking (remains in original stock)'}
-            </p>
-
-            {/* Clean Numeric Entry with Quick Steppers - SLIDER COMPLETELY REMOVED */}
-            <div className="flex flex-col items-center justify-center py-2 gap-3">
-              <div className="flex items-center justify-center gap-3 w-full">
-                {/* Decrement Buttons */}
-                <button
-                  type="button"
-                  onClick={() => adjustRemainingOil(-1)}
-                  disabled={remainingOil <= 0}
-                  className="px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
-                >
-                  <TbMinus className="w-3.5 h-3.5" /> 1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustRemainingOil(-0.5)}
-                  disabled={remainingOil <= 0}
-                  className="px-2.5 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
-                >
-                  <TbMinus className="w-3.5 h-3.5" /> 0.5
-                </button>
-
-                {/* Direct Value Input */}
-                <div className="flex items-center justify-center gap-1.5 px-4 sm:px-6 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={remainingInputStr}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, '');
-                      setRemainingInputStr(val);
-                      const parsed = parseFloat(val);
-                      if (!isNaN(parsed) && parsed >= 0) {
-                        const clamped = Math.min(pouredOil, parsed);
-                        setRemainingOil(Number(clamped.toFixed(1)));
-                      }
-                    }}
-                    onBlur={handleRemainingInputCommit}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleRemainingInputCommit();
-                      }
-                    }}
-                    className="text-3xl sm:text-4xl font-black text-emerald-900 dark:text-emerald-200 tabular-nums text-center w-24 bg-transparent focus:outline-none"
-                  />
-                  <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 uppercase select-none">
+            {/* If Confirmed/Entered: Show as Unclickable Card with Pencil Edit Icon */}
+            {isRemainingConfirmed && remainingOil > 0 ? (
+              <div className="p-4 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 dark:border-emerald-900/40 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 font-malayalam flex items-center gap-1.5">
+                    <TbLock className="w-3.5 h-3.5 text-emerald-600" />
+                    ബാക്കി വന്നത് രേഖപ്പെടുത്തി
+                  </span>
+                  <span className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam block">
+                    മെയിൻ സ്റ്റോക്കിലേക്ക് തിരികെ കണക്കാക്കും
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-900 dark:text-emerald-200 font-mono">
+                    {remainingOil.toFixed(1)}
+                  </span>
+                  <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 uppercase ml-1">
                     {oilUnit}
                   </span>
                 </div>
-
-                {/* Increment Buttons */}
-                <button
-                  type="button"
-                  onClick={() => adjustRemainingOil(0.5)}
-                  disabled={remainingOil >= pouredOil}
-                  className="px-2.5 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
-                >
-                  <TbPlus className="w-3.5 h-3.5" /> 0.5
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustRemainingOil(1)}
-                  disabled={remainingOil >= pouredOil}
-                  className="px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#332c2c] disabled:opacity-40 text-xs font-bold font-mono transition-colors active:scale-95 flex items-center gap-0.5"
-                >
-                  <TbPlus className="w-3.5 h-3.5" /> 1
-                </button>
               </div>
+            ) : (
+              /* Editable State: Clean Numeric Entry (No slider, no stepper buttons) */
+              <div className="space-y-3">
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam">
+                  {language === 'ml'
+                    ? 'പണി കഴിഞ്ഞ ശേഷം ചീനച്ചട്ടിയിൽ ബാക്കിയുള്ള ഓയിലിന്റെ അളവ് നൽകുക:'
+                    : 'Enter remaining oil in pan after cooking:'}
+                </p>
 
-              {/* Real Summary Banner (Simple & Honest) */}
-              <div className="w-full mt-1 p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] flex items-center justify-between text-xs font-malayalam">
-                <span className="text-stone-500 dark:text-stone-400">
-                  ഇന്ന് യഥാർത്ഥത്തിൽ ചെലവായത്:
-                </span>
-                <span className="font-extrabold text-amber-700 dark:text-amber-400 font-mono text-sm">
-                  {netConsumedOil} {oilUnit}
-                </span>
+                <div className="flex flex-col items-center justify-center py-1">
+                  <div className="flex items-center justify-center gap-1.5 px-6 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border-2 border-emerald-300 dark:border-emerald-800/60 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all cursor-text">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={remainingInputStr}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9.]/g, '');
+                        setRemainingInputStr(val);
+                        const parsed = parseFloat(val);
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          const clamped = Math.min(pouredOil, parsed);
+                          setRemainingOil(Number(clamped.toFixed(1)));
+                        }
+                      }}
+                      onBlur={handleRemainingInputCommit}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleRemainingInputCommit();
+                          if (remainingOil > 0) setIsRemainingConfirmed(true);
+                        }
+                      }}
+                      className="text-3xl sm:text-4xl font-black text-emerald-900 dark:text-emerald-200 tabular-nums text-center w-28 bg-transparent focus:outline-none"
+                    />
+                    <span className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 uppercase select-none">
+                      {oilUnit}
+                    </span>
+                  </div>
+                </div>
+
+                {remainingOil > 0 && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleRemainingInputCommit();
+                        setIsRemainingConfirmed(true);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs font-malayalam flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <TbCheck className="w-4 h-4" />
+                      <span>ശരി (Confirm)</span>
+                    </button>
+                  </div>
+                )}
               </div>
+            )}
+          </div>
+
+          {/* EXACT CALCULATION SUMMARY BANNER AS SPECIFIED BY USER */}
+          <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-2 text-xs font-malayalam">
+            <div className="flex items-center justify-between">
+              <span className="text-stone-600 dark:text-stone-400 font-bold">
+                ആകെ ചെലവായ ഓയിൽ (Net Consumed):
+              </span>
+              <span className="font-mono font-black text-amber-700 dark:text-amber-400 text-sm">
+                {pouredOil.toFixed(1)} - {remainingOil.toFixed(1)} = {netConsumedOil} {oilUnit}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between pt-1.5 border-t border-stone-200/60 dark:border-[#282323]">
+              <span className="text-stone-600 dark:text-stone-400 font-bold">
+                മെയിൻ സ്റ്റോക്കിൽ ബാക്കി വരുന്നത്:
+              </span>
+              <span className="font-mono font-black text-emerald-700 dark:text-emerald-400 text-sm">
+                {morningStock.toFixed(1)} - {netConsumedOil} = {finalMainStock} {oilUnit}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Footer Actions: Fixed on bottom */}
+        {/* Footer Actions */}
         <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 p-4 bg-white/95 dark:bg-[#1E1B1B]/95 backdrop-blur-md border-t border-charcoal-border/60 dark:border-[#2E2828] flex items-center justify-end gap-3 z-30 shadow-lg mt-auto">
           <Button
             type="button"
@@ -600,7 +681,7 @@ export const DailyOilModal: React.FC<DailyOilModalProps> = ({
           >
             {remainingOil > 0
               ? (language === 'ml' ? 'കണക്ക് പൂർത്തിയാക്കുക' : 'Complete Daily Oil')
-              : (language === 'ml' ? 'ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Poured Oil')}
+              : (language === 'ml' ? 'ഒഴിച്ച ഓയിൽ രേഖപ്പെടുത്തുക' : 'Save Poured Oil')}
           </Button>
         </div>
       </form>
