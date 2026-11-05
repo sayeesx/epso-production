@@ -198,8 +198,16 @@ export function calculateContinuousOilExpense(
 }
 
 /**
- * Distributes shared daily expenses (Oil & Wages) across products produced that day by production weight.
- * Formula: Product allocation = (Product production kg / Total production kg) * Total daily expense.
+ * Distributes shared daily expenses across products produced that day:
+ * - Oil & Basic Ingredients: Allocated proportional to production weight.
+ * - Daily Wages: Allocated EQUALLY across all production batches created on that day
+ *   (each batch receives an equal share: Total Daily Wage / Total Batches).
+ *
+ * Example:
+ * Total daily labour wage: ₹6,000.
+ * Total batches produced that day: 3.
+ * Labour allocation per batch: ₹2,000.
+ *
  * Exact reconciliation: The final product absorbs any fractional paisa rounding discrepancy
  * so that sum(allocated) strictly equals the original expense amount.
  */
@@ -227,15 +235,10 @@ export function allocateDailySharedExpenses(
   productionCostPerKg: number;
 }> {
   const totalKg = productsSummary.reduce((sum, p) => sum + p.totalProductionKg, 0);
-  if (totalKg <= 0 || productsSummary.length === 0) {
-    return productsSummary.map((p) => ({
-      ...p,
-      allocatedOilCost: 0,
-      allocatedProductionWages: 0,
-      allocatedBasicIngredientsCost: 0,
-      totalProductionCost: p.ingredientCost,
-      productionCostPerKg: 0,
-    }));
+  const totalBatches = productsSummary.reduce((sum, p) => sum + (p.batchCount > 0 ? p.batchCount : 1), 0);
+
+  if (productsSummary.length === 0) {
+    return [];
   }
 
   let runningOil = 0;
@@ -249,15 +252,22 @@ export function allocateDailySharedExpenses(
     let wagesAlloc: number;
     let basicAlloc: number;
 
+    const batches = p.batchCount > 0 ? p.batchCount : 1;
+
     if (isLast) {
       oilAlloc = roundCurrency(dailyOilExpense - runningOil);
       wagesAlloc = roundCurrency(dailyProductionWages - runningWages);
       basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
     } else {
-      const ratio = p.totalProductionKg / totalKg;
-      oilAlloc = roundCurrency(ratio * dailyOilExpense);
-      wagesAlloc = roundCurrency(ratio * dailyProductionWages);
-      basicAlloc = roundCurrency(ratio * dailyBasicIngredientsExpense);
+      // Weight-based ratio for physical shared ingredients (Oil, Basic Ingredients)
+      const weightRatio = totalKg > 0 ? p.totalProductionKg / totalKg : 1 / count;
+      oilAlloc = roundCurrency(weightRatio * dailyOilExpense);
+      basicAlloc = roundCurrency(weightRatio * dailyBasicIngredientsExpense);
+
+      // Equal batch allocation rule for Labour Wages: Each batch gets an equal share
+      const batchRatio = totalBatches > 0 ? batches / totalBatches : 1 / count;
+      wagesAlloc = roundCurrency(batchRatio * dailyProductionWages);
+
       runningOil += oilAlloc;
       runningWages += wagesAlloc;
       runningBasic += basicAlloc;
@@ -283,8 +293,8 @@ export function allocateDailySharedExpenses(
 
 /**
  * Calculates Final Product Costing Breakdown.
- * Total product cost = Ingredient cost + Allocated oil cost + Allocated wages + Packaging cover cost + Packing labour.
- * Clearly separates bulk production cost from packing cost and maintains unpacked bulk stock valuation.
+ * Labour is allocated as daily wage expense across batches; per-packet labour calculation is removed.
+ * Total product cost = Bulk production cost + Packaging material (cover) cost.
  */
 export function calculateFinalProductCosting(
   productionAllocation: {
@@ -312,8 +322,9 @@ export function calculateFinalProductCosting(
   const totalPacketsPacked = packingRecords.reduce((sum, r) => sum + r.packetsPacked, 0);
   const totalWeightPackedKg = roundStock(packingRecords.reduce((sum, r) => sum + r.weightPackedKg, 0));
   const totalPackagingCost = roundCurrency(packingRecords.reduce((sum, r) => sum + r.packagingCost, 0));
-  const totalPackingLabourCost = roundCurrency(packingRecords.reduce((sum, r) => sum + r.packingLabourCost, 0));
-  const totalPackingCost = roundCurrency(totalPackagingCost + totalPackingLabourCost);
+  // Removed per-packet labour charge; labour is allocated via daily wages
+  const totalPackingLabourCost = 0;
+  const totalPackingCost = totalPackagingCost;
 
   const totalCost = roundCurrency(productionAllocation.totalProductionCost + totalPackingCost);
   const unpackedKg = Math.max(0, roundStock(productionAllocation.totalProductionKg - totalWeightPackedKg));
@@ -327,8 +338,8 @@ export function calculateFinalProductCosting(
     }
     sizeMap[r.packetSize].packets += r.packetsPacked;
     sizeMap[r.packetSize].coverCost += r.packagingCost;
-    sizeMap[r.packetSize].labourCost += r.packingLabourCost;
-    sizeMap[r.packetSize].totalCost += r.totalPackingCost;
+    sizeMap[r.packetSize].labourCost += 0;
+    sizeMap[r.packetSize].totalCost += r.packagingCost;
     sizeMap[r.packetSize].weightKg += r.weightPackedKg;
   }
 
@@ -356,7 +367,7 @@ export function calculateFinalProductCosting(
       size,
       packets: item.packets,
       coverCost: roundCurrency(item.coverCost),
-      labourCost: roundCurrency(item.labourCost),
+      labourCost: 0,
       totalCost: roundCurrency(item.totalCost),
       costPerPacket,
     };

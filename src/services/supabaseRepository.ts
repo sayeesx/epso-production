@@ -589,9 +589,24 @@ export class SupabaseRepository implements IEpsoRepository {
       await client.from('recipe_packets').delete().eq('recipe_id', recipeId);
     }
 
-    // Insert recipe items
+    // Insert recipe items (deduplicated by ingredientId to prevent duplicate consumption)
     if (data.ingredients.length > 0) {
-      const items = data.ingredients.map((item) => ({
+      const dedupedMap = new Map<string, { ingredientId: string; quantity: number; unit: string }>();
+      for (const item of data.ingredients) {
+        if (!item.ingredientId) continue;
+        const existing = dedupedMap.get(item.ingredientId);
+        if (existing) {
+          existing.quantity += Number(item.quantity) || 0;
+        } else {
+          dedupedMap.set(item.ingredientId, {
+            ingredientId: item.ingredientId,
+            quantity: Number(item.quantity) || 0,
+            unit: item.unit || 'kg',
+          });
+        }
+      }
+
+      const items = Array.from(dedupedMap.values()).map((item) => ({
         recipe_id: recipeId,
         ingredient_id: item.ingredientId,
         quantity: item.quantity,
@@ -1388,8 +1403,74 @@ export class SupabaseRepository implements IEpsoRepository {
       oilUnitCost
     );
 
-    const productionWages = params.productionWages || 0;
-    const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages);
+    // Wage auto-fill: Check today's wage or auto-populate from previous day's wage
+    let productionWages = params.productionWages || 0;
+    try {
+      const { data: todayWage } = await client
+        .from('daily_wages')
+        .select('*')
+        .eq('production_date', productionDate)
+        .maybeSingle();
+
+      const todayBudget = Number(todayWage?.total_wage_budget) || Number(todayWage?.daily_wage_budget) || 0;
+      if (todayWage && todayBudget > 0) {
+        if (!productionWages) {
+          productionWages = todayBudget;
+        }
+      } else if (!todayWage) {
+        const { data: prevWage } = await client
+          .from('daily_wages')
+          .select('*')
+          .lt('production_date', productionDate)
+          .order('production_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const prevBudget = Number(prevWage?.total_wage_budget) || Number(prevWage?.daily_wage_budget) || 0;
+        if (prevWage && prevBudget > 0) {
+          if (!productionWages) {
+            productionWages = prevBudget;
+          }
+          await client.from('daily_wages').upsert({
+            production_date: productionDate,
+            total_wage_budget: productionWages,
+            production_wage_amount: Number(prevWage.production_wage_amount) || productionWages,
+            packing_wage_amount: Number(prevWage.packing_wage_amount) || 0,
+            num_cooks: prevWage.num_cooks || 2,
+            num_packers: prevWage.num_packers || 2,
+            wage_per_cook: prevWage.wage_per_cook || (productionWages / 2),
+            wage_per_packer: prevWage.wage_per_packer || 0,
+            notes: 'Auto-populated from previous recorded wage',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'production_date', ignoreDuplicates: true });
+        }
+      }
+    } catch (e) {
+      console.warn('Could not auto-fill daily wage:', e);
+    }
+
+    // Query basic ingredients adjustments recorded on this date (Salt, Cashew shell, Chippli, Curry leaves)
+    let dailyBasicIngredientsExpense = 0;
+    try {
+      const { data: basicMovements } = await client
+        .from('stock_movements')
+        .select('quantity, cost_per_unit, item_name, reason')
+        .eq('item_type', 'ingredient')
+        .ilike('reason', `%${productionDate}%`);
+
+      if (basicMovements && basicMovements.length > 0) {
+        for (const m of basicMovements) {
+          const cost = Number(m.cost_per_unit) || 0;
+          const qty = Math.abs(Number(m.quantity) || 0);
+          dailyBasicIngredientsExpense += qty * cost;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not query basic ingredients expense for allocation', e);
+    }
+
+    const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages + dailyBasicIngredientsExpense);
 
     // 6. Fetch completed production runs on that date
     const { data: runs, error: runsErr } = await client
@@ -1408,6 +1489,7 @@ export class SupabaseRepository implements IEpsoRepository {
       leftoverOilKg: leftoverOil,
       previousAvailableStock,
       finalOilStock,
+      basicIngredientsExpense: dailyBasicIngredientsExpense,
       userNotes: notes || '',
     };
 
@@ -1459,26 +1541,6 @@ export class SupabaseRepository implements IEpsoRepository {
       productMap[pId].ingredientCost += ingCost;
     }
 
-    // Query basic ingredients adjustments recorded on this date (Salt, Cashew shell, Chippli, Curry leaves)
-    let dailyBasicIngredientsExpense = 0;
-    try {
-      const { data: basicMovements } = await client
-        .from('stock_movements')
-        .select('quantity, cost_per_unit, item_name, reason')
-        .eq('item_type', 'ingredient')
-        .ilike('reason', `%${productionDate}%`);
-
-      if (basicMovements && basicMovements.length > 0) {
-        for (const m of basicMovements) {
-          const cost = Number(m.cost_per_unit) || 0;
-          const qty = Math.abs(Number(m.quantity) || 0);
-          dailyBasicIngredientsExpense += qty * cost;
-        }
-      }
-    } catch (e) {
-      console.warn('Could not query basic ingredients expense for allocation', e);
-    }
-
     const allocations = allocateDailySharedExpenses(
       Object.values(productMap),
       oilTotalExpense,
@@ -1499,13 +1561,21 @@ export class SupabaseRepository implements IEpsoRepository {
         ingredient_cost: a.ingredientCost,
         allocated_oil_cost: a.allocatedOilCost,
         allocated_production_wages: a.allocatedProductionWages,
+        allocated_basic_ingredients_cost: a.allocatedBasicIngredientsCost || 0,
         total_production_cost: a.totalProductionCost,
         production_cost_per_kg: a.productionCostPerKg,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }));
 
-      await client.from('daily_cost_allocations').insert(allocationsPayload);
+      let { error: allocErr } = await client.from('daily_cost_allocations').insert(allocationsPayload);
+      if (allocErr && allocErr.message?.includes('allocated_basic_ingredients_cost')) {
+        const fallbackPayload = allocationsPayload.map(({ allocated_basic_ingredients_cost, ...rest }: any) => rest);
+        const retry = await client.from('daily_cost_allocations').insert(fallbackPayload);
+        if (retry.error) console.error('Failed to insert allocations fallback', retry.error);
+      } else if (allocErr) {
+        console.error('Failed to insert allocations', allocErr);
+      }
     }
 
     // 7. Update common oil inventory in ingredients table to final calculated stock
@@ -1812,7 +1882,9 @@ export class SupabaseRepository implements IEpsoRepository {
     const prodName = prod?.name || 'Product';
 
     let unitCost = 0;
-    let labourRate = 1.0;
+    // Labour charges per packet are removed per financial audit rules.
+    // Labour is allocated equally across production batches in daily closing.
+    let labourRate = 0;
     let sizeGrams = 100;
     let currStock = 0;
 
@@ -1825,7 +1897,6 @@ export class SupabaseRepository implements IEpsoRepository {
 
       if (packItem) {
         unitCost = Number(packItem.unit_cost) || 0;
-        labourRate = Number(packItem.packing_labour_rate) || 1.0;
         sizeGrams = Number(packItem.size_grams) || 100;
         currStock = Number(packItem.current_stock) || 0;
 
@@ -1851,6 +1922,13 @@ export class SupabaseRepository implements IEpsoRepository {
           created_at: new Date().toISOString(),
         });
       }
+    } else if (packetSize) {
+      const match = packetSize.match(/(\d+(?:\.\d+)?)\s*(kg|g|gm)?/i);
+      if (match) {
+        const val = parseFloat(match[1]);
+        const unit = (match[2] || 'g').toLowerCase();
+        sizeGrams = unit === 'kg' ? val * 1000 : val;
+      }
     }
 
     if (unitCost <= 0) {
@@ -1870,9 +1948,40 @@ export class SupabaseRepository implements IEpsoRepository {
     }
 
     const packagingCost = roundCurrency(packetsPacked * unitCost);
-    const packingLabourCost = roundCurrency(packetsPacked * labourRate);
-    const totalPackingCost = roundCurrency(packagingCost + packingLabourCost);
+    const packingLabourCost = 0;
+    const totalPackingCost = packagingCost;
     const weightPackedKg = roundStock((packetsPacked * sizeGrams) / 1000.0);
+
+    // Deduct packed weight from bulk finished-product inventory
+    const { data: currentProd } = await client
+      .from('products')
+      .select('current_stock, name')
+      .eq('id', productId)
+      .single();
+
+    if (currentProd) {
+      const prevStock = Number(currentProd.current_stock) || 0;
+      const newStock = roundStock(Math.max(0, prevStock - weightPackedKg));
+      await client
+        .from('products')
+        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+        .eq('id', productId);
+
+      await client.from('stock_movements').insert({
+        item_id: productId,
+        item_type: 'product',
+        item_name: currentProd.name || prodName,
+        movement_type: 'packing_deduction',
+        quantity: -weightPackedKg,
+        unit: 'kg',
+        previous_balance: prevStock,
+        new_balance: newStock,
+        reference: productionRunId || `Packing ${packingDate}`,
+        operator_name: operatorName,
+        reason: `Deducted bulk product for packing ${packetsPacked} x ${packetSize} (${weightPackedKg} kg)`,
+        created_at: new Date().toISOString(),
+      });
+    }
 
     const { data: created, error } = await client
       .from('packing_records')
@@ -1901,6 +2010,7 @@ export class SupabaseRepository implements IEpsoRepository {
 
     dbCache.invalidate('packing_records');
     dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
 
     return {
       id: created.id,
@@ -1964,6 +2074,52 @@ export class SupabaseRepository implements IEpsoRepository {
 
   async deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void> {
     const client = this.checkClient();
+
+    // 1. Fetch records before deleting to reverse stock deductions
+    try {
+      const { data: existingRecords } = await client
+        .from('packing_records')
+        .select('*')
+        .eq('production_run_id', runId);
+
+      if (existingRecords && existingRecords.length > 0) {
+        for (const rec of existingRecords) {
+          const weightKg = Number(rec.weight_packed_kg) || 0;
+          if (weightKg > 0 && rec.product_id) {
+            const { data: prod } = await client.from('products').select('current_stock, name').eq('id', rec.product_id).single();
+            if (prod) {
+              const prevStock = Number(prod.current_stock) || 0;
+              const newStock = roundStock(prevStock + weightKg);
+              await client.from('products').update({ current_stock: newStock, updated_at: new Date().toISOString() }).eq('id', rec.product_id);
+              await client.from('stock_movements').insert({
+                item_id: rec.product_id,
+                item_type: 'product',
+                item_name: prod.name || 'Product',
+                movement_type: 'packing_reversal',
+                quantity: weightKg,
+                unit: 'kg',
+                previous_balance: prevStock,
+                new_balance: newStock,
+                reference: runId,
+                reason: `Reversal of packing record on run update (${weightKg} kg restored)`,
+                created_at: new Date().toISOString(),
+              });
+            }
+          }
+          if (rec.packaging_item_id && Number(rec.covers_consumed) > 0) {
+            const { data: pkgItem } = await client.from('packaging_items').select('current_stock').eq('id', rec.packaging_item_id).single();
+            if (pkgItem) {
+              const prevPkgStock = Number(pkgItem.current_stock) || 0;
+              const newPkgStock = prevPkgStock + Number(rec.covers_consumed);
+              await client.from('packaging_items').update({ current_stock: newPkgStock, updated_at: new Date().toISOString() }).eq('id', rec.packaging_item_id);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error reversing packing stock movements:', e);
+    }
+
     const { error } = await client
       .from('packing_records')
       .delete()
@@ -1984,6 +2140,7 @@ export class SupabaseRepository implements IEpsoRepository {
 
     dbCache.invalidate('packing_records');
     dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
   }
 }
 
