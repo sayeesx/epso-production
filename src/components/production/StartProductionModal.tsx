@@ -21,13 +21,27 @@ import {
   TbPencil,
 } from 'react-icons/tb';
 
+export const isBlackSalt = (name: string): boolean => {
+  const n = (name || '').trim().toLowerCase();
+  return (
+    n.includes('black salt') ||
+    n.includes('black') ||
+    n.includes('കറുത്ത ഉപ്പ്') ||
+    n.includes('കറുത്ത') ||
+    n.includes('ബ്ലാക്ക്') ||
+    n.includes('കാലാ നമക്') ||
+    n.includes('kala namak')
+  );
+};
+
 export const isDailySharedBasic = (name: string) => {
+  if (isBlackSalt(name)) return false;
   const n = (name || '').trim().toLowerCase();
   return (
     n.includes('ഓയിൽ') ||
     n.includes('oil') ||
     n.includes('ഉപ്പ്') ||
-    (n.includes('salt') && !n.includes('black salt')) ||
+    n.includes('salt') ||
     n.includes('അണ്ടി തോട്') ||
     n.includes('തോട്') ||
     n.includes('കറിവേപ്പില') ||

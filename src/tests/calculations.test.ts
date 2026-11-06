@@ -303,17 +303,17 @@ describe('Epso Precision Calculation Engine Tests', () => {
       // Packet Cost Breakdown:
       // For 200g packet:
       // Bulk cost inside packet = 0.2kg * 100 = 20 INR
-      // Packing cost inside packet = 300 / 100 = 3 INR
-      // Total cost per 200g packet = 23 INR
+      // Cover material cost inside packet = 200 / 100 = 2 INR (packing labour is allocated via daily shared wages)
+      // Total cost per 200g packet = 22 INR
       const p200 = finalCosting.packetsBySize.find((p) => p.size === '200g')!;
-      expect(p200.costPerPacket).toBe(23);
+      expect(p200.costPerPacket).toBe(22);
 
       // For 500g packet:
       // Bulk cost inside packet = 0.5kg * 100 = 50 INR
-      // Packing cost inside packet = 100 / 20 = 5 INR
-      // Total cost per 500g packet = 55 INR
+      // Cover material cost inside packet = 70 / 20 = 3.5 INR
+      // Total cost per 500g packet = 53.5 INR
       const p500 = finalCosting.packetsBySize.find((p) => p.size === '500g')!;
-      expect(p500.costPerPacket).toBe(55);
+      expect(p500.costPerPacket).toBe(53.5);
     });
   });
 

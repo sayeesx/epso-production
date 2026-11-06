@@ -810,6 +810,7 @@ export class SupabaseRepository implements IEpsoRepository {
     productionDate?: string;
     operatorName?: string;
     notes?: string;
+    status?: 'completed' | 'cancelled';
     ingredientsConsumed?: Array<{
       ingredientId: string;
       expectedQuantity: number;
@@ -924,6 +925,11 @@ export class SupabaseRepository implements IEpsoRepository {
       actual_quantity: params.actualQuantity,
       updated_at: now,
     };
+    if (params.status) {
+      updatePayload.status = params.status;
+    } else if (params.actualQuantity > 0) {
+      updatePayload.status = 'completed';
+    }
     if (params.plannedQuantity !== undefined) updatePayload.planned_quantity = params.plannedQuantity;
     if (params.productionDate) updatePayload.production_date = params.productionDate;
     if (params.operatorName) updatePayload.operator_name = params.operatorName;
@@ -2032,6 +2038,216 @@ export class SupabaseRepository implements IEpsoRepository {
       notes: created.notes,
       createdAt: created.created_at,
     };
+  }
+
+  async updatePackingRecord(params: {
+    id: string;
+    packetsPacked: number;
+    operatorName?: string;
+    coverUnitCost?: number;
+    notes?: string;
+  }): Promise<PackingRecord> {
+    const client = this.checkClient();
+
+    // 1. Fetch current record
+    const { data: oldRec, error: fetchErr } = await client
+      .from('packing_records')
+      .select('*, products(name)')
+      .eq('id', params.id)
+      .single();
+
+    if (fetchErr || !oldRec) {
+      throw new Error(`Packing record with id ${params.id} not found: ${fetchErr?.message || ''}`);
+    }
+
+    const oldPackets = Number(oldRec.packets_packed) || 0;
+    const deltaPackets = params.packetsPacked - oldPackets;
+    const operator = params.operatorName || oldRec.operator_name || 'Kitchen Staff';
+
+    // Calculate packet size in grams
+    let sizeGrams = 100;
+    if (oldRec.packaging_item_id) {
+      const { data: packItem } = await client
+        .from('packaging_items')
+        .select('*')
+        .eq('id', oldRec.packaging_item_id)
+        .maybeSingle();
+
+      if (packItem) {
+        sizeGrams = Number(packItem.size_grams) || 100;
+        if (deltaPackets !== 0) {
+          const currPkgStock = Number(packItem.current_stock) || 0;
+          const newPkgStock = Math.max(0, currPkgStock - deltaPackets);
+          await client
+            .from('packaging_items')
+            .update({ current_stock: newPkgStock, updated_at: new Date().toISOString() })
+            .eq('id', oldRec.packaging_item_id);
+        }
+      }
+    } else if (oldRec.packet_size) {
+      const match = oldRec.packet_size.match(/(\d+(?:\.\d+)?)\s*(kg|g|gm)?/i);
+      if (match) {
+        const val = parseFloat(match[1]);
+        const unit = (match[2] || 'g').toLowerCase();
+        sizeGrams = unit === 'kg' ? val * 1000 : val;
+      }
+    }
+
+    const newWeightPackedKg = roundStock((params.packetsPacked * sizeGrams) / 1000.0);
+    const oldWeightPackedKg = Number(oldRec.weight_packed_kg) || 0;
+    const deltaWeightKg = roundStock(newWeightPackedKg - oldWeightPackedKg);
+
+    // Apply product stock delta: deltaWeightKg > 0 means more product packed (subtract from bulk)
+    if (deltaWeightKg !== 0 && oldRec.product_id) {
+      const { data: prod } = await client
+        .from('products')
+        .select('current_stock, name')
+        .eq('id', oldRec.product_id)
+        .maybeSingle();
+
+      if (prod) {
+        const prevBal = Number(prod.current_stock) || 0;
+        const newBal = roundStock(Math.max(0, prevBal - deltaWeightKg));
+        await client
+          .from('products')
+          .update({ current_stock: newBal, updated_at: new Date().toISOString() })
+          .eq('id', oldRec.product_id);
+
+        await client.from('stock_movements').insert({
+          item_id: oldRec.product_id,
+          item_type: 'product',
+          item_name: prod.name || 'Product',
+          movement_type: deltaWeightKg > 0 ? 'packing_deduction' : 'packing_reversal',
+          quantity: -deltaWeightKg,
+          unit: 'kg',
+          previous_balance: prevBal,
+          new_balance: newBal,
+          reference: oldRec.production_run_id || `Packing ${oldRec.packing_date}`,
+          operator_name: operator,
+          reason: `Adjusted packing for ${oldRec.packet_size} from ${oldPackets} to ${params.packetsPacked} packets (${deltaWeightKg > 0 ? '-' : '+'}${Math.abs(deltaWeightKg)} kg)`,
+          created_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    const unitCost = params.coverUnitCost !== undefined ? params.coverUnitCost : Number(oldRec.cover_unit_cost) || 0;
+    const packagingCost = roundCurrency(params.packetsPacked * unitCost);
+
+    const updatePayload: Record<string, any> = {
+      packets_packed: params.packetsPacked,
+      covers_consumed: params.packetsPacked,
+      packaging_cost: packagingCost,
+      total_packing_cost: packagingCost,
+      weight_packed_kg: newWeightPackedKg,
+      operator_name: operator,
+      updated_at: new Date().toISOString(),
+    };
+    if (params.coverUnitCost !== undefined) updatePayload.cover_unit_cost = params.coverUnitCost;
+    if (params.notes !== undefined) updatePayload.notes = params.notes;
+
+    const { data: updated, error: updErr } = await client
+      .from('packing_records')
+      .update(updatePayload)
+      .eq('id', params.id)
+      .select('*, products(name)')
+      .single();
+
+    if (updErr) throw new Error(updErr.message);
+
+    dbCache.invalidate('packing_records');
+    dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
+
+    return {
+      id: updated.id,
+      packingDate: updated.packing_date,
+      productId: updated.product_id,
+      productName: updated.products?.name || oldRec.products?.name || 'Product',
+      productionRunId: updated.production_run_id,
+      packagingItemId: updated.packaging_item_id,
+      packetSize: updated.packet_size,
+      packetsPacked: Number(updated.packets_packed),
+      coversConsumed: Number(updated.covers_consumed),
+      coverUnitCost: Number(updated.cover_unit_cost),
+      packagingCost: Number(updated.packaging_cost),
+      packingLabourRate: Number(updated.packing_labour_rate || 0),
+      packingLabourCost: Number(updated.packing_labour_cost || 0),
+      totalPackingCost: Number(updated.total_packing_cost),
+      weightPackedKg: Number(updated.weight_packed_kg),
+      operatorName: updated.operator_name,
+      notes: updated.notes,
+      createdAt: updated.created_at,
+    };
+  }
+
+  async deletePackingRecord(id: string): Promise<void> {
+    const client = this.checkClient();
+
+    // Fetch existing record to reverse stock
+    const { data: rec } = await client
+      .from('packing_records')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (rec) {
+      const weightKg = Number(rec.weight_packed_kg) || 0;
+      if (weightKg > 0 && rec.product_id) {
+        const { data: prod } = await client
+          .from('products')
+          .select('current_stock, name')
+          .eq('id', rec.product_id)
+          .maybeSingle();
+
+        if (prod) {
+          const prevBal = Number(prod.current_stock) || 0;
+          const newBal = roundStock(prevBal + weightKg);
+          await client
+            .from('products')
+            .update({ current_stock: newBal, updated_at: new Date().toISOString() })
+            .eq('id', rec.product_id);
+
+          await client.from('stock_movements').insert({
+            item_id: rec.product_id,
+            item_type: 'product',
+            item_name: prod.name || 'Product',
+            movement_type: 'packing_reversal',
+            quantity: weightKg,
+            unit: 'kg',
+            previous_balance: prevBal,
+            new_balance: newBal,
+            reference: rec.production_run_id || `Packing ${rec.packing_date}`,
+            operator_name: rec.operator_name || 'Kitchen Staff',
+            reason: `Reversal of deleted packing record (${rec.packets_packed} x ${rec.packet_size}, ${weightKg} kg restored)`,
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      if (rec.packaging_item_id && Number(rec.covers_consumed) > 0) {
+        const { data: pkgItem } = await client
+          .from('packaging_items')
+          .select('current_stock')
+          .eq('id', rec.packaging_item_id)
+          .maybeSingle();
+
+        if (pkgItem) {
+          const prevPkgStock = Number(pkgItem.current_stock) || 0;
+          const newPkgStock = prevPkgStock + Number(rec.covers_consumed);
+          await client
+            .from('packaging_items')
+            .update({ current_stock: newPkgStock, updated_at: new Date().toISOString() })
+            .eq('id', rec.packaging_item_id);
+        }
+      }
+    }
+
+    const { error } = await client.from('packing_records').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+
+    dbCache.invalidate('packing_records');
+    dbCache.invalidate('production_runs');
+    dbCache.invalidate('product');
   }
 
   async listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {

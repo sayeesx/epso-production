@@ -80,6 +80,7 @@ export interface IEpsoRepository {
     productionDate?: string;
     operatorName?: string;
     notes?: string;
+    status?: 'completed' | 'cancelled';
     ingredientsConsumed?: Array<{
       ingredientId: string;
       expectedQuantity: number;
@@ -164,6 +165,14 @@ export interface IEpsoRepository {
     coverUnitCost?: number;
     notes?: string;
   }): Promise<PackingRecord>;
+  updatePackingRecord(params: {
+    id: string;
+    packetsPacked: number;
+    operatorName?: string;
+    coverUnitCost?: number;
+    notes?: string;
+  }): Promise<PackingRecord>;
+  deletePackingRecord(id: string): Promise<void>;
   listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]>;
   deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void>;
 

@@ -26,6 +26,7 @@ const STORAGE_KEYS = {
   AUDIT_LOGS: 'epso_storage_audit_logs_v2',
   SECURITY: 'epso_storage_admin_security_v2',
   SESSIONS: 'epso_storage_admin_sessions_v2',
+  PACKING_RECORDS: 'epso_storage_packing_records_v2',
 };
 
 export class DemoRepository implements IEpsoRepository {
@@ -565,6 +566,7 @@ export class DemoRepository implements IEpsoRepository {
     productionDate?: string;
     operatorName?: string;
     notes?: string;
+    status?: 'completed' | 'cancelled';
     ingredientsConsumed?: Array<{
       ingredientId: string;
       expectedQuantity: number;
@@ -667,6 +669,7 @@ export class DemoRepository implements IEpsoRepository {
       operatorName: operator,
       notes: params.notes !== undefined ? params.notes : oldRun.notes,
       ingredientsConsumed: updatedConsumed,
+      status: params.status || (params.actualQuantity > 0 ? 'completed' : oldRun.status),
       updatedAt: now,
     };
 
@@ -1224,34 +1227,133 @@ export class DemoRepository implements IEpsoRepository {
     packetSize: string;
     packetsPacked: number;
     operatorName: string;
+    coverUnitCost?: number;
     notes?: string;
   }): Promise<PackingRecord> {
-    return {
-      id: `packing-${Date.now()}`,
+    const list = this.getItem<PackingRecord[]>(STORAGE_KEYS.PACKING_RECORDS, []);
+    const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    const prod = products.find((p) => p.id === params.productId);
+    const weightPackedKg = (params.packetsPacked * 100) / 1000;
+
+    if (prod) {
+      prod.currentStock = Math.max(0, Number((prod.currentStock - weightPackedKg).toFixed(3)));
+      this.setItem(STORAGE_KEYS.PRODUCTS, products);
+    }
+
+    const rec: PackingRecord = {
+      id: `packing-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       packingDate: params.packingDate,
       productId: params.productId,
+      productName: prod?.name || 'Product',
       productionRunId: params.productionRunId,
       packagingItemId: params.packagingItemId,
       packetSize: params.packetSize,
       packetsPacked: params.packetsPacked,
       coversConsumed: params.packetsPacked,
-      coverUnitCost: 0,
-      packagingCost: 0,
-      packingLabourRate: 1.0,
-      packingLabourCost: params.packetsPacked,
-      totalPackingCost: params.packetsPacked,
-      weightPackedKg: (params.packetsPacked * 100) / 1000,
+      coverUnitCost: params.coverUnitCost || 0,
+      packagingCost: params.packetsPacked * (params.coverUnitCost || 0),
+      packingLabourRate: 0,
+      packingLabourCost: 0,
+      totalPackingCost: params.packetsPacked * (params.coverUnitCost || 0),
+      weightPackedKg,
       operatorName: params.operatorName,
       notes: params.notes,
       createdAt: new Date().toISOString(),
     };
+
+    list.unshift(rec);
+    this.setItem(STORAGE_KEYS.PACKING_RECORDS, list);
+    return rec;
   }
 
-  async listPackingRecords(_options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
-    return [];
+  async updatePackingRecord(params: {
+    id: string;
+    packetsPacked: number;
+    operatorName?: string;
+    coverUnitCost?: number;
+    notes?: string;
+  }): Promise<PackingRecord> {
+    const list = this.getItem<PackingRecord[]>(STORAGE_KEYS.PACKING_RECORDS, []);
+    const idx = list.findIndex((p) => p.id === params.id);
+    if (idx === -1) throw new Error(`Packing record with id ${params.id} not found`);
+
+    const old = list[idx];
+    const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    const prod = products.find((p) => p.id === old.productId);
+    const newWeight = (params.packetsPacked * 100) / 1000;
+    const deltaWeight = newWeight - (old.weightPackedKg || 0);
+
+    if (prod && deltaWeight !== 0) {
+      prod.currentStock = Math.max(0, Number((prod.currentStock - deltaWeight).toFixed(3)));
+      this.setItem(STORAGE_KEYS.PRODUCTS, products);
+    }
+
+    const unitCost = params.coverUnitCost !== undefined ? params.coverUnitCost : (old.coverUnitCost || 0);
+    const updated: PackingRecord = {
+      ...old,
+      packetsPacked: params.packetsPacked,
+      coversConsumed: params.packetsPacked,
+      coverUnitCost: unitCost,
+      packagingCost: params.packetsPacked * unitCost,
+      totalPackingCost: params.packetsPacked * unitCost,
+      weightPackedKg: newWeight,
+      operatorName: params.operatorName || old.operatorName,
+      notes: params.notes !== undefined ? params.notes : old.notes,
+    };
+
+    list[idx] = updated;
+    this.setItem(STORAGE_KEYS.PACKING_RECORDS, list);
+    return updated;
   }
 
-  async deletePackingRecordsForRun(_runId: string, _runNumber?: string): Promise<void> {}
+  async deletePackingRecord(id: string): Promise<void> {
+    const list = this.getItem<PackingRecord[]>(STORAGE_KEYS.PACKING_RECORDS, []);
+    const found = list.find((p) => p.id === id);
+    if (found) {
+      const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+      const prod = products.find((p) => p.id === found.productId);
+      if (prod && found.weightPackedKg) {
+        prod.currentStock = Number((prod.currentStock + found.weightPackedKg).toFixed(3));
+        this.setItem(STORAGE_KEYS.PRODUCTS, products);
+      }
+    }
+    const filtered = list.filter((p) => p.id !== id);
+    this.setItem(STORAGE_KEYS.PACKING_RECORDS, filtered);
+  }
+
+  async listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
+    let list = this.getItem<PackingRecord[]>(STORAGE_KEYS.PACKING_RECORDS, []);
+    if (options?.productId) {
+      list = list.filter((p) => p.productId === options.productId);
+    }
+    if (options?.date) {
+      list = list.filter((p) => p.packingDate === options.date);
+    }
+    if (options?.limit) {
+      list = list.slice(0, options.limit);
+    }
+    return list;
+  }
+
+  async deletePackingRecordsForRun(runId: string, runNumber?: string): Promise<void> {
+    let list = this.getItem<PackingRecord[]>(STORAGE_KEYS.PACKING_RECORDS, []);
+    const toDelete = list.filter(
+      (p) => p.productionRunId === runId || (runNumber && p.notes && p.notes.includes(runNumber))
+    );
+    const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    for (const rec of toDelete) {
+      const prod = products.find((p) => p.id === rec.productId);
+      if (prod && rec.weightPackedKg) {
+        prod.currentStock = Number((prod.currentStock + rec.weightPackedKg).toFixed(3));
+      }
+    }
+    this.setItem(STORAGE_KEYS.PRODUCTS, products);
+
+    list = list.filter(
+      (p) => !(p.productionRunId === runId || (runNumber && p.notes && p.notes.includes(runNumber)))
+    );
+    this.setItem(STORAGE_KEYS.PACKING_RECORDS, list);
+  }
 
   invalidateCache(_key?: string): void {}
 }

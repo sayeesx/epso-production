@@ -81,6 +81,7 @@ export const BatchWeighingModal: React.FC<BatchWeighingModalProps> = ({
         operatorName: staffName || batch.operatorName || 'Kitchen Staff',
         notes: batch.notes,
         ingredientsConsumed: batch.ingredientsConsumed,
+        status: 'completed',
       });
 
       triggerRefresh();

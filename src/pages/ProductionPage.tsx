@@ -173,6 +173,20 @@ export const ProductionPage: React.FC = () => {
     }
   });
 
+  const isBlackSalt = (name?: string): boolean => {
+    if (!name) return false;
+    const n = name.trim().toLowerCase();
+    return (
+      n.includes('black salt') ||
+      n.includes('black') ||
+      n.includes('കറുത്ത ഉപ്പ്') ||
+      n.includes('കറുത്ത') ||
+      n.includes('ബ്ലാക്ക്') ||
+      n.includes('കാലാ നമക്') ||
+      n.includes('kala namak')
+    );
+  };
+
   const markBasicAsRecorded = useCallback((date: string, ingredientOrKey: Ingredient | string) => {
     let key = '';
     if (typeof ingredientOrKey === 'string') {
@@ -180,7 +194,7 @@ export const ProductionPage: React.FC = () => {
     } else {
       const name = ingredientOrKey.name.toLowerCase();
       if (name.includes('ഓയിൽ') || name.includes('oil')) key = 'oil';
-      else if (name.includes('ഉപ്പ്') || name.includes('salt')) key = 'salt';
+      else if (!isBlackSalt(name) && (name.includes('ഉപ്പ്') || name.includes('salt'))) key = 'salt';
       else if (name.includes('അണ്ടി തോട്') || name.includes('തോട്') || name.includes('shell') || name.includes('cashew')) key = 'cashew_shell';
       else if (name.includes('ചിപ്പ്ളി') || name.includes('chippli')) key = 'chippli';
       else if (name.includes('കറിവേപ്പില') || name.includes('curry')) key = 'curry_leaves';
@@ -242,7 +256,7 @@ export const ProductionPage: React.FC = () => {
 
               let key = '';
               if (n.includes('ഓയിൽ') || n.includes('oil')) key = 'oil';
-              else if (n.includes('ഉപ്പ്') || n.includes('salt')) key = 'salt';
+              else if (!isBlackSalt(n) && (n.includes('ഉപ്പ്') || n.includes('salt'))) key = 'salt';
               else if (n.includes('അണ്ടി തോട്') || n.includes('തോട്') || n.includes('shell') || n.includes('cashew')) key = 'cashew_shell';
               else if (n.includes('ചിപ്പ്ളി') || n.includes('chippli')) key = 'chippli';
               else if (n.includes('കറിവേപ്പില') || n.includes('curry')) key = 'curry_leaves';
@@ -1112,10 +1126,20 @@ export const ProductionPage: React.FC = () => {
                             )}
                           </button>
 
-                          {/* 2. Weigh Produced KG (Weighing Scale) & Set Production Quantity Display */}
+                          {/* 2. Weigh Produced KG (Weighing Scale) & Set Production Quantity Display: Locked when produced weight is recorded */}
                           {(() => {
                             const isProducedMissing = !run.actualQuantity || run.actualQuantity <= 0;
-                            return (
+                            return hasProducedWeight ? (
+                              <div
+                                className="relative h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl flex items-center gap-2 font-bold text-xs bg-stone-100 dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-800 shadow-xs shrink-0 select-none cursor-default"
+                                title={language === 'ml' ? 'ഉൽപ്പാദന അളവ് രേഖപ്പെടുത്തിക്കഴിഞ്ഞു (തിരുത്താനാകില്ല)' : 'Produced quantity recorded (locked)'}
+                              >
+                                <TbScale className="w-5 h-5 stroke-[2.2] text-stone-500 dark:text-stone-400 shrink-0" />
+                                <span className="font-mono text-sm font-extrabold whitespace-nowrap">
+                                  {run.actualQuantity} {run.unit}
+                                </span>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1123,26 +1147,20 @@ export const ProductionPage: React.FC = () => {
                                   setIsPostCreationPrompt(false);
                                   setBatchForWeighing(run);
                                 }}
-                                className={`relative h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl flex items-center gap-2 font-bold text-xs transition-all press-apple cursor-pointer shadow-xs shrink-0 ${
-                                  isProducedMissing
-                                    ? 'bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-900 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40'
-                                    : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50'
-                                }`}
+                                className="relative h-11 sm:h-12 px-3 sm:px-3.5 rounded-xl flex items-center gap-2 font-bold text-xs bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/60 dark:hover:bg-yellow-900/70 text-yellow-900 dark:text-yellow-200 border-2 border-yellow-400 dark:border-yellow-600/80 ring-2 ring-yellow-400/40 transition-all press-apple cursor-pointer shadow-xs shrink-0"
                                 title={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
                                 aria-label={language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Production Quantity'}
                               >
                                 <TbScale className="w-5 h-5 stroke-[2.2] text-orange-600 dark:text-orange-400 shrink-0" />
                                 <span className="font-mono text-sm font-extrabold whitespace-nowrap">
-                                  {run.actualQuantity > 0 ? `${run.actualQuantity} ${run.unit}` : (language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Qty')}
+                                  {language === 'ml' ? 'തൂക്കം നൽകുക' : 'Set Qty'}
                                 </span>
-                                {isProducedMissing && (
-                                  <span
-                                    className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
-                                    title={language === 'ml' ? 'ഉത്പാദന അളവ് നൽകിയിട്ടില്ല' : 'Production quantity not entered'}
-                                  >
-                                    !
-                                  </span>
-                                )}
+                                <span
+                                  className="absolute -top-1.5 -right-1.5 px-1 min-w-[18px] h-4 rounded-full bg-yellow-500 text-stone-950 text-[10px] font-black flex items-center justify-center shadow-sm ring-2 ring-white dark:ring-[#1E1B1B] leading-none select-none"
+                                  title={language === 'ml' ? 'ഉത്പാദന അളവ് നൽകിയിട്ടില്ല' : 'Production quantity not entered'}
+                                >
+                                  !
+                                </span>
                               </button>
                             );
                           })()}
@@ -1174,33 +1192,20 @@ export const ProductionPage: React.FC = () => {
                             </button>
                           )}
 
-                          {/* 4. Delete Batch Icon Box: Grey & disabled if batch is completed, red & clickable otherwise */}
-                          {isAllPacketsAdded || hasPackedPackets ? (
-                            <button
-                              type="button"
-                              disabled
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] text-stone-300 dark:text-stone-600 border border-stone-200 dark:border-stone-800 flex items-center justify-center cursor-not-allowed select-none shrink-0"
-                              title={language === 'ml' ? 'പൂർത്തിയായ ബാച്ച് ഒഴിവാക്കാനാകില്ല' : 'Completed batch cannot be deleted'}
-                              aria-label="Delete Batch Disabled"
-                            >
-                              <TbTrash className="w-5 h-5 stroke-[2.2]" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRestockChoice('yes');
-                                setRunToDelete(run);
-                              }}
-                              className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
-                              title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
-                              aria-label="Delete Batch"
-                            >
-                              <TbTrash className="w-5 h-5 stroke-[2.2]" />
-                            </button>
-                          )}
+                          {/* 4. Delete Batch Icon Box: Always visibly active & clickable with existing safeguards */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRestockChoice('yes');
+                              setRunToDelete(run);
+                            }}
+                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 flex items-center justify-center transition-all press-apple cursor-pointer shadow-xs shrink-0"
+                            title={language === 'ml' ? 'ബാച്ച് ഒഴിവാക്കുക' : 'Delete Batch'}
+                            aria-label="Delete Batch"
+                          >
+                            <TbTrash className="w-5 h-5 stroke-[2.2]" />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1442,7 +1447,17 @@ export const ProductionPage: React.FC = () => {
             : []
         }
         onClose={() => setBatchForPacking(null)}
-        onSuccess={() => {
+        onSuccess={(updatedRecords) => {
+          if (updatedRecords && updatedRecords.length > 0) {
+            setPackingRecords((prev) => {
+              const otherRecords = prev.filter((p) =>
+                batchForPacking
+                  ? (p.productionRunId ? p.productionRunId !== batchForPacking.id : !p.notes?.includes(batchForPacking.runNumber))
+                  : true
+              );
+              return [...otherRecords, ...updatedRecords];
+            });
+          }
           triggerRefresh();
         }}
       />
@@ -1458,7 +1473,7 @@ export const ProductionPage: React.FC = () => {
         }}
         onSuccess={(updated) => {
           if (updated) {
-            setRuns((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+            setRuns((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated, status: 'completed' } : r)));
           }
           triggerRefresh();
         }}

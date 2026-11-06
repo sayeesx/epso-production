@@ -10,6 +10,7 @@ import { RecipeFormModal } from '../components/recipes/RecipeFormModal';
 import { RecipeDetailModal } from '../components/recipes/RecipeDetailModal';
 import { StockAdjustmentModal } from '../components/ingredients/StockAdjustmentModal';
 import { BatchCardSkeleton } from '../components/ui/BatchCardSkeleton';
+import { formatHumanReference } from '../components/stock/StockLedgerView';
 import {
   AdminDashboardMetrics,
   ProductionRun,
@@ -958,8 +959,8 @@ const AdminDashboardContent: React.FC = () => {
                           <td className="p-3 text-charcoal-muted">
                             {m.operatorName}
                           </td>
-                          <td className="p-3 text-charcoal-muted text-[11px] truncate max-w-xs">
-                            {m.reason || m.reference}
+                          <td className="p-3 text-charcoal-muted text-[11px] truncate max-w-xs" title={m.reference}>
+                            {formatHumanReference(m.reference, m.reason, m.movementType)}
                           </td>
                         </tr>
                       );

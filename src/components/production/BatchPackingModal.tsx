@@ -20,7 +20,7 @@ interface BatchPackingModalProps {
   batch: ProductionRun | null;
   recipes?: Recipe[];
   initialPackings?: PackingRecord[];
-  onSuccess?: () => void;
+  onSuccess?: (savedRecords?: PackingRecord[]) => void;
 }
 
 // Fallback packet sizes if catalogue is loading or empty:
@@ -98,44 +98,61 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
   // Track whether we are adjusting already recorded packets
   const [hasExistingRecords, setHasExistingRecords] = useState<boolean>(false);
+  // Store existing records grouped by packetSize to allow updating existing records without duplication
+  const [existingRecordsMap, setExistingRecordsMap] = useState<Record<string, PackingRecord[]>>({});
+  const savedRecordsRef = useRef<PackingRecord[]>([]);
 
-  // Load existing records for this batch (instantly from prop if available)
+  // Load existing records for this batch
   useEffect(() => {
     if (isOpen && batch) {
       setShowSuccessAnim(false);
       setIsSubmitting(false);
+      savedRecordsRef.current = [];
       let isMounted = true;
-      const initialMap: Record<string, number> = {};
 
-      if (initialPackings && initialPackings.length > 0) {
-        initialPackings.forEach((r) => {
-          if ((r.packetsPacked || 0) > 0) {
-            initialMap[r.packetSize] = (initialMap[r.packetSize] || 0) + (r.packetsPacked || 0);
-          }
-        });
-        setQuantities({ ...initialMap });
-        setHasExistingRecords(Object.keys(initialMap).length > 0);
-      }
-
-      repo.listPackingRecords({ productId: batch.productId, limit: 100 }).then((records) => {
-        if (!isMounted) return;
-        records.forEach((r) => {
-          const isThisBatch = r.productionRunId
+      const applyRecords = (records: PackingRecord[]) => {
+        const batchRecords = records.filter((r) => {
+          return r.productionRunId
             ? r.productionRunId === batch.id
             : Boolean(r.notes && r.notes.includes(batch.runNumber));
+        });
 
-          if (isThisBatch && (r.packetsPacked || 0) > 0) {
-            initialMap[r.packetSize] = (initialMap[r.packetSize] || 0) + (r.packetsPacked || 0);
+        const newMap: Record<string, number> = {};
+        const bySize: Record<string, PackingRecord[]> = {};
+
+        batchRecords.forEach((r) => {
+          if (r.packetSize && (r.packetsPacked || 0) > 0) {
+            newMap[r.packetSize] = (newMap[r.packetSize] || 0) + (r.packetsPacked || 0);
+            if (!bySize[r.packetSize]) bySize[r.packetSize] = [];
+            bySize[r.packetSize].push(r);
           }
         });
-        setQuantities({ ...initialMap });
-        setHasExistingRecords(Object.keys(initialMap).length > 0);
-      }).catch(() => {
-        if (isMounted && (!initialPackings || initialPackings.length === 0)) {
-          setQuantities({});
-          setHasExistingRecords(false);
+
+        if (isMounted) {
+          setQuantities(newMap);
+          setExistingRecordsMap(bySize);
+          setHasExistingRecords(Object.keys(newMap).length > 0);
         }
-      });
+      };
+
+      // 1. Initial quick seed from prop if available
+      if (initialPackings && initialPackings.length > 0) {
+        applyRecords(initialPackings);
+      }
+
+      // 2. Fetch fresh records from repository and REPLACE cleanly (never sum on top of initialPackings)
+      repo.listPackingRecords({ productId: batch.productId, limit: 100 })
+        .then((records) => {
+          if (!isMounted) return;
+          applyRecords(records);
+        })
+        .catch(() => {
+          if (isMounted && (!initialPackings || initialPackings.length === 0)) {
+            setQuantities({});
+            setExistingRecordsMap({});
+            setHasExistingRecords(false);
+          }
+        });
 
       setActiveRulerPacket(null);
       return () => {
@@ -229,26 +246,68 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
       const packingDate = batch.productionDate || new Date().toISOString().split('T')[0];
       const operatorName = staffName || batch.operatorName || 'Kitchen Staff';
 
-      // 1. Delete previous records for this run to keep calculations & DB strictly accurate
-      await repo.deletePackingRecordsForRun(batch.id, batch.runNumber);
+      const allSizes = Array.from(new Set([
+        ...Object.keys(quantities),
+        ...Object.keys(existingRecordsMap),
+      ]));
 
-      // 2. Insert new confirmed quantities with explicit unit cost for costing accuracy (if > 0)
-      for (const [packetSize, count] of configuredPackets) {
+      // Update existing records or insert new ones without duplicating
+      for (const packetSize of allSizes) {
+        const count = quantities[packetSize] || 0;
+        const existingList = existingRecordsMap[packetSize] || [];
+        const pktInfo = displayedPackets.find(
+          (p) => p.name.toLowerCase() === packetSize.toLowerCase()
+        );
+        const unitCost = pktInfo?.costPerPacket || 0;
+
         if (count > 0) {
-          const pktInfo = displayedPackets.find(
-            (p) => p.name.toLowerCase() === packetSize.toLowerCase()
-          );
-          await repo.recordPacking({
-            packingDate,
-            productId: batch.productId,
-            productionRunId: batch.id,
-            packetSize,
-            packetsPacked: count,
-            operatorName,
-            coverUnitCost: pktInfo?.costPerPacket || 0,
-            notes: `Batch #${batch.runNumber}`,
-          });
+          if (existingList.length > 0) {
+            // Update the primary existing record
+            const primaryRec = existingList[0];
+            await repo.updatePackingRecord({
+              id: primaryRec.id,
+              packetsPacked: count,
+              operatorName,
+              coverUnitCost: unitCost,
+              notes: `Batch #${batch.runNumber}`,
+            });
+
+            // Prevent duplicate database entries: if multiple records exist, delete excess duplicates
+            if (existingList.length > 1) {
+              for (let i = 1; i < existingList.length; i++) {
+                await repo.deletePackingRecord(existingList[i].id);
+              }
+            }
+          } else {
+            // Insert new record for newly configured packet size
+            await repo.recordPacking({
+              packingDate,
+              productId: batch.productId,
+              productionRunId: batch.id,
+              packetSize,
+              packetsPacked: count,
+              operatorName,
+              coverUnitCost: unitCost,
+              notes: `Batch #${batch.runNumber}`,
+            });
+          }
+        } else {
+          // If count === 0, delete previously saved record(s) for this packet size
+          for (const rec of existingList) {
+            await repo.deletePackingRecord(rec.id);
+          }
         }
+      }
+
+      // Fetch fresh records for this batch to immediately propagate without manual page reload
+      try {
+        const freshRecords = await repo.listPackingRecords({ productId: batch.productId, limit: 100 });
+        const batchFresh = freshRecords.filter(
+          (r) => r.productionRunId ? r.productionRunId === batch.id : Boolean(r.notes && r.notes.includes(batch.runNumber))
+        );
+        savedRecordsRef.current = batchFresh;
+      } catch {
+        // ignore
       }
 
       setIsSubmitting(false);
@@ -277,7 +336,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
       'success'
     );
     triggerRefresh();
-    if (onSuccess) onSuccess();
+    if (onSuccess) onSuccess(savedRecordsRef.current);
     onClose();
   };
 

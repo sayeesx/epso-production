@@ -124,11 +124,24 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
       <div className="space-y-2.5 pb-2">
         {basicItemsConfig.map((item) => {
           const isSalt = item.key === 'salt';
+          const isBlackSalt = (name: string) => {
+            const s = (name || '').toLowerCase().trim();
+            return (
+              s.includes('black salt') ||
+              s.includes('black') ||
+              s.includes('കറുത്ത ഉപ്പ്') ||
+              s.includes('കറുത്ത') ||
+              s.includes('ബ്ലാക്ക്') ||
+              s.includes('കാലാ നമക്') ||
+              s.includes('kala namak')
+            );
+          };
+
           // Prioritize ingredients with category === 'basic', and ensure black salt is never picked for common salt
           const matchingIngredient =
             ingredients.find((i) => {
               const iName = i.name.toLowerCase();
-              if (isSalt && iName.includes('black')) return false;
+              if (isSalt && isBlackSalt(iName)) return false;
               return (
                 i.category === 'basic' &&
                 item.matchNames.some(
@@ -139,7 +152,7 @@ export const BasicIngredientsSelectorModal: React.FC<BasicIngredientsSelectorMod
             }) ||
             ingredients.find((i) => {
               const iName = i.name.toLowerCase();
-              if (isSalt && iName.includes('black')) return false;
+              if (isSalt && isBlackSalt(iName)) return false;
               return item.matchNames.some(
                 (name) =>
                   iName.includes(name.toLowerCase()) || name.toLowerCase().includes(iName)

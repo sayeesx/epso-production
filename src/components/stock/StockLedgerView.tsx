@@ -5,6 +5,92 @@ import { Input } from '../ui/Input';
 import { StockMovement, MovementType } from '../../types';
 import { TbSearch, TbArrowUpRight, TbArrowDownLeft, TbFilter, TbCalendar, TbUser } from 'react-icons/tb';
 
+// Helper to format technical IDs / internal codes into clean, human-readable labels
+export const formatHumanReference = (
+  reference?: string,
+  reason?: string,
+  movementType?: string
+): string => {
+  const ref = (reference || '').trim();
+  const reasonText = (reason || '').trim();
+
+  // Wage references: WAGE-YYYY-MM-DD
+  if (/^wage[-_]/i.test(ref)) {
+    const dateMatch = ref.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? `Wage Allocation (${dateMatch[0]})` : 'Wage Allocation';
+  }
+
+  // Admin adjustment codes
+  if (/^admin[-_]prd[-_]adj/i.test(ref)) {
+    return 'Production Adjustment';
+  }
+  if (/^admin[-_]adj/i.test(ref)) {
+    return 'Stock Audit Adjustment';
+  }
+
+  // Cover packaging
+  if (/^cover[-_]/i.test(ref)) {
+    return 'Packaging Cover Consumption';
+  }
+
+  // Sales
+  if (/^sale reversal/i.test(ref)) {
+    return 'Sale Reversal';
+  }
+  if (/^sale\s*#/i.test(ref)) {
+    return 'Snack Sale';
+  }
+
+  // Daily closing
+  if (/^daily closing/i.test(ref)) {
+    const dateMatch = ref.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? `Daily Closing (${dateMatch[0]})` : 'Daily Closing';
+  }
+
+  // Packing
+  if (/^packing\b/i.test(ref)) {
+    const dateMatch = ref.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? `Packaging Record (${dateMatch[0]})` : 'Packaging Record';
+  }
+
+  // Run delete / reversal references
+  if (/^del run\s*(\S+)\s*reversal/i.test(ref)) {
+    const m = ref.match(/^del run\s*(\S+)\s*reversal/i);
+    return `Batch ${m ? m[1] : ''} Reversal`;
+  }
+  if (/^del run\s*(\S+)/i.test(ref)) {
+    const m = ref.match(/^del run\s*(\S+)/i);
+    return `Batch ${m ? m[1] : ''} Deletion`;
+  }
+  if (/^reversal of\s*(\S+)/i.test(ref)) {
+    const m = ref.match(/^reversal of\s*(\S+)/i);
+    return `Batch ${m ? m[1] : ''} Reversal`;
+  }
+  if (/^run\s*(\S+)\s*edit/i.test(ref)) {
+    const m = ref.match(/^run\s*(\S+)\s*edit/i);
+    return `Batch ${m ? m[1] : ''} Adjustment`;
+  }
+  if (/^run\s*(\S+)/i.test(ref)) {
+    const m = ref.match(/^run\s*(\S+)/i);
+    return `Batch ${m ? m[1] : ''} Output`;
+  }
+
+  // UUID or contains UUID
+  const isUuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(ref);
+  if (isUuid) {
+    if (movementType === 'production_consumption') return 'Batch Consumption';
+    if (movementType === 'production_output') return 'Batch Production';
+    if (movementType === 'purchase') return 'Purchase Entry';
+    if (movementType === 'adjustment') return 'Stock Adjustment';
+    if (reasonText && !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(reasonText)) {
+      return reasonText;
+    }
+    return 'Production Record';
+  }
+
+  return ref || 'Stock Record';
+};
+
 interface StockLedgerViewProps {
   movements: StockMovement[];
 }
@@ -127,7 +213,7 @@ export const StockLedgerView: React.FC<StockLedgerViewProps> = ({ movements }) =
                         {mov.itemName}
                       </h4>
                       <div className="flex items-center gap-1.5 text-[11px] text-charcoal-muted mt-0.5">
-                        <span>{mov.reference}</span>
+                        <span title={mov.reference}>{formatHumanReference(mov.reference, mov.reason, mov.movementType)}</span>
                         <span>•</span>
                         <span>{new Date(mov.createdAt).toLocaleDateString()}</span>
                       </div>
