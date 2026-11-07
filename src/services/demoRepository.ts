@@ -1260,11 +1260,7 @@ export class DemoRepository implements IEpsoRepository {
     const prod = products.find((p) => p.id === params.productId);
     const weightPackedKg = (params.packetsPacked * 100) / 1000;
 
-    if (prod) {
-      prod.currentStock = Math.max(0, Number((prod.currentStock - weightPackedKg).toFixed(3)));
-      this.setItem(STORAGE_KEYS.PRODUCTS, products);
-    }
-
+    // Packing only deducts empty packet stock; finished-product stock is not reduced when packing.
     const packetTypes = await this.listPacketTypes();
     const pt = packetTypes.find((t) => t.name === params.packetSize);
     let unitCost = params.coverUnitCost || 0;
@@ -1314,15 +1310,7 @@ export class DemoRepository implements IEpsoRepository {
 
     const old = list[idx];
     const deltaPackets = params.packetsPacked - (old.packetsPacked || 0);
-    const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
-    const prod = products.find((p) => p.id === old.productId);
     const newWeight = (params.packetsPacked * 100) / 1000;
-    const deltaWeight = newWeight - (old.weightPackedKg || 0);
-
-    if (prod && deltaWeight !== 0) {
-      prod.currentStock = Math.max(0, Number((prod.currentStock - deltaWeight).toFixed(3)));
-      this.setItem(STORAGE_KEYS.PRODUCTS, products);
-    }
 
     if (deltaPackets !== 0 && old.packetSize) {
       const packetTypes = await this.listPacketTypes();
@@ -1356,12 +1344,6 @@ export class DemoRepository implements IEpsoRepository {
     const list = this.getItem<PackingRecord[]>(STORAGE_KEYS.PACKING_RECORDS, []);
     const found = list.find((p) => p.id === id);
     if (found) {
-      const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
-      const prod = products.find((p) => p.id === found.productId);
-      if (prod && found.weightPackedKg) {
-        prod.currentStock = Number((prod.currentStock + found.weightPackedKg).toFixed(3));
-        this.setItem(STORAGE_KEYS.PRODUCTS, products);
-      }
       if (found.packetSize && found.packetsPacked > 0) {
         const packetTypes = await this.listPacketTypes();
         const pt = packetTypes.find((t) => t.name === found.packetSize);
@@ -1395,13 +1377,8 @@ export class DemoRepository implements IEpsoRepository {
     const toDelete = list.filter(
       (p) => p.productionRunId === runId || (runNumber && p.notes && p.notes.includes(runNumber))
     );
-    const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
     const packetTypes = await this.listPacketTypes();
     for (const rec of toDelete) {
-      const prod = products.find((p) => p.id === rec.productId);
-      if (prod && rec.weightPackedKg) {
-        prod.currentStock = Number((prod.currentStock + rec.weightPackedKg).toFixed(3));
-      }
       if (rec.packetSize && rec.packetsPacked > 0) {
         const pt = packetTypes.find((t) => t.name === rec.packetSize);
         if (pt) {
@@ -1410,7 +1387,6 @@ export class DemoRepository implements IEpsoRepository {
         }
       }
     }
-    this.setItem(STORAGE_KEYS.PRODUCTS, products);
     this.setItem(STORAGE_KEYS.PACKET_TYPES, packetTypes);
 
     list = list.filter(

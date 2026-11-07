@@ -198,15 +198,124 @@ export function calculateContinuousOilExpense(
 }
 
 /**
- * Distributes shared daily expenses across products produced that day:
- * - Oil & Basic Ingredients: Allocated proportional to production weight.
- * - Daily Wages: Allocated EQUALLY across all production batches created on that day
- *   (each batch receives an equal share: Total Daily Wage / Total Batches).
+ * Consistent batch eligibility rule across Epso:
+ * Excludes cancelled batches and requires positive produced weight (actualQuantity > 0).
+ */
+export function isEligibleProductionBatch(
+  run: { status?: string; actualQuantity?: number } | null | undefined
+): boolean {
+  if (!run) return false;
+  if (run.status === 'cancelled') return false;
+  return (Number(run.actualQuantity) || 0) > 0;
+}
+
+/**
+ * Extracts the effective total daily wage from a daily_wages record or daily_closings fallback.
+ */
+export function getEffectiveDailyWage(
+  wage?: {
+    totalWageBudget?: number;
+    dailyWageBudget?: number;
+    productionWageAmount?: number;
+    packingWageAmount?: number;
+  } | null,
+  closing?: { productionWages?: number } | null
+): number {
+  if (wage) {
+    const total = Number(wage.totalWageBudget) || Number(wage.dailyWageBudget) || 0;
+    if (total > 0) return roundCurrency(total);
+    const splitSum =
+      (Number(wage.productionWageAmount) || 0) + (Number(wage.packingWageAmount) || 0);
+    if (splitSum > 0) return roundCurrency(splitSum);
+  }
+  if (closing) {
+    const closingWage = Number(closing.productionWages) || 0;
+    if (closingWage > 0) return roundCurrency(closingWage);
+  }
+  return 0;
+}
+
+export interface BatchWageAllocationItem<T extends { id: string; actualQuantity?: number }> {
+  run: T;
+  weight: number;
+  shareRatio: number;
+  sharePercent: number;
+  totalBatchWage: number;
+  wagePerKg: number;
+}
+
+/**
+ * Allocates the total daily wage across all eligible batches on a given date
+ * based on production weight:
+ *   Batch Wage = (Batch Production kg / Total Eligible Daily Production kg) × Total Daily Wage
  *
- * Example:
- * Total daily labour wage: ₹6,000.
- * Total batches produced that day: 3.
- * Labour allocation per batch: ₹2,000.
+ * Rounding is reconciled on the final eligible batch so that the sum of all batch
+ * allocations strictly equals the entered daily wage.
+ */
+export function allocateDailyWageToBatches<
+  T extends { id: string; actualQuantity?: number; status?: string }
+>(runsForDate: T[], totalDailyWage: number): BatchWageAllocationItem<T>[] {
+  const eligibleRuns = (runsForDate || []).filter((r) => isEligibleProductionBatch(r));
+  if (eligibleRuns.length === 0) return [];
+
+  const budget = Math.max(0, roundCurrency(Number(totalDailyWage) || 0));
+  const totalEligibleKg = roundStock(
+    eligibleRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0)
+  );
+
+  if (totalEligibleKg <= 0 || budget <= 0) {
+    return eligibleRuns.map((run) => {
+      const weight = roundStock(Number(run.actualQuantity) || 0);
+      return {
+        run,
+        weight,
+        shareRatio: 0,
+        sharePercent: 0,
+        totalBatchWage: 0,
+        wagePerKg: 0,
+      };
+    });
+  }
+
+  let runningWage = 0;
+  let runningPercent = 0;
+  const count = eligibleRuns.length;
+
+  return eligibleRuns.map((run, idx) => {
+    const isLast = idx === count - 1;
+    const weight = roundStock(Number(run.actualQuantity) || 0);
+    const shareRatio = weight / totalEligibleKg;
+
+    let totalBatchWage: number;
+    let sharePercent: number;
+
+    if (isLast) {
+      totalBatchWage = roundCurrency(budget - runningWage);
+      sharePercent = roundTo(100 - runningPercent, 1);
+    } else {
+      totalBatchWage = roundCurrency(shareRatio * budget);
+      sharePercent = roundTo(shareRatio * 100, 1);
+      runningWage = roundCurrency(runningWage + totalBatchWage);
+      runningPercent = roundTo(runningPercent + sharePercent, 1);
+    }
+
+    const wagePerKg = weight > 0 ? roundCurrency(totalBatchWage / weight) : 0;
+
+    return {
+      run,
+      weight,
+      shareRatio,
+      sharePercent,
+      totalBatchWage,
+      wagePerKg,
+    };
+  });
+}
+
+/**
+ * Distributes shared daily expenses across products produced that day:
+ * - Oil, Basic Ingredients & Daily Wages: Allocated proportional to production weight:
+ *   Product Share = (Product Production kg / Total Eligible Daily Production kg) × Daily Expense
  *
  * Exact reconciliation: The final product absorbs any fractional paisa rounding discrepancy
  * so that sum(allocated) strictly equals the original expense amount.
@@ -234,8 +343,9 @@ export function allocateDailySharedExpenses(
   totalProductionCost: number;
   productionCostPerKg: number;
 }> {
-  const totalKg = productsSummary.reduce((sum, p) => sum + p.totalProductionKg, 0);
-  const totalBatches = productsSummary.reduce((sum, p) => sum + (p.batchCount > 0 ? p.batchCount : 1), 0);
+  const eligibleProducts = productsSummary.filter((p) => (Number(p.totalProductionKg) || 0) > 0);
+  const targetList = eligibleProducts.length > 0 ? productsSummary : productsSummary;
+  const totalKg = targetList.reduce((sum, p) => sum + (Number(p.totalProductionKg) || 0), 0);
 
   if (productsSummary.length === 0) {
     return [];
@@ -244,37 +354,44 @@ export function allocateDailySharedExpenses(
   let runningOil = 0;
   let runningWages = 0;
   let runningBasic = 0;
-  const count = productsSummary.length;
+
+  // Find the last index with positive production weight for exact rounding reconciliation
+  let lastPositiveIdx = -1;
+  for (let i = productsSummary.length - 1; i >= 0; i--) {
+    if ((Number(productsSummary[i].totalProductionKg) || 0) > 0) {
+      lastPositiveIdx = i;
+      break;
+    }
+  }
+  if (lastPositiveIdx === -1) {
+    lastPositiveIdx = productsSummary.length - 1;
+  }
 
   return productsSummary.map((p, idx) => {
-    const isLast = idx === count - 1;
-    let oilAlloc: number;
-    let wagesAlloc: number;
-    let basicAlloc: number;
+    const prodKg = Number(p.totalProductionKg) || 0;
+    let oilAlloc = 0;
+    let wagesAlloc = 0;
+    let basicAlloc = 0;
 
-    const batches = p.batchCount > 0 ? p.batchCount : 1;
+    if (totalKg > 0 && prodKg > 0) {
+      if (idx === lastPositiveIdx) {
+        oilAlloc = roundCurrency(dailyOilExpense - runningOil);
+        wagesAlloc = roundCurrency(dailyProductionWages - runningWages);
+        basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
+      } else {
+        const weightRatio = prodKg / totalKg;
+        oilAlloc = roundCurrency(weightRatio * dailyOilExpense);
+        wagesAlloc = roundCurrency(weightRatio * dailyProductionWages);
+        basicAlloc = roundCurrency(weightRatio * dailyBasicIngredientsExpense);
 
-    if (isLast) {
-      oilAlloc = roundCurrency(dailyOilExpense - runningOil);
-      wagesAlloc = roundCurrency(dailyProductionWages - runningWages);
-      basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
-    } else {
-      // Weight-based ratio for physical shared ingredients (Oil, Basic Ingredients)
-      const weightRatio = totalKg > 0 ? p.totalProductionKg / totalKg : 1 / count;
-      oilAlloc = roundCurrency(weightRatio * dailyOilExpense);
-      basicAlloc = roundCurrency(weightRatio * dailyBasicIngredientsExpense);
-
-      // Equal batch allocation rule for Labour Wages: Each batch gets an equal share
-      const batchRatio = totalBatches > 0 ? batches / totalBatches : 1 / count;
-      wagesAlloc = roundCurrency(batchRatio * dailyProductionWages);
-
-      runningOil += oilAlloc;
-      runningWages += wagesAlloc;
-      runningBasic += basicAlloc;
+        runningOil = roundCurrency(runningOil + oilAlloc);
+        runningWages = roundCurrency(runningWages + wagesAlloc);
+        runningBasic = roundCurrency(runningBasic + basicAlloc);
+      }
     }
 
     const totalProdCost = roundCurrency(p.ingredientCost + oilAlloc + wagesAlloc + basicAlloc);
-    const costPerKg = p.totalProductionKg > 0 ? roundCurrency(totalProdCost / p.totalProductionKg) : 0;
+    const costPerKg = prodKg > 0 ? roundCurrency(totalProdCost / prodKg) : 0;
 
     return {
       productId: p.productId,

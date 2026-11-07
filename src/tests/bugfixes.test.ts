@@ -222,5 +222,78 @@ describe('Epso Argon High Bugfix Verification Tests', () => {
       expect(updatedCommonSalt!.currentStock).toBe(initialSaltStock);
     });
   });
+
+  // Bug 7: Packing must only deduct empty packet stock, NOT finished-product inventory
+  describe('Bug 7: Packing Preserves Finished-Product Inventory (10 kg Batch Test)', () => {
+    it('adds 10 kg on production and does not reduce finished-product stock when 4 kg is packed', async () => {
+      const products = await repo.listProducts(true);
+      const prod = products[0];
+      const initialProductStock = prod.currentStock;
+
+      // Save a packet type with 100 empty packets in stock
+      await repo.savePacketType({
+        name: '2KG HM Packet',
+        bundleCost: 500,
+        bundleQuantity: 100,
+        costPerPacket: 5,
+        isActive: true,
+      });
+
+      // 1. Record a 10 kg production batch
+      const run = await repo.recordProductionRun({
+        runNumber: 'PRD-10KG-PACK-TEST',
+        productId: prod.id,
+        productionDate: '2026-11-07',
+        plannedQuantity: 10,
+        actualQuantity: 10,
+        unit: 'kg',
+        operatorName: 'Kitchen Staff',
+        ingredientsConsumed: [],
+      });
+
+      let afterProd = await repo.getProductById(prod.id);
+      expect(afterProd!.currentStock).toBe(initialProductStock + 10);
+
+      // 2. Pack 2 packets of 2KG HM Packet (4 kg packed)
+      const packRec = await repo.recordPacking({
+        packingDate: '2026-11-07',
+        productId: prod.id,
+        productionRunId: run.id,
+        packetSize: '2KG HM Packet',
+        packetsPacked: 2,
+        operatorName: 'Kitchen Staff',
+      });
+
+      // Finished-product inventory MUST remain initialProductStock + 10 kg (NOT reduced to 6 kg!)
+      let afterPack = await repo.getProductById(prod.id);
+      expect(afterPack!.currentStock).toBe(initialProductStock + 10);
+
+      // Empty packet stock MUST decrease from 100 to 98
+      let pktTypes = await repo.listPacketTypes();
+      let pkt2kg = pktTypes.find((p) => p.name === '2KG HM Packet');
+      expect(pkt2kg!.bundleQuantity).toBe(98);
+
+      // 3. Update packing record from 2 packets to 4 packets (8 kg packed)
+      await repo.updatePackingRecord({
+        id: packRec.id,
+        packetsPacked: 4,
+        operatorName: 'Kitchen Staff',
+      });
+
+      afterPack = await repo.getProductById(prod.id);
+      expect(afterPack!.currentStock).toBe(initialProductStock + 10);
+      pktTypes = await repo.listPacketTypes();
+      pkt2kg = pktTypes.find((p) => p.name === '2KG HM Packet');
+      expect(pkt2kg!.bundleQuantity).toBe(96);
+
+      // 4. Delete packing record -> empty packets restored to 100, finished-product stock still initialProductStock + 10 kg
+      await repo.deletePackingRecord(packRec.id);
+      afterPack = await repo.getProductById(prod.id);
+      expect(afterPack!.currentStock).toBe(initialProductStock + 10);
+      pktTypes = await repo.listPacketTypes();
+      pkt2kg = pktTypes.find((p) => p.name === '2KG HM Packet');
+      expect(pkt2kg!.bundleQuantity).toBe(100);
+    });
+  });
 });
 

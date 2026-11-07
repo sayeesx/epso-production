@@ -10,6 +10,8 @@ import {
   calculateContinuousOilExpense,
   calculateDailyOilUsage,
   allocateDailySharedExpenses,
+  allocateDailyWageToBatches,
+  isEligibleProductionBatch,
   calculateFinalProductCosting,
 } from '../services/costing';
 import { Recipe } from '../types';
@@ -325,6 +327,47 @@ describe('Epso Precision Calculation Engine Tests', () => {
       // total 100kg, total value 5000 -> 50 INR/kg
       const newCost = calculateWeightedAverageCost(50, 40, 50, 60);
       expect(newCost).toBe(50);
+    });
+  });
+
+  // 7. WEIGHT-BASED BATCH WAGE ALLOCATION & ELIGIBILITY
+  describe('Weight-Based Batch Wage Allocation & Batch Eligibility', () => {
+    it('excludes cancelled and zero-weight batches and allocates daily wage proportionally by weight', () => {
+      const batches = [
+        { id: 'b1', runNumber: 'RUN-001', productId: 'p1', productName: 'Mixture', actualQuantity: 30, status: 'completed' },
+        { id: 'b2', runNumber: 'RUN-002', productId: 'p2', productName: 'Murukku', actualQuantity: 70, status: 'in_progress' },
+        { id: 'b3', runNumber: 'RUN-003', productId: 'p1', productName: 'Mixture', actualQuantity: 50, status: 'cancelled' },
+        { id: 'b4', runNumber: 'RUN-004', productId: 'p2', productName: 'Murukku', actualQuantity: 0, status: 'in_progress' },
+      ];
+
+      expect(isEligibleProductionBatch(batches[0])).toBe(true);
+      expect(isEligibleProductionBatch(batches[1])).toBe(true);
+      expect(isEligibleProductionBatch(batches[2])).toBe(false);
+      expect(isEligibleProductionBatch(batches[3])).toBe(false);
+
+      const allocations = allocateDailyWageToBatches(batches, 2000);
+      expect(allocations).toHaveLength(2);
+      expect(allocations[0].run.id).toBe('b1');
+      expect(allocations[0].totalBatchWage).toBe(600); // 30 / 100 * 2000
+      expect(allocations[0].wagePerKg).toBe(20);
+      expect(allocations[1].run.id).toBe('b2');
+      expect(allocations[1].totalBatchWage).toBe(1400); // 70 / 100 * 2000
+      expect(allocations[1].wagePerKg).toBe(20);
+
+      const sumAllocated = roundCurrency(allocations.reduce((s, a) => s + a.totalBatchWage, 0));
+      expect(sumAllocated).toBe(2000);
+    });
+
+    it('reconciles fractional paisa rounding so sum of batch wages always equals total daily wage', () => {
+      const batches = [
+        { id: 'b1', actualQuantity: 10, status: 'completed' },
+        { id: 'b2', actualQuantity: 10, status: 'completed' },
+        { id: 'b3', actualQuantity: 10, status: 'completed' },
+      ];
+      const allocations = allocateDailyWageToBatches(batches, 1000);
+      expect(allocations.map((a) => a.totalBatchWage)).toEqual([333.33, 333.33, 333.34]);
+      const total = roundCurrency(allocations.reduce((s, a) => s + a.totalBatchWage, 0));
+      expect(total).toBe(1000);
     });
   });
 });

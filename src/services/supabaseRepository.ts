@@ -848,6 +848,7 @@ export class SupabaseRepository implements IEpsoRepository {
         await client.from('stock_movements').insert({
           item_id: oldRun.productId,
           item_type: 'product',
+          item_name: prod.name || oldRun.productName,
           movement_type: deltaProduct > 0 ? 'production_output' : 'adjustment',
           quantity: deltaProduct,
           unit: oldRun.unit,
@@ -889,6 +890,7 @@ export class SupabaseRepository implements IEpsoRepository {
             await client.from('stock_movements').insert({
               item_id: newIng.ingredientId,
               item_type: 'ingredient',
+              item_name: ingData.name || 'Ingredient',
               movement_type: deltaIng > 0 ? 'production_consumption' : 'adjustment',
               quantity: -deltaIng,
               unit: newIng.unit,
@@ -1422,7 +1424,11 @@ export class SupabaseRepository implements IEpsoRepository {
         .eq('production_date', productionDate)
         .maybeSingle();
 
-      const todayBudget = Number(todayWage?.total_wage_budget) || Number(todayWage?.daily_wage_budget) || 0;
+      const todayBudget =
+        Number(todayWage?.total_wage_budget) ||
+        Number(todayWage?.daily_wage_budget) ||
+        ((Number(todayWage?.production_wage_amount) || 0) + (Number(todayWage?.packing_wage_amount) || 0)) ||
+        0;
       if (todayWage && todayBudget > 0) {
         if (!productionWages) {
           productionWages = todayBudget;
@@ -1436,7 +1442,11 @@ export class SupabaseRepository implements IEpsoRepository {
           .limit(1)
           .maybeSingle();
 
-        const prevBudget = Number(prevWage?.total_wage_budget) || Number(prevWage?.daily_wage_budget) || 0;
+        const prevBudget =
+          Number(prevWage?.total_wage_budget) ||
+          Number(prevWage?.daily_wage_budget) ||
+          ((Number(prevWage?.production_wage_amount) || 0) + (Number(prevWage?.packing_wage_amount) || 0)) ||
+          0;
         if (prevWage && prevBudget > 0) {
           if (!productionWages) {
             productionWages = prevBudget;
@@ -1444,12 +1454,12 @@ export class SupabaseRepository implements IEpsoRepository {
           await client.from('daily_wages').upsert({
             production_date: productionDate,
             total_wage_budget: productionWages,
-            production_wage_amount: Number(prevWage.production_wage_amount) || productionWages,
-            packing_wage_amount: Number(prevWage.packing_wage_amount) || 0,
-            num_cooks: prevWage.num_cooks || 2,
-            num_packers: prevWage.num_packers || 2,
-            wage_per_cook: prevWage.wage_per_cook || (productionWages / 2),
-            wage_per_packer: prevWage.wage_per_packer || 0,
+            production_wage_amount: productionWages,
+            packing_wage_amount: 0,
+            num_cooks: 0,
+            num_packers: 0,
+            wage_per_cook: 0,
+            wage_per_packer: 0,
             notes: 'Auto-populated from previous recorded wage',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -1482,12 +1492,13 @@ export class SupabaseRepository implements IEpsoRepository {
 
     const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages + dailyBasicIngredientsExpense);
 
-    // 6. Fetch completed production runs on that date
+    // 6. Fetch eligible production runs on that date
     const { data: runs, error: runsErr } = await client
       .from('production_runs')
       .select('id, product_id, actual_quantity, total_ingredient_cost, products(name)')
       .eq('production_date', productionDate)
-      .eq('status', 'completed');
+      .neq('status', 'cancelled')
+      .gt('actual_quantity', 0);
 
     if (runsErr) throw new Error(runsErr.message);
 
@@ -2006,37 +2017,7 @@ export class SupabaseRepository implements IEpsoRepository {
     const totalPackingCost = packagingCost;
     const weightPackedKg = roundStock((packetsPacked * sizeGrams) / 1000.0);
 
-    // Deduct packed weight from bulk finished-product inventory
-    const { data: currentProd } = await client
-      .from('products')
-      .select('current_stock, name')
-      .eq('id', productId)
-      .single();
-
-    if (currentProd) {
-      const prevStock = Number(currentProd.current_stock) || 0;
-      const newStock = roundStock(Math.max(0, prevStock - weightPackedKg));
-      await client
-        .from('products')
-        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-        .eq('id', productId);
-
-      await client.from('stock_movements').insert({
-        item_id: productId,
-        item_type: 'product',
-        item_name: currentProd.name || prodName,
-        movement_type: 'packing_deduction',
-        quantity: -weightPackedKg,
-        unit: 'kg',
-        previous_balance: prevStock,
-        new_balance: newStock,
-        reference: productionRunId || `Packing ${packingDate}`,
-        operator_name: operatorName,
-        reason: `Deducted bulk product for packing ${packetsPacked} x ${packetSize} (${weightPackedKg} kg)`,
-        created_at: new Date().toISOString(),
-      });
-    }
-
+    // Packing only deducts empty packet stock (above); finished-product inventory is NOT reduced when packing.
     const { data: created, error } = await client
       .from('packing_records')
       .insert({
@@ -2190,42 +2171,8 @@ export class SupabaseRepository implements IEpsoRepository {
     }
 
     const newWeightPackedKg = roundStock((params.packetsPacked * sizeGrams) / 1000.0);
-    const oldWeightPackedKg = Number(oldRec.weight_packed_kg) || 0;
-    const deltaWeightKg = roundStock(newWeightPackedKg - oldWeightPackedKg);
 
-    // Apply product stock delta: deltaWeightKg > 0 means more product packed (subtract from bulk)
-    if (deltaWeightKg !== 0 && oldRec.product_id) {
-      const { data: prod } = await client
-        .from('products')
-        .select('current_stock, name')
-        .eq('id', oldRec.product_id)
-        .maybeSingle();
-
-      if (prod) {
-        const prevBal = Number(prod.current_stock) || 0;
-        const newBal = roundStock(Math.max(0, prevBal - deltaWeightKg));
-        await client
-          .from('products')
-          .update({ current_stock: newBal, updated_at: new Date().toISOString() })
-          .eq('id', oldRec.product_id);
-
-        await client.from('stock_movements').insert({
-          item_id: oldRec.product_id,
-          item_type: 'product',
-          item_name: prod.name || 'Product',
-          movement_type: deltaWeightKg > 0 ? 'packing_deduction' : 'packing_reversal',
-          quantity: -deltaWeightKg,
-          unit: 'kg',
-          previous_balance: prevBal,
-          new_balance: newBal,
-          reference: oldRec.production_run_id || `Packing ${oldRec.packing_date}`,
-          operator_name: operator,
-          reason: `Adjusted packing for ${oldRec.packet_size} from ${oldPackets} to ${params.packetsPacked} packets (${deltaWeightKg > 0 ? '-' : '+'}${Math.abs(deltaWeightKg)} kg)`,
-          created_at: new Date().toISOString(),
-        });
-      }
-    }
-
+    // Packing only adjusts empty packet stock (above); finished-product inventory is NOT modified when packing is updated.
     const unitCost = params.coverUnitCost !== undefined ? params.coverUnitCost : Number(oldRec.cover_unit_cost) || 0;
     const packagingCost = roundCurrency(params.packetsPacked * unitCost);
 
@@ -2280,7 +2227,7 @@ export class SupabaseRepository implements IEpsoRepository {
   async deletePackingRecord(id: string): Promise<void> {
     const client = this.checkClient();
 
-    // Fetch existing record to reverse stock
+    // Fetch existing record to reverse empty packet stock
     const { data: rec } = await client
       .from('packing_records')
       .select('*')
@@ -2288,39 +2235,7 @@ export class SupabaseRepository implements IEpsoRepository {
       .maybeSingle();
 
     if (rec) {
-      const weightKg = Number(rec.weight_packed_kg) || 0;
-      if (weightKg > 0 && rec.product_id) {
-        const { data: prod } = await client
-          .from('products')
-          .select('current_stock, name')
-          .eq('id', rec.product_id)
-          .maybeSingle();
-
-        if (prod) {
-          const prevBal = Number(prod.current_stock) || 0;
-          const newBal = roundStock(prevBal + weightKg);
-          await client
-            .from('products')
-            .update({ current_stock: newBal, updated_at: new Date().toISOString() })
-            .eq('id', rec.product_id);
-
-          await client.from('stock_movements').insert({
-            item_id: rec.product_id,
-            item_type: 'product',
-            item_name: prod.name || 'Product',
-            movement_type: 'packing_reversal',
-            quantity: weightKg,
-            unit: 'kg',
-            previous_balance: prevBal,
-            new_balance: newBal,
-            reference: rec.production_run_id || `Packing ${rec.packing_date}`,
-            operator_name: rec.operator_name || 'Kitchen Staff',
-            reason: `Reversal of deleted packing record (${rec.packets_packed} x ${rec.packet_size}, ${weightKg} kg restored)`,
-            created_at: new Date().toISOString(),
-          });
-        }
-      }
-
+      // Only restore empty packet stock; finished-product stock is not modified by packing
       if (rec.packaging_item_id && Number(rec.covers_consumed) > 0) {
         const { data: pkgItem } = await client
           .from('packaging_items')
@@ -2458,28 +2373,7 @@ export class SupabaseRepository implements IEpsoRepository {
 
       if (existingRecords && existingRecords.length > 0) {
         for (const rec of existingRecords) {
-          const weightKg = Number(rec.weight_packed_kg) || 0;
-          if (weightKg > 0 && rec.product_id) {
-            const { data: prod } = await client.from('products').select('current_stock, name').eq('id', rec.product_id).single();
-            if (prod) {
-              const prevStock = Number(prod.current_stock) || 0;
-              const newStock = roundStock(prevStock + weightKg);
-              await client.from('products').update({ current_stock: newStock, updated_at: new Date().toISOString() }).eq('id', rec.product_id);
-              await client.from('stock_movements').insert({
-                item_id: rec.product_id,
-                item_type: 'product',
-                item_name: prod.name || 'Product',
-                movement_type: 'packing_reversal',
-                quantity: weightKg,
-                unit: 'kg',
-                previous_balance: prevStock,
-                new_balance: newStock,
-                reference: runId,
-                reason: `Reversal of packing record on run update (${weightKg} kg restored)`,
-                created_at: new Date().toISOString(),
-              });
-            }
-          }
+          // Only restore empty packet stock; finished-product stock is not modified by packing
           if (rec.packaging_item_id && Number(rec.covers_consumed) > 0) {
             const { data: pkgItem } = await client.from('packaging_items').select('current_stock').eq('id', rec.packaging_item_id).single();
             if (pkgItem) {
