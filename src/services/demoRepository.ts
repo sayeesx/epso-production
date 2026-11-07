@@ -27,6 +27,7 @@ const STORAGE_KEYS = {
   SECURITY: 'epso_storage_admin_security_v2',
   SESSIONS: 'epso_storage_admin_sessions_v2',
   PACKING_RECORDS: 'epso_storage_packing_records_v2',
+  PACKET_TYPES: 'epso_storage_packet_types_v2',
 };
 
 export class DemoRepository implements IEpsoRepository {
@@ -1191,8 +1192,8 @@ export class DemoRepository implements IEpsoRepository {
     // Demo no-op
   }
 
-  async listPacketTypes(): Promise<PacketType[]> {
-    return [
+  async listPacketTypes(_force?: boolean): Promise<PacketType[]> {
+    const defaults: PacketType[] = [
       { id: 'pkt-1', name: '3kg HM Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
       { id: 'pkt-2', name: '2KG HM Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
       { id: 'pkt-3', name: '10 x 12 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
@@ -1201,23 +1202,47 @@ export class DemoRepository implements IEpsoRepository {
       { id: 'pkt-6', name: '8 x 10 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
       { id: 'pkt-7', name: '8 x 12 Packet', bundleCost: 0, bundleQuantity: 100, costPerPacket: 0, isActive: true },
     ];
+    return this.getItem<PacketType[]>(STORAGE_KEYS.PACKET_TYPES, defaults);
   }
 
   async savePacketType(data: Partial<PacketType> & { name: string }): Promise<PacketType> {
-    const bundleCost = Number(data.bundleCost) || 0;
-    const bundleQuantity = Math.max(1, Number(data.bundleQuantity) || 1);
-    const costPerPacket = data.costPerPacket ?? (bundleQuantity > 0 ? bundleCost / bundleQuantity : 0);
-    return {
+    const list = await this.listPacketTypes();
+    const bundleCost = Math.max(0, Number(data.bundleCost) || 0);
+    const bundleQuantity = Math.max(0, Number(data.bundleQuantity ?? 0));
+    const costPerPacket =
+      data.costPerPacket !== undefined && Number(data.costPerPacket) > 0
+        ? Number(data.costPerPacket)
+        : bundleQuantity > 0 && bundleCost > 0
+          ? Number((bundleCost / bundleQuantity).toFixed(4))
+          : Number(data.costPerPacket) || 0;
+
+    const item: PacketType = {
       id: data.id || `pkt-${Date.now()}`,
-      name: data.name,
+      name: data.name.trim(),
       bundleCost,
       bundleQuantity,
       costPerPacket,
       isActive: data.isActive ?? true,
     };
+
+    const idx = list.findIndex((p) => p.id === item.id || p.name.toLowerCase() === item.name.toLowerCase());
+    if (idx >= 0) {
+      item.id = list[idx].id;
+      list[idx] = item;
+    } else {
+      list.push(item);
+    }
+    this.setItem(STORAGE_KEYS.PACKET_TYPES, list);
+    return item;
   }
 
-  async deletePacketType(_id: string): Promise<void> {}
+  async deletePacketType(id: string): Promise<void> {
+    const list = await this.listPacketTypes();
+    this.setItem(
+      STORAGE_KEYS.PACKET_TYPES,
+      list.filter((p) => p.id !== id)
+    );
+  }
 
   async recordPacking(params: {
     packingDate: string;
@@ -1240,6 +1265,16 @@ export class DemoRepository implements IEpsoRepository {
       this.setItem(STORAGE_KEYS.PRODUCTS, products);
     }
 
+    const packetTypes = await this.listPacketTypes();
+    const pt = packetTypes.find((t) => t.name === params.packetSize);
+    let unitCost = params.coverUnitCost || 0;
+    if (pt) {
+      if (unitCost <= 0) unitCost = pt.costPerPacket || 0;
+      pt.bundleQuantity = Math.max(0, (pt.bundleQuantity ?? 0) - params.packetsPacked);
+      pt.bundleCost = roundCurrency(pt.bundleQuantity * (pt.costPerPacket || unitCost));
+      this.setItem(STORAGE_KEYS.PACKET_TYPES, packetTypes);
+    }
+
     const rec: PackingRecord = {
       id: `packing-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       packingDate: params.packingDate,
@@ -1250,11 +1285,11 @@ export class DemoRepository implements IEpsoRepository {
       packetSize: params.packetSize,
       packetsPacked: params.packetsPacked,
       coversConsumed: params.packetsPacked,
-      coverUnitCost: params.coverUnitCost || 0,
-      packagingCost: params.packetsPacked * (params.coverUnitCost || 0),
+      coverUnitCost: unitCost,
+      packagingCost: params.packetsPacked * unitCost,
       packingLabourRate: 0,
       packingLabourCost: 0,
-      totalPackingCost: params.packetsPacked * (params.coverUnitCost || 0),
+      totalPackingCost: params.packetsPacked * unitCost,
       weightPackedKg,
       operatorName: params.operatorName,
       notes: params.notes,
@@ -1278,6 +1313,7 @@ export class DemoRepository implements IEpsoRepository {
     if (idx === -1) throw new Error(`Packing record with id ${params.id} not found`);
 
     const old = list[idx];
+    const deltaPackets = params.packetsPacked - (old.packetsPacked || 0);
     const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
     const prod = products.find((p) => p.id === old.productId);
     const newWeight = (params.packetsPacked * 100) / 1000;
@@ -1286,6 +1322,16 @@ export class DemoRepository implements IEpsoRepository {
     if (prod && deltaWeight !== 0) {
       prod.currentStock = Math.max(0, Number((prod.currentStock - deltaWeight).toFixed(3)));
       this.setItem(STORAGE_KEYS.PRODUCTS, products);
+    }
+
+    if (deltaPackets !== 0 && old.packetSize) {
+      const packetTypes = await this.listPacketTypes();
+      const pt = packetTypes.find((t) => t.name === old.packetSize);
+      if (pt) {
+        pt.bundleQuantity = Math.max(0, (pt.bundleQuantity ?? 0) - deltaPackets);
+        pt.bundleCost = roundCurrency(pt.bundleQuantity * (pt.costPerPacket || old.coverUnitCost || 0));
+        this.setItem(STORAGE_KEYS.PACKET_TYPES, packetTypes);
+      }
     }
 
     const unitCost = params.coverUnitCost !== undefined ? params.coverUnitCost : (old.coverUnitCost || 0);
@@ -1316,6 +1362,15 @@ export class DemoRepository implements IEpsoRepository {
         prod.currentStock = Number((prod.currentStock + found.weightPackedKg).toFixed(3));
         this.setItem(STORAGE_KEYS.PRODUCTS, products);
       }
+      if (found.packetSize && found.packetsPacked > 0) {
+        const packetTypes = await this.listPacketTypes();
+        const pt = packetTypes.find((t) => t.name === found.packetSize);
+        if (pt) {
+          pt.bundleQuantity = Math.max(0, (pt.bundleQuantity ?? 0) + found.packetsPacked);
+          pt.bundleCost = roundCurrency(pt.bundleQuantity * (pt.costPerPacket || found.coverUnitCost || 0));
+          this.setItem(STORAGE_KEYS.PACKET_TYPES, packetTypes);
+        }
+      }
     }
     const filtered = list.filter((p) => p.id !== id);
     this.setItem(STORAGE_KEYS.PACKING_RECORDS, filtered);
@@ -1341,13 +1396,22 @@ export class DemoRepository implements IEpsoRepository {
       (p) => p.productionRunId === runId || (runNumber && p.notes && p.notes.includes(runNumber))
     );
     const products = this.getItem<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    const packetTypes = await this.listPacketTypes();
     for (const rec of toDelete) {
       const prod = products.find((p) => p.id === rec.productId);
       if (prod && rec.weightPackedKg) {
         prod.currentStock = Number((prod.currentStock + rec.weightPackedKg).toFixed(3));
       }
+      if (rec.packetSize && rec.packetsPacked > 0) {
+        const pt = packetTypes.find((t) => t.name === rec.packetSize);
+        if (pt) {
+          pt.bundleQuantity = Math.max(0, (pt.bundleQuantity ?? 0) + rec.packetsPacked);
+          pt.bundleCost = roundCurrency(pt.bundleQuantity * (pt.costPerPacket || rec.coverUnitCost || 0));
+        }
+      }
     }
     this.setItem(STORAGE_KEYS.PRODUCTS, products);
+    this.setItem(STORAGE_KEYS.PACKET_TYPES, packetTypes);
 
     list = list.filter(
       (p) => !(p.productionRunId === runId || (runNumber && p.notes && p.notes.includes(runNumber)))

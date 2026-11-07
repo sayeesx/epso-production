@@ -146,7 +146,7 @@ export interface IEpsoRepository {
   listCostAllocations(dateOrClosingId: string): Promise<DailyCostAllocation[]>;
 
   // Packet Types Catalog
-  listPacketTypes(): Promise<PacketType[]>;
+  listPacketTypes(force?: boolean): Promise<PacketType[]>;
   savePacketType(data: Partial<PacketType> & { name: string }): Promise<PacketType>;
   deletePacketType(id: string): Promise<void>;
 

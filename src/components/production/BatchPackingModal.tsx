@@ -49,14 +49,15 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSuccessAnim, setShowSuccessAnim] = useState<boolean>(false);
 
-  // All catalog packets (cook can select any packet without restrictions)
-  const [catalogPackets, setCatalogPackets] = useState<Array<{ name: string; costPerPacket?: number }>>([]);
+  // All catalog packets with live remaining stock
+  const [catalogPackets, setCatalogPackets] = useState<Array<{ name: string; costPerPacket?: number; stock: number }>>([]);
 
   // Active Ruler / Number input modal for a selected packet
   const [activeRulerPacket, setActiveRulerPacket] = useState<{
     size: string;
     count: number;
     costPerPacket?: number;
+    maxStock: number;
   } | null>(null);
 
   // Ruler scrolling refs
@@ -68,9 +69,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   const STEP_PACKETS = 1;
   const TICK_SPACING = 14;
 
-  const scrollRulerTo = useCallback((val: number) => {
+  const scrollRulerTo = useCallback((val: number, maxLimit = MAX_RULER_PACKETS) => {
     if (!rulerRef.current) return;
-    const clamped = Math.max(MIN_PACKETS, Math.min(MAX_RULER_PACKETS, val));
+    const effectiveMax = Math.min(MAX_RULER_PACKETS, Math.max(MIN_PACKETS, maxLimit));
+    const clamped = Math.max(MIN_PACKETS, Math.min(effectiveMax, val));
     const ticksFromMin = clamped - MIN_PACKETS;
     const targetScroll = ticksFromMin * TICK_SPACING;
     isScrollingRuler.current = true;
@@ -83,18 +85,33 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     }, 200);
   }, []);
 
-  // Load ALL packet types from catalogue (every packet can be chosen by cook)
-  useEffect(() => {
-    repo.listPacketTypes().then((types) => {
+  const fetchLatestPacketCatalog = useCallback((force = true) => {
+    repo.listPacketTypes(force).then((types) => {
       if (types && types.length > 0) {
-        setCatalogPackets(types.map((t) => ({ name: t.name, costPerPacket: t.costPerPacket })));
+        setCatalogPackets(
+          types.map((t) => ({
+            name: t.name,
+            costPerPacket: t.costPerPacket,
+            stock: Math.max(0, Number(t.bundleQuantity ?? 0)),
+          }))
+        );
       } else {
-        setCatalogPackets(DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0 })));
+        setCatalogPackets(DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0, stock: 0 })));
       }
     }).catch(() => {
-      setCatalogPackets(DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0 })));
+      setCatalogPackets(DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0, stock: 0 })));
     });
   }, [repo]);
+
+  // Load ALL packet types from catalogue and refresh whenever modal opens or while open
+  useEffect(() => {
+    fetchLatestPacketCatalog(true);
+    if (!isOpen) return;
+    const interval = setInterval(() => {
+      fetchLatestPacketCatalog(true);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isOpen, fetchLatestPacketCatalog]);
 
   // Track whether we are adjusting already recorded packets
   const [hasExistingRecords, setHasExistingRecords] = useState<boolean>(false);
@@ -166,18 +183,43 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
   // All available packets shown directly to the cook:
   const displayedPackets = catalogPackets.length > 0
     ? catalogPackets
-    : DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0 }));
+    : DEFAULT_PACKET_SIZES.map((name) => ({ name, costPerPacket: 0, stock: 0 }));
 
-  // Open measurement modal instantly when selecting a packet
-  const handleOpenRulerForPacket = (size: string, costPerPacket?: number) => {
-    const currentVal = quantities[size] || 50;
+  // Helper to get already-saved packet count for this batch for a given packet size
+  const getExistingBatchCount = (size: string): number => {
+    const list = existingRecordsMap[size] || [];
+    return list.reduce((sum, r) => sum + (Number(r.packetsPacked) || 0), 0);
+  };
+
+  // Max packets available to allocate to this batch = current DB stock + already allocated to this batch
+  const getMaxAvailableForPacket = (size: string, dbStock: number): number => {
+    return Math.max(0, dbStock + getExistingBatchCount(size));
+  };
+
+  // Open measurement modal when selecting a packet (only if stock is available)
+  const handleOpenRulerForPacket = (size: string, costPerPacket?: number, dbStock = 0) => {
+    const maxStock = getMaxAvailableForPacket(size, dbStock);
+    if (maxStock <= 0) {
+      addToast(
+        language === 'ml'
+          ? `${size} സ്റ്റോക്കില്ല! അഡ്മിൻ വഴി സ്റ്റോക്ക് ചേർക്കുക.`
+          : `${size} is out of stock! Please add stock in Admin.`,
+        'error'
+      );
+      return;
+    }
+    const existingSelection = quantities[size] || 0;
+    const currentVal = existingSelection > 0
+      ? Math.min(existingSelection, maxStock)
+      : Math.min(50, maxStock);
     setActiveRulerPacket({
       size,
       count: currentVal,
       costPerPacket,
+      maxStock,
     });
     setTimeout(() => {
-      scrollRulerTo(currentVal);
+      scrollRulerTo(currentVal, maxStock);
     }, 120);
   };
 
@@ -185,33 +227,38 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     if (!rulerRef.current || isScrollingRuler.current || !activeRulerPacket) return;
     const scrollLeft = rulerRef.current.scrollLeft;
     const tickIndex = Math.round(scrollLeft / TICK_SPACING);
+    const effectiveMax = Math.min(MAX_RULER_PACKETS, activeRulerPacket.maxStock);
     const calculatedVal = Math.max(
       MIN_PACKETS,
-      Math.min(MAX_RULER_PACKETS, MIN_PACKETS + tickIndex * STEP_PACKETS)
+      Math.min(effectiveMax, MIN_PACKETS + tickIndex * STEP_PACKETS)
     );
     setActiveRulerPacket((prev) => (prev ? { ...prev, count: calculatedVal } : null));
   };
 
   const handleRulerStepDelta = (delta: number) => {
     if (!activeRulerPacket) return;
-    const next = Math.max(0, activeRulerPacket.count + delta);
+    const effectiveMax = Math.min(MAX_RULER_PACKETS, activeRulerPacket.maxStock);
+    const next = Math.max(0, Math.min(effectiveMax, activeRulerPacket.count + delta));
     setActiveRulerPacket((prev) => (prev ? { ...prev, count: next } : null));
-    scrollRulerTo(next);
+    scrollRulerTo(next, effectiveMax);
   };
 
   const handleDirectCountChange = (valStr: string) => {
+    if (!activeRulerPacket) return;
+    const effectiveMax = Math.min(MAX_RULER_PACKETS, activeRulerPacket.maxStock);
     const val = parseInt(valStr, 10);
-    const count = isNaN(val) ? 0 : Math.max(0, Math.min(MAX_RULER_PACKETS, val));
+    const count = isNaN(val) ? 0 : Math.max(0, Math.min(effectiveMax, val));
     setActiveRulerPacket((prev) => (prev ? { ...prev, count } : null));
-    scrollRulerTo(count);
+    scrollRulerTo(count, effectiveMax);
   };
 
   const handleConfirmRulerValue = () => {
     if (!activeRulerPacket) return;
-    if (activeRulerPacket.count > 0) {
+    const clampedCount = Math.max(0, Math.min(activeRulerPacket.maxStock, activeRulerPacket.count));
+    if (clampedCount > 0) {
       setQuantities((prev) => ({
         ...prev,
-        [activeRulerPacket.size]: activeRulerPacket.count,
+        [activeRulerPacket.size]: clampedCount,
       }));
     } else {
       setQuantities((prev) => {
@@ -240,6 +287,35 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
 
   const handleSubmitAllPackets = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    if (!hasExistingRecords && totalPacketsSum <= 0) {
+      addToast(
+        language === 'ml'
+          ? 'സ്റ്റോക്കുള്ള പാക്കറ്റുകൾ തിരഞ്ഞെടുക്കുക!'
+          : 'Please select packets in stock to add!',
+        'error'
+      );
+      return;
+    }
+
+    // Validate against available stock
+    for (const [packetSize, count] of Object.entries(quantities)) {
+      if ((count || 0) > 0) {
+        const pktInfo = displayedPackets.find(
+          (p) => p.name.toLowerCase() === packetSize.toLowerCase()
+        );
+        const maxAvail = getMaxAvailableForPacket(packetSize, pktInfo?.stock ?? 0);
+        if (count > maxAvail) {
+          addToast(
+            language === 'ml'
+              ? `${packetSize}: പരമാവധി ${maxAvail} പാക്കറ്റുകൾ മാത്രമേ സ്റ്റോക്കുള്ളൂ!`
+              : `${packetSize}: Only ${maxAvail} packets available in stock!`,
+            'error'
+          );
+          return;
+        }
+      }
+    }
 
     try {
       setIsSubmitting(true);
@@ -299,7 +375,8 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
         }
       }
 
-      // Fetch fresh records for this batch to immediately propagate without manual page reload
+      // Refresh packet catalog stock and batch packing records immediately
+      fetchLatestPacketCatalog(true);
       try {
         const freshRecords = await repo.listPackingRecords({ productId: batch.productId, limit: 100 });
         const batchFresh = freshRecords.filter(
@@ -340,7 +417,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
     onClose();
   };
 
-  const totalTicks = Math.min(MAX_RULER_PACKETS - MIN_PACKETS, 500);
+  const rulerMaxStock = activeRulerPacket
+    ? Math.max(0, Math.min(MAX_RULER_PACKETS, activeRulerPacket.maxStock))
+    : MAX_RULER_PACKETS;
+  const totalTicks = Math.min(rulerMaxStock - MIN_PACKETS, 500);
 
   return (
     <>
@@ -435,17 +515,17 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             </div>
           </div>
 
-          {/* All Available Packets Grid (Cook can pick any packet) */}
+          {/* All Available Packets Grid (Cook can pick packets in stock up to remaining stock) */}
           <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam block">
-                  {language === 'ml' ? 'എല്ലാ പാക്കറ്റ് തരങ്ങളും (ഏതും തിരഞ്ഞെടുക്കാം)' : 'All Packet Types (Select Any)'}
+                  {language === 'ml' ? 'എല്ലാ പാക്കറ്റ് തരങ്ങളും (സ്റ്റോക്ക് അനുസരിച്ച്)' : 'All Packet Types (By Available Stock)'}
                 </span>
                 <span className="text-[10px] text-stone-400 font-medium">
                   {language === 'ml'
-                    ? 'പാക്കറ്റുകൾ ചേർക്കൽ നിർബന്ധമാണ്. പരിധിയില്ലാതെ എത്രയും ചേർക്കാം.'
-                    : 'Adding packets is compulsory. Select any packet without limits.'}
+                    ? 'സ്റ്റോക്കുള്ള പാക്കറ്റുകൾ ലഭ്യമായ എണ്ണം വരെ ചേർക്കാം.'
+                    : 'Select packets up to the remaining stock available.'}
                 </span>
               </div>
               <span className="text-xs font-black text-stone-600 dark:text-stone-400 font-mono">
@@ -457,15 +537,20 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               {displayedPackets.map((pkt) => {
                 const count = quantities[pkt.name] || 0;
                 const hasCount = count > 0;
+                const maxAvailable = getMaxAvailableForPacket(pkt.name, pkt.stock ?? 0);
+                const isOutOfStock = maxAvailable <= 0;
+                const remainingStock = Math.max(0, maxAvailable - count);
 
                 return (
                   <div
                     key={pkt.name}
-                    onClick={() => handleOpenRulerForPacket(pkt.name, pkt.costPerPacket)}
-                    className={`relative p-3.5 rounded-2xl border-2 transition-all press-apple cursor-pointer flex flex-col justify-between gap-2.5 select-none ${
-                      hasCount
-                        ? 'bg-orange-50/70 dark:bg-orange-950/20 border-epso-red dark:border-amber-500 shadow-sm'
-                        : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#282323] hover:border-epso-red/50 dark:hover:border-amber-500/50'
+                    onClick={() => handleOpenRulerForPacket(pkt.name, pkt.costPerPacket, pkt.stock ?? 0)}
+                    className={`relative p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between gap-2.5 select-none ${
+                      isOutOfStock
+                        ? 'bg-stone-100/70 dark:bg-[#141212]/60 border-red-200/70 dark:border-red-900/40 opacity-65 cursor-not-allowed'
+                        : hasCount
+                        ? 'bg-orange-50/70 dark:bg-orange-950/20 border-epso-red dark:border-amber-500 shadow-sm press-apple cursor-pointer'
+                        : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#282323] hover:border-epso-red/50 dark:hover:border-amber-500/50 press-apple cursor-pointer'
                     }`}
                   >
                     {/* Top status indicator */}
@@ -479,6 +564,11 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                           <TbCheck className="w-3.5 h-3.5 stroke-[3]" />
                           <span>{count} pkts</span>
                         </span>
+                      ) : isOutOfStock ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60 font-black text-[10px]">
+                          <TbAlertCircle className="w-3 h-3 stroke-[2.5]" />
+                          <span>{language === 'ml' ? 'സ്റ്റോക്കില്ല' : 'Out of Stock'}</span>
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-stone-200/70 dark:bg-[#282323] text-stone-500 dark:text-stone-400 font-bold text-[10px]">
                           <TbPlus className="w-3 h-3" />
@@ -487,12 +577,14 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                       )}
                     </div>
 
-                    {/* Packet Name & Quick Info */}
+                    {/* Packet Name & Remaining Stock Info */}
                     <div className="flex items-end justify-between gap-2">
                       <div>
                         <h4
                           className={`text-base font-black tracking-tight ${
-                            hasCount
+                            isOutOfStock
+                              ? 'text-stone-500 dark:text-stone-400'
+                              : hasCount
                               ? 'text-epso-red dark:text-amber-400'
                               : 'text-stone-900 dark:text-white'
                           }`}
@@ -507,15 +599,21 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                       </div>
 
                       <div className="text-right">
-                        <span
-                          className={`text-xs font-black font-mono px-2 py-1 rounded-lg ${
-                            hasCount
-                              ? 'bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white border border-epso-red/30 dark:border-amber-500/30'
-                              : 'text-stone-400'
-                          }`}
-                        >
-                          {hasCount ? `${count} pkts` : '0 pkts'}
-                        </span>
+                        {isOutOfStock ? (
+                          <span className="text-[11px] font-black font-mono px-2 py-1 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200/60 dark:border-red-900/40">
+                            {language === 'ml' ? '0 സ്റ്റോക്ക്' : '0 left'}
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[11px] font-black font-mono px-2 py-1 rounded-lg border ${
+                              remainingStock === 0
+                                ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50'
+                                : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200/70 dark:border-emerald-800/40'
+                            }`}
+                          >
+                            {remainingStock} {language === 'ml' ? 'ബാക്കി' : 'left'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -549,11 +647,11 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
             <span>{language === 'ml' ? 'റദ്ദാക്കുക' : 'Cancel'}</span>
           </button>
 
-          {/* SAVE / UPDATE PACKETS BUTTON: Packets can be set to 0, and adjusted once set */}
+          {/* SAVE / UPDATE PACKETS BUTTON */}
           <button
             type="button"
             onClick={() => handleSubmitAllPackets()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || (!hasExistingRecords && totalPacketsSum === 0)}
             className="flex-[2] py-3.5 sm:py-4 px-4 rounded-2xl font-black text-sm shadow-md transition-all press-apple cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950"
           >
             {isSubmitting ? (
@@ -563,7 +661,9 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                 <TbCheck className="w-5 h-5 stroke-[3]" />
                 <span>
                   {totalPacketsSum === 0
-                    ? (language === 'ml' ? 'സൂക്ഷിക്കുക (0 പാക്കറ്റുകൾ)' : 'Save (0 Packets)')
+                    ? hasExistingRecords
+                      ? (language === 'ml' ? 'സൂക്ഷിക്കുക (0 പാക്കറ്റുകൾ)' : 'Save (0 Packets)')
+                      : (language === 'ml' ? 'പാക്കറ്റുകൾ തിരഞ്ഞെടുക്കുക' : 'Select Packets')
                     : hasExistingRecords
                     ? (language === 'ml' ? `മാറ്റങ്ങൾ സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)` : `Update (${totalPacketsSum} Packets)`)
                     : (language === 'ml' ? `സൂക്ഷിക്കുക (${totalPacketsSum} പാക്കറ്റുകൾ)` : `Save (${totalPacketsSum} Packets)`)}
@@ -575,7 +675,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
       </Modal>
 
       {/* =================================================================== */}
-      {/* RULER & DIRECT INPUT MODAL FOR SELECTED PACKET (NO LIMITS)          */}
+      {/* RULER & DIRECT INPUT MODAL FOR SELECTED PACKET (UP TO STOCK LIMIT)  */}
       {/* =================================================================== */}
       {activeRulerPacket && (
         <Modal
@@ -590,10 +690,10 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                 <h3 className="text-base font-black text-stone-900 dark:text-white leading-tight font-malayalam">
                   {activeRulerPacket.size}
                 </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 font-medium">
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">
                   {language === 'ml'
-                    ? 'പാക്കറ്റുകളുടെ എണ്ണം നൽകുക (പരിധിയില്ല)'
-                    : 'Enter Packet Count (No Limits)'}
+                    ? `ലഭ്യമായ സ്റ്റോക്ക്: ${activeRulerPacket.maxStock} • ബാക്കി: ${Math.max(0, activeRulerPacket.maxStock - activeRulerPacket.count)}`
+                    : `Available: ${activeRulerPacket.maxStock} pkts • Remaining: ${Math.max(0, activeRulerPacket.maxStock - activeRulerPacket.count)}`}
                 </p>
               </div>
             </div>
@@ -601,12 +701,13 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
           size="md"
         >
           <div className="space-y-4 py-2 font-malayalam">
-            {/* Direct Number Input + Steppers (No Limits) */}
+            {/* Direct Number Input + Steppers (Capped at maxStock) */}
             <div className="flex items-center justify-center gap-2 py-1">
               <button
                 type="button"
                 onClick={() => handleRulerStepDelta(-10)}
-                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer"
+                disabled={activeRulerPacket.count <= 0}
+                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 title="-10"
               >
                 -10
@@ -614,16 +715,18 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleRulerStepDelta(-1)}
-                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer"
+                disabled={activeRulerPacket.count <= 0}
+                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <TbMinus className="w-4 h-4 stroke-[2.5]" />
               </button>
 
-              {/* Editable Input Box for Any Count */}
+              {/* Editable Input Box Capped at maxStock */}
               <div className="w-44 shrink-0 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-2xl bg-stone-100 dark:bg-[#141212] border-2 border-epso-red/40 dark:border-amber-500/40 shadow-inner">
                 <input
                   type="number"
                   min="0"
+                  max={activeRulerPacket.maxStock}
                   step="1"
                   value={activeRulerPacket.count === 0 ? '' : activeRulerPacket.count}
                   onChange={(e) => handleDirectCountChange(e.target.value)}
@@ -639,14 +742,16 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleRulerStepDelta(1)}
-                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer"
+                disabled={activeRulerPacket.count >= activeRulerPacket.maxStock}
+                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <TbPlus className="w-4 h-4 stroke-[2.5]" />
               </button>
               <button
                 type="button"
                 onClick={() => handleRulerStepDelta(10)}
-                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer"
+                disabled={activeRulerPacket.count >= activeRulerPacket.maxStock}
+                className="w-11 h-11 shrink-0 rounded-2xl bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-200 flex items-center justify-center font-bold text-xs press-apple transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 title="+10"
               >
                 +10
@@ -679,7 +784,7 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
                         key={idx}
                         onClick={() => {
                           setActiveRulerPacket((prev) => (prev ? { ...prev, count: val } : null));
-                          scrollRulerTo(val);
+                          scrollRulerTo(val, activeRulerPacket.maxStock);
                         }}
                         className="flex flex-col items-center justify-end shrink-0 cursor-pointer h-10 pb-1"
                         style={{ width: '2px' }}
@@ -705,26 +810,37 @@ export const BatchPackingModal: React.FC<BatchPackingModalProps> = ({
               <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-stone-50 dark:from-[#141212] to-transparent pointer-events-none z-10" />
             </div>
 
-            {/* Quick Presets (Extending to large counts) */}
+            {/* Quick Presets (Capped at maxStock) */}
             <div className="flex items-center justify-center gap-1.5 pt-0.5 flex-wrap">
               <span className="text-[10px] text-stone-400 font-bold mr-1">Quick:</span>
-              {[0, 25, 50, 75, 100, 150, 200, 250, 500, 1000].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => {
-                    setActiveRulerPacket((prev) => (prev ? { ...prev, count: preset } : null));
-                    scrollRulerTo(preset);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                    activeRulerPacket.count === preset
-                      ? 'bg-epso-red text-white border-epso-red dark:bg-amber-500 dark:text-stone-950 dark:border-amber-500'
-                      : 'bg-white dark:bg-[#141212] border-charcoal-border/70 dark:border-[#2E2828] text-stone-600 dark:text-stone-300 hover:text-epso-red'
-                  }`}
-                >
-                  {preset}
-                </button>
-              ))}
+              {Array.from(
+                new Set([
+                  ...[0, 10, 25, 50, 75, 100, 150, 200, 250, 500, 1000].filter(
+                    (preset) => preset <= activeRulerPacket.maxStock
+                  ),
+                  activeRulerPacket.maxStock,
+                ])
+              )
+                .sort((a, b) => a - b)
+                .map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setActiveRulerPacket((prev) => (prev ? { ...prev, count: preset } : null));
+                      scrollRulerTo(preset, activeRulerPacket.maxStock);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                      activeRulerPacket.count === preset
+                        ? 'bg-epso-red text-white border-epso-red dark:bg-amber-500 dark:text-stone-950 dark:border-amber-500'
+                        : 'bg-white dark:bg-[#141212] border-charcoal-border/70 dark:border-[#2E2828] text-stone-600 dark:text-stone-300 hover:text-epso-red'
+                    }`}
+                  >
+                    {preset === activeRulerPacket.maxStock && preset > 0
+                      ? `${preset} (Max)`
+                      : preset}
+                  </button>
+                ))}
             </div>
 
             {/* Ruler Dialog Actions */}

@@ -997,6 +997,9 @@ export class SupabaseRepository implements IEpsoRepository {
     if (!run) return true;
 
     if (restock) {
+      // Reverse any packed packets & product weight for this run first
+      await this.deletePackingRecordsForRun(runId, run.run_number);
+
       // 1. If restock: call atomic procedure which adds ingredients back and removes product produced
       const { error: cancelErr } = await client.rpc('cancel_production_run_atomic', {
         p_run_id: runId,
@@ -1007,6 +1010,7 @@ export class SupabaseRepository implements IEpsoRepository {
       dbCache.invalidate('production_runs');
       dbCache.invalidate('product');
       dbCache.invalidate('ingredient');
+      dbCache.invalidate('packet_types');
       return true;
     } else {
       // 2. If wastage: do NOT add ingredients back to stock!
@@ -1759,7 +1763,7 @@ export class SupabaseRepository implements IEpsoRepository {
     if (error) throw new Error(error.message);
   }
 
-  async listPacketTypes(): Promise<PacketType[]> {
+  async listPacketTypes(force = false): Promise<PacketType[]> {
     return dbCache.wrap(
       'packet_types',
       async () => {
@@ -1778,24 +1782,26 @@ export class SupabaseRepository implements IEpsoRepository {
           id: row.id,
           name: row.name,
           bundleCost: Number(row.bundle_cost) || 0,
-          bundleQuantity: Number(row.bundle_quantity) || 1,
+          bundleQuantity: Math.max(0, Number(row.bundle_quantity ?? 0)),
           costPerPacket: Number(row.cost_per_packet) || 0,
           isActive: row.is_active ?? true,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
         }));
       },
-      { ttl: 10 * 60 * 1000 }
+      { ttl: 10 * 60 * 1000, force }
     );
   }
 
   async savePacketType(packet: Partial<PacketType> & { name: string }): Promise<PacketType> {
     const client = this.checkClient();
-    const bundleCost = Number(packet.bundleCost) || 0;
-    const bundleQuantity = Math.max(1, Number(packet.bundleQuantity) || 1);
-    const costPerPacket = packet.costPerPacket !== undefined && packet.costPerPacket > 0
+    const bundleCost = Math.max(0, Number(packet.bundleCost) || 0);
+    const bundleQuantity = Math.max(0, Number(packet.bundleQuantity ?? 0));
+    const costPerPacket = packet.costPerPacket !== undefined && Number(packet.costPerPacket) > 0
       ? Number(packet.costPerPacket)
-      : bundleQuantity > 0 ? Number((bundleCost / bundleQuantity).toFixed(4)) : 0;
+      : bundleQuantity > 0 && bundleCost > 0
+        ? Number((bundleCost / bundleQuantity).toFixed(4))
+        : Number(packet.costPerPacket) || 0;
 
     const payload = {
       name: packet.name.trim(),
@@ -1820,7 +1826,7 @@ export class SupabaseRepository implements IEpsoRepository {
         id: data.id,
         name: data.name,
         bundleCost: Number(data.bundle_cost) || 0,
-        bundleQuantity: Number(data.bundle_quantity) || 1,
+        bundleQuantity: Math.max(0, Number(data.bundle_quantity ?? 0)),
         costPerPacket: Number(data.cost_per_packet) || 0,
         isActive: data.is_active,
         createdAt: data.created_at,
@@ -1841,7 +1847,7 @@ export class SupabaseRepository implements IEpsoRepository {
         id: data.id,
         name: data.name,
         bundleCost: Number(data.bundle_cost) || 0,
-        bundleQuantity: Number(data.bundle_quantity) || 1,
+        bundleQuantity: Math.max(0, Number(data.bundle_quantity ?? 0)),
         costPerPacket: Number(data.cost_per_packet) || 0,
         isActive: data.is_active,
         createdAt: data.created_at,
@@ -1870,6 +1876,7 @@ export class SupabaseRepository implements IEpsoRepository {
     packetSize: string;
     packetsPacked: number;
     operatorName: string;
+    coverUnitCost?: number;
     notes?: string;
   }): Promise<PackingRecord> {
     const client = this.checkClient();
@@ -1881,13 +1888,14 @@ export class SupabaseRepository implements IEpsoRepository {
       packetSize,
       packetsPacked,
       operatorName,
+      coverUnitCost,
       notes = '',
     } = params;
 
     const { data: prod } = await client.from('products').select('name').eq('id', productId).single();
     const prodName = prod?.name || 'Product';
 
-    let unitCost = 0;
+    let unitCost = Number(coverUnitCost) || 0;
     // Labour charges per packet are removed per financial audit rules.
     // Labour is allocated equally across production batches in daily closing.
     let labourRate = 0;
@@ -1902,7 +1910,7 @@ export class SupabaseRepository implements IEpsoRepository {
         .single();
 
       if (packItem) {
-        unitCost = Number(packItem.unit_cost) || 0;
+        unitCost = Number(packItem.unit_cost) || unitCost;
         sizeGrams = Number(packItem.size_grams) || 100;
         currStock = Number(packItem.current_stock) || 0;
 
@@ -1937,19 +1945,59 @@ export class SupabaseRepository implements IEpsoRepository {
       }
     }
 
-    if (unitCost <= 0) {
+    if (packetSize) {
       try {
         const { data: pt } = await client
           .from('packet_types')
-          .select('cost_per_packet, bundle_cost, bundle_quantity')
+          .select('id, name, cost_per_packet, bundle_cost, bundle_quantity')
           .eq('name', packetSize)
           .limit(1)
           .maybeSingle();
         if (pt) {
-          unitCost = Number(pt.cost_per_packet) || (Number(pt.bundle_cost) / Math.max(1, Number(pt.bundle_quantity))) || 0;
+          const ptUnitCost =
+            Number(pt.cost_per_packet) ||
+            (Number(pt.bundle_quantity) > 0 ? Number(pt.bundle_cost) / Number(pt.bundle_quantity) : 0) ||
+            0;
+          if (unitCost <= 0) {
+            unitCost = ptUnitCost;
+          }
+
+          if (packetsPacked > 0) {
+            const currPktStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+            const newPktStock = Math.max(0, currPktStock - packetsPacked);
+            const preservedUnitCost = Number(pt.cost_per_packet) || unitCost;
+            const newBundleCost = roundCurrency(newPktStock * preservedUnitCost);
+
+            await client
+              .from('packet_types')
+              .update({
+                bundle_quantity: newPktStock,
+                bundle_cost: newBundleCost,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', pt.id);
+
+            if (!packagingItemId) {
+              await client.from('stock_movements').insert({
+                item_id: pt.id,
+                item_type: 'ingredient',
+                item_name: pt.name,
+                movement_type: 'production_consumption',
+                quantity: -packetsPacked,
+                unit: 'pcs',
+                previous_balance: currPktStock,
+                new_balance: newPktStock,
+                cost_per_unit: unitCost,
+                reference: productionRunId || `Packing ${packingDate}`,
+                operator_name: operatorName,
+                reason: `Packaging covers consumed for ${packetsPacked} packets (${prodName})`,
+                created_at: new Date().toISOString(),
+              });
+            }
+          }
         }
       } catch (e) {
-        console.warn('Could not query packet_types cost for', packetSize, e);
+        console.warn('Could not query or update packet_types for', packetSize, e);
       }
     }
 
@@ -2017,6 +2065,7 @@ export class SupabaseRepository implements IEpsoRepository {
     dbCache.invalidate('packing_records');
     dbCache.invalidate('production_runs');
     dbCache.invalidate('product');
+    dbCache.invalidate('packet_types');
 
     return {
       id: created.id,
@@ -2093,6 +2142,53 @@ export class SupabaseRepository implements IEpsoRepository {
       }
     }
 
+    if (deltaPackets !== 0 && oldRec.packet_size) {
+      try {
+        const { data: pt } = await client
+          .from('packet_types')
+          .select('id, name, cost_per_packet, bundle_cost, bundle_quantity')
+          .eq('name', oldRec.packet_size)
+          .limit(1)
+          .maybeSingle();
+
+        if (pt) {
+          const currPktStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+          const newPktStock = Math.max(0, currPktStock - deltaPackets);
+          const preservedUnitCost = Number(pt.cost_per_packet) || Number(oldRec.cover_unit_cost) || 0;
+          const newBundleCost = roundCurrency(newPktStock * preservedUnitCost);
+
+          await client
+            .from('packet_types')
+            .update({
+              bundle_quantity: newPktStock,
+              bundle_cost: newBundleCost,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', pt.id);
+
+          if (!oldRec.packaging_item_id) {
+            await client.from('stock_movements').insert({
+              item_id: pt.id,
+              item_type: 'ingredient',
+              item_name: pt.name,
+              movement_type: deltaPackets > 0 ? 'production_consumption' : 'packing_reversal',
+              quantity: -deltaPackets,
+              unit: 'pcs',
+              previous_balance: currPktStock,
+              new_balance: newPktStock,
+              cost_per_unit: preservedUnitCost,
+              reference: oldRec.production_run_id || `Packing ${oldRec.packing_date}`,
+              operator_name: operator,
+              reason: `Adjusted packing for ${oldRec.packet_size} from ${oldPackets} to ${params.packetsPacked} packets`,
+              created_at: new Date().toISOString(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not update packet_types stock for', oldRec.packet_size, e);
+      }
+    }
+
     const newWeightPackedKg = roundStock((params.packetsPacked * sizeGrams) / 1000.0);
     const oldWeightPackedKg = Number(oldRec.weight_packed_kg) || 0;
     const deltaWeightKg = roundStock(newWeightPackedKg - oldWeightPackedKg);
@@ -2157,6 +2253,7 @@ export class SupabaseRepository implements IEpsoRepository {
     dbCache.invalidate('packing_records');
     dbCache.invalidate('production_runs');
     dbCache.invalidate('product');
+    dbCache.invalidate('packet_types');
 
     return {
       id: updated.id,
@@ -2240,6 +2337,54 @@ export class SupabaseRepository implements IEpsoRepository {
             .eq('id', rec.packaging_item_id);
         }
       }
+
+      if (rec.packet_size && Number(rec.packets_packed) > 0) {
+        try {
+          const { data: pt } = await client
+            .from('packet_types')
+            .select('id, name, cost_per_packet, bundle_cost, bundle_quantity')
+            .eq('name', rec.packet_size)
+            .limit(1)
+            .maybeSingle();
+
+          if (pt) {
+            const restored = Number(rec.packets_packed) || 0;
+            const currPktStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+            const newPktStock = currPktStock + restored;
+            const preservedUnitCost = Number(pt.cost_per_packet) || Number(rec.cover_unit_cost) || 0;
+            const newBundleCost = roundCurrency(newPktStock * preservedUnitCost);
+
+            await client
+              .from('packet_types')
+              .update({
+                bundle_quantity: newPktStock,
+                bundle_cost: newBundleCost,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', pt.id);
+
+            if (!rec.packaging_item_id) {
+              await client.from('stock_movements').insert({
+                item_id: pt.id,
+                item_type: 'ingredient',
+                item_name: pt.name,
+                movement_type: 'packing_reversal',
+                quantity: restored,
+                unit: 'pcs',
+                previous_balance: currPktStock,
+                new_balance: newPktStock,
+                cost_per_unit: preservedUnitCost,
+                reference: rec.production_run_id || `Packing ${rec.packing_date}`,
+                operator_name: rec.operator_name || 'Kitchen Staff',
+                reason: `Reversal of deleted packing record (${restored} x ${rec.packet_size} covers restored)`,
+                created_at: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('Could not restore packet_types stock for', rec.packet_size, e);
+        }
+      }
     }
 
     const { error } = await client.from('packing_records').delete().eq('id', id);
@@ -2248,6 +2393,7 @@ export class SupabaseRepository implements IEpsoRepository {
     dbCache.invalidate('packing_records');
     dbCache.invalidate('production_runs');
     dbCache.invalidate('product');
+    dbCache.invalidate('packet_types');
   }
 
   async listPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
@@ -2293,10 +2439,22 @@ export class SupabaseRepository implements IEpsoRepository {
 
     // 1. Fetch records before deleting to reverse stock deductions
     try {
-      const { data: existingRecords } = await client
+      const { data: runRecords } = await client
         .from('packing_records')
         .select('*')
         .eq('production_run_id', runId);
+
+      let noteRecords: any[] = [];
+      if (runNumber) {
+        const { data: byNote } = await client
+          .from('packing_records')
+          .select('*')
+          .is('production_run_id', null)
+          .eq('notes', `Batch #${runNumber}`);
+        noteRecords = byNote || [];
+      }
+
+      const existingRecords = [...(runRecords || []), ...noteRecords];
 
       if (existingRecords && existingRecords.length > 0) {
         for (const rec of existingRecords) {
@@ -2330,6 +2488,35 @@ export class SupabaseRepository implements IEpsoRepository {
               await client.from('packaging_items').update({ current_stock: newPkgStock, updated_at: new Date().toISOString() }).eq('id', rec.packaging_item_id);
             }
           }
+          if (rec.packet_size && Number(rec.packets_packed) > 0) {
+            try {
+              const { data: pt } = await client
+                .from('packet_types')
+                .select('id, name, cost_per_packet, bundle_cost, bundle_quantity')
+                .eq('name', rec.packet_size)
+                .limit(1)
+                .maybeSingle();
+
+              if (pt) {
+                const restored = Number(rec.packets_packed) || 0;
+                const currPktStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+                const newPktStock = currPktStock + restored;
+                const preservedUnitCost = Number(pt.cost_per_packet) || Number(rec.cover_unit_cost) || 0;
+                const newBundleCost = roundCurrency(newPktStock * preservedUnitCost);
+
+                await client
+                  .from('packet_types')
+                  .update({
+                    bundle_quantity: newPktStock,
+                    bundle_cost: newBundleCost,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', pt.id);
+              }
+            } catch (ptErr) {
+              console.warn('Could not restore packet_types stock on run delete:', ptErr);
+            }
+          }
         }
       }
     } catch (e) {
@@ -2357,6 +2544,7 @@ export class SupabaseRepository implements IEpsoRepository {
     dbCache.invalidate('packing_records');
     dbCache.invalidate('production_runs');
     dbCache.invalidate('product');
+    dbCache.invalidate('packet_types');
   }
 }
 
